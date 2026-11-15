@@ -1,0 +1,30 @@
+Traceback (most recent call last):
+  File "/workspaces/Jane Street ASIC/tt/tt_tool.py", line 195, in <module>
+    project.harden(no_docker=args.no_docker)
+  File "/workspaces/Jane Street ASIC/tt/project.py", line 521, in harden
+    commit_hash = self.get_git_commit_hash()
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspaces/Jane Street ASIC/tt/project.py", line 299, in get_git_commit_hash
+    return Repo(self.local_dir).commit().hexsha
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/ttsetup/venv/lib/python3.12/site-packages/git/repo/base.py", line 723, in commit
+    return self.head.commit
+           ^^^^^^^^^^^^^^^^
+  File "/ttsetup/venv/lib/python3.12/site-packages/git/refs/symbolic.py", line 392, in commit
+    return self._get_commit()
+           ^^^^^^^^^^^^^^^^^^
+  File "/ttsetup/venv/lib/python3.12/site-packages/git/refs/symbolic.py", line 296, in _get_commit
+    obj = self._get_object()
+          ^^^^^^^^^^^^^^^^^^
+  File "/ttsetup/venv/lib/python3.12/site-packages/git/refs/symbolic.py", line 287, in _get_object
+    return Object.new_from_sha(self.repo, hex_to_bin(self.dereference_recursive(self.repo, self.path)))
+                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/ttsetup/venv/lib/python3.12/site-packages/git/refs/symbolic.py", line 167, in dereference_recursive
+    hexsha, ref_path = cls._get_ref_info(repo, ref_path)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/ttsetup/venv/lib/python3.12/site-packages/git/refs/symbolic.py", line 277, in _get_ref_info
+    return cls._get_ref_info_helper(repo, ref_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/ttsetup/venv/lib/python3.12/site-packages/git/refs/symbolic.py", line 256, in _get_ref_info_helper
+    raise ValueError("Reference at %r does not exist" % ref_path)
+ValueError: Reference at 'refs/heads/master' does not exist
