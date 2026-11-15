@@ -1,6 +1,6 @@
 # Timing Boundary Explorer — Architecture Draft
 
-**Status:** v0.1 single-SPI bring-up contract selected; the final reprogrammable protocol engine and ISA remain to be designed.
+**Status:** v0.1 UART-to-SPI bring-up RTL has passed a standalone RTL simulation; the final reprogrammable protocol engine and ISA remain to be designed.
 **Purpose:** keep the experiment, ASIC, host software, and evidence plan aligned before RTL work.
 
 ## Research question (hypothesis)
