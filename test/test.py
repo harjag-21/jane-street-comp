@@ -3,7 +3,7 @@
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import ClockCycles, FallingEdge
+from cocotb.triggers import ClockCycles, ValueChange
 
 
 CLKS_PER_BIT = 8
@@ -43,12 +43,23 @@ async def uart_send_frame(dut, frame):
         await uart_send_byte(dut, byte)
 
 
+async def wait_falling_bit(vector, bit):
+    """Cocotb 2 permits value-change triggers on a packed vector, not a bit."""
+    previous = (int(vector.value) >> bit) & 1
+    while True:
+        await ValueChange(vector)
+        current = (int(vector.value) >> bit) & 1
+        if previous and not current:
+            return
+        previous = current
+
+
 async def uart_read_byte(dut):
-    await FallingEdge(dut.uo_out[0])
+    await wait_falling_bit(dut.uo_out, 0)
     await ClockCycles(dut.clk, CLKS_PER_BIT + CLKS_PER_BIT // 2)
     value = 0
     for bit in range(8):
-        value |= int(dut.uo_out[0].value) << bit
+        value |= ((int(dut.uo_out.value) >> 0) & 1) << bit
         await ClockCycles(dut.clk, CLKS_PER_BIT)
     return value
 
@@ -56,10 +67,10 @@ async def uart_read_byte(dut):
 async def spi_target_aa(dut):
     """Mode-0 target that presents 0xAA before / after falling clock edges."""
     bits = [(0xAA >> bit) & 1 for bit in range(7, -1, -1)]
-    await FallingEdge(dut.uo_out[2])  # CS_N asserted
+    await wait_falling_bit(dut.uo_out, 2)  # CS_N asserted
     dut.uio_in.value = bits[0]
     for index in range(1, 8):
-        await FallingEdge(dut.uo_out[1])
+        await wait_falling_bit(dut.uo_out, 1)
         dut.uio_in.value = bits[index]
 
 
@@ -102,4 +113,4 @@ async def invalid_commands_return_status_without_spi_transaction(dut):
         assert response[2] == expected_status
         assert response[5] == 0
         assert response[6] == crc8(response[:6])
-        assert int(dut.uo_out[2].value) == 1, "CS_N must remain inactive for rejected commands"
+        assert (int(dut.uo_out.value) >> 2) & 1 == 1, "CS_N must remain inactive for rejected commands"

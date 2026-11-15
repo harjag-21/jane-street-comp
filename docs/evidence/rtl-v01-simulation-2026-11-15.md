@@ -31,6 +31,8 @@ PASS: v0.1 UART/SPI contract checks passed
 
 `test/tb_v01.v` checked one valid command against a behavioural `0xAA` SPI target, including response CRC, eight rising/falling SPI edges, a two-core-clock high phase, and the requested three-core-clock low phase. It also checked BAD_CRC, BAD_OPCODE, and BAD_ARGUMENT responses and asserted that each rejected request did not assert SPI chip-select.
 
+The repository Cocotb suite in `test/test.py` also passed 2/2 on Icarus 12.0 with Cocotb 2.0.1 in the Tiny Tapeout development container. It checks the valid response and CRC plus the three rejected-command statuses. The template Makefile expands an unquoted `$(PWD)`, so this workspace's space-containing path could not be run directly; the same `src/` and `test/` files were copied to `/tmp/asic-v01-run` inside the container for that invocation. This is an infrastructure workaround, not a source change.
+
 ## Limits
 
-This does not establish area, timing closure, pad behavior, physical SPI compatibility, reset/reload on the demo board, gate-level behavior, or the programmable architecture required for final submission. The repository Cocotb test was updated as a second test implementation but could not be run on this Windows host because `make` and Cocotb are absent from its PATH.
+This does not establish area, timing closure, pad behavior, physical SPI compatibility, reset/reload on the demo board, gate-level behavior, or the programmable architecture required for final submission.
