@@ -1,0 +1,10 @@
+3.1.0.dev4: Pulling from librelane/librelane
+7e60b6bce75e: Pulling fs layer
+4a494bc6d969: Pulling fs layer
+7e60b6bce75e: Download complete
+[09:19:19] ERROR    Failed to pull image                        container.py:128
+                    'ghcr.io/librelane/librelane:3.1.0.dev4'                    
+                    from the container registries.                              
+[09:19:19] ERROR    Failed to use image                          __main__.py:348
+                    'ghcr.io/librelane/librelane:3.1.0.dev4'.                   
+2026-11-15 09:19:19,794 - project    - ERROR    - harden failed

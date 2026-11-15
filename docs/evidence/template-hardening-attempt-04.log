@@ -1,0 +1,15 @@
+﻿Command: /ttsetup/venv/bin/python tt/tt_tool.py --debug --pdk ihp-sg13cmos5l --harden
+Workspace: /workspaces/Jane Street ASIC
+Source commit: 6dadfe03b834d1216690c6d25949c441b82acfe6
+Result: LibreLane started but failed at Yosys synthesis (stage 6/80) because ABC split a generated script path at the workspace path's spaces. The attempt produced no GDS or precheck result.
+
+[10:10:55] DEBUG python -m librelane --pdk-root "$PDK_ROOT" --docker-no-tty --dockerized --pdk-root "$PDK_ROOT" --pdk ihp-sg13cmos5l --run-tag wokwi --force-run-dir runs/wokwi src/config_merged.json
+[10:11:00] INFO Running containerized command
+Version 89d42ee6d2fd9b50b86a1aada6fee6673c3e6008 not found locally, attempting to download…
+Downloading common.tar.zst… 100%
+Downloading sg13cmos5l_io.tar.zst… 100%
+Downloading sg13cmos5l_sram.tar.zst… 100%
+Downloading sg13cmos5l_stdcell.tar.zst… 100%
+The flow started and reached Synthesis at stage 6/80, then Yosys ABC failed:
+ABC: Cannot open file "/workspaces/Jane".
+This failure is attributed to unescaped spaces in the workspace path. No GDS or precheck result.

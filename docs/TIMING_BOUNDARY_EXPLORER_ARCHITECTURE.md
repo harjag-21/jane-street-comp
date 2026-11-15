@@ -36,15 +36,33 @@ Simulation establishes behavior only for the modeled target. It does not establi
 
 ## Minimum experiment
 
-**First candidate, not yet frozen:** a single SPI mode-0 master transaction to a simulation target that returns a known byte after a declared MISO clock-to-output delay. Sweep only the master's MISO sample offset in integer cycles; keep SCLK rate and all other settings fixed. This gives a clear timing boundary without initially mixing sample-phase and bus-frequency effects. Later experiments can sweep SCLK rate as a separate axis.
+**First candidate, not yet frozen:** a single SPI mode-0 master transaction to a simulation target that returns a known byte and changes MISO after a declared clock-to-output delay from the falling SCLK edge. Keep the high phase and all other settings fixed; sweep only the low-phase duration in integer cycles before the next rising edge samples MISO. The expected boundary follows from the target delay plus the model's explicit setup rule. Later experiments can sweep the high phase or a sample offset as separate axes.
 
-1. Use a fixed pattern with enough transitions to expose bit/edge alignment errors and one adjustable sample offset.
+1. Use a fixed pattern with enough transitions to expose bit/edge alignment errors and one adjustable low-phase duration.
 2. Define success and failure before collecting results; include malformed, timeout, and ambiguous responses as separate outcomes.
-3. Compare a fixed sample-offset sweep against coarse-to-fine refinement on identical target delays and repeat counts.
+3. Compare a fixed low-phase sweep against binary search with repeats on identical target delays and trial budgets.
 4. Measure boundary error in clock cycles, trial count, repeat-to-repeat spread, false classifications, and report reproducibility from saved raw traces.
 5. Repeat with target delays near clock-quantization points and with injected response jitter in simulation.
 
 The minimum experiment should answer whether the explorer adds measurable value before adding adaptive search, multiple simultaneous buses, large trace buffers, or multiple protocol families in one run.
+
+### Executable timing-oracle draft
+
+This is a specification proposal for the first simulation experiment, not a claim about physical SPI devices:
+
+- Let `T` be the recorded core-clock period, `L` the programmable SCLK-low duration in whole core cycles, `H` the fixed high duration, `d` the target's declared MISO clock-to-output delay after a falling SCLK edge, and `s` the declared setup requirement at the next rising sample.
+- Preload the first response bit before the first rising edge. After each falling edge, schedule the next MISO bit after `d`; sample it at the following rising edge. Use a byte pattern with frequent bit changes so stale-bit and edge-alignment errors are visible.
+- In the deterministic model, a transition is accepted exactly when its age at the sample is at least `s`. Thus the predicted first passing low duration is `L_min = ceil((d + s) / T)` cycles, with equality passing by definition. The testbench computes this from the model parameters before running the explorer. The model must explicitly handle the first bit, which has no preceding falling edge in the transaction.
+- Define one trial as one complete, bounded SPI transaction. A trial passes only if the captured response exactly matches the expected byte before timeout; record timeout and protocol/model errors separately so the search algorithm cannot quietly treat them as ordinary timing failures.
+- For jitter runs, add a seeded, recorded delay perturbation to each target transition. Report the tested perturbation rule and per-setting pass counts. Do not report a single hard boundary when repeated outcomes disagree; report the transition region and uncertainty instead.
+
+Before coding, review the SPI edge ordering and equality convention against the selected simulator's event semantics. The analytical boundary is an oracle for this deliberately simplified target model; it is not a prediction of a real target's setup/hold behavior or of the ASIC pad timing.
+
+## Higher-risk research option
+
+After the fixed sweep and binary-search baselines work, test a sequential estimator that models response probability versus timing, chooses the next probe near the uncertain boundary, and stops when a predeclared confidence interval reaches a chosen width. The probability threshold (such as 99% successful trials) must be justified for the use case, not presented as universal. Detect and report violations of the assumed monotonic response curve instead of forcing a boundary estimate.
+
+This could make the write-up more research-driven if it measurably reduces trials at the same error and false-classification limits under jitter and drift. Adaptive interface calibration, bit-error-rate testing, and timing-margin searches are established neighboring fields; novelty must be checked against them before presenting this as a research contribution.
 
 ## Decisions intentionally deferred
 

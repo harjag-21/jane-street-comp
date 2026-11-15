@@ -1,0 +1,5 @@
+﻿Attempt: 05
+Command: /ttsetup/venv/bin/python tt/tt_tool.py --debug --project-dir /workspaces/JaneStreetASIC-baseline --pdk ihp-sg13cmos5l --harden
+Source commit: 6dadfe03b834d1216690c6d25949c441b82acfe6
+Result: stopped before invoking LibreLane because the clean worktree did not contain the ignored/generated src/user_config.json.
+Follow-up: Tiny Tapeout's --create-user-config command succeeded in the same worktree and generated the expected CMOS5L 8x4 configuration (DIE_AREA 0 0 1724.16 710.64).
