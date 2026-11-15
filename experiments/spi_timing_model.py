@@ -192,6 +192,10 @@ def paired_fixed_sweep(
     success_threshold: float = 0.95,
 ) -> dict[str, object]:
     """Scan every setting using the same profile IDs at every setting."""
+    if not jitter_profiles:
+        raise ValueError("at least one jitter profile is required")
+    if not 0 <= success_threshold <= 1:
+        raise ValueError("success threshold must be in [0, 1]")
     rows = []
     for low in low_values:
         successes = sum(
@@ -217,6 +221,8 @@ def paired_binary_search(
     """Binary search using identical paired profiles and the same rate rule."""
     if low < 1 or high < low or not jitter_profiles:
         raise ValueError("require 1 <= low <= high and at least one jitter profile")
+    if not 0 <= success_threshold <= 1:
+        raise ValueError("success threshold must be in [0, 1]")
     observations = []
 
     def classify(value: int) -> bool:
@@ -307,6 +313,8 @@ def theoretical_success_probability(
         low_cycles * target.clock_fs - target.output_delay_fs - target.setup_fs
     )
     total = 2 * jitter_fs + 1
+    if low_cycles * target.clock_fs < target.setup_fs:
+        return 0.0
     per_edge_passes = min(total, max(0, slack_without_jitter + jitter_fs + 1))
     return (per_edge_passes / total) ** 7
 
@@ -342,6 +350,10 @@ def run_equal_budget_study(
     """
     target = Target()
     candidates = list(range(1, 9))
+    if not 0 < success_threshold < 1:
+        raise ValueError("success threshold must be strictly between 0 and 1")
+    if fixed_repeats_per_setting < 1 or binary_repeats_per_probe < fixed_repeats_per_setting:
+        raise ValueError("repeat counts must be positive and binary profiles must cover fixed repeats")
     fixed_budget = len(candidates) * fixed_repeats_per_setting
     binary_max_probes = 5  # endpoints plus at most three bisection probes
     binary_budget = binary_max_probes * binary_repeats_per_probe
@@ -399,6 +411,10 @@ def run_equal_budget_study(
                    "binary_repeats_per_probe": binary_repeats_per_probe,
                    "candidate_settings": candidates,
                    "binary_max_probes": binary_max_probes},
+        "interval_methods": {"wilson_z": 1.959963984540054,
+                             "paired_bootstrap": "percentile",
+                             "paired_bootstrap_resamples": 5000,
+                             "paired_bootstrap_seed": 20262115},
         "summary": {
             "paired_seed_runs": count,
             "fixed_correct": sum(fixed_correct),

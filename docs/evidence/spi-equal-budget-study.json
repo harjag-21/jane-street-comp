@@ -44,6 +44,12 @@
     ],
     "binary_max_probes": 5
   },
+  "interval_methods": {
+    "wilson_z": 1.959963984540054,
+    "paired_bootstrap": "percentile",
+    "paired_bootstrap_resamples": 5000,
+    "paired_bootstrap_seed": 20262115
+  },
   "summary": {
     "paired_seed_runs": 1000,
     "fixed_correct": 769,

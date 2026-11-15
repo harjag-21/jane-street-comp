@@ -1,0 +1,7 @@
+Reference study independently replayed: deterministic scan/search and all 80,000 jitter trials match.
+Independent replay passed for 1000 seeds.
+Fixed: 769/1000, Wilson95=[0.7418776678486424, 0.7940635360861289]
+Binary: 789/1000, Wilson95=[0.7626295063588951, 0.813158627236454]
+Paired delta=0.02, bootstrap95=[-0.003, 0.043]
+Independent probability oracle boundary=4; probabilities={'1': 2.2476755365534596e-16, '2': 0.0004761868649048092, '3': 0.05734687641510337, '4': 0.9599999585072804, '5': 1.0, '6': 1.0, '7': 1.0, '8': 1.0}
+All per-setting counts, boundaries, 800-trial budgets, and CI summaries match.
