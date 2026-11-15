@@ -14,7 +14,7 @@ The first seeded Cocotb comparison failed at a one-cycle low phase. The simulato
 
 ## Verification after correction
 
-- Python suite: 11/11 passed.
+- Python suite at that milestone: 11/11 passed. Search-limit cases were added in the next implementation step; the suite now has 15 tests.
 - Icarus 12.0 / Cocotb 2.0.1: 2/2 tests passed.
 - Seeded cross-check: seed `20261116`; 27 profiles × 4 low-phase settings = 108 transactions; all 7 transition ages and every sampled byte matched the Python model; 334 transitions arrived after their intended sample.
 - Explicit all-edges equality case: all jitter entries `+5 ns`, output delay `28 ns`, low phase `3` cycles, setup `2 ns`; equality passes.

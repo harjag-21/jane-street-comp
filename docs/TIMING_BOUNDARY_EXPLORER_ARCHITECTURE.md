@@ -1,6 +1,6 @@
 # Timing Boundary Explorer — Architecture Draft
 
-**Status:** proposal only; no architecture or interface is frozen.  
+**Status:** v0.1 single-SPI vertical-slice contract selected for implementation; generic protocol architecture remains a proposal.
 **Purpose:** keep the experiment, ASIC, host software, and evidence plan aligned before RTL work.
 
 ## Research question (hypothesis)
@@ -9,12 +9,14 @@ For a digital target with a repeatable timing acceptance threshold, can a small 
 
 This is a research question, not a novelty claim. The contribution would need to be shown by a measured comparison against a fixed-sweep baseline and by independent reruns. The competition ledger tracks prior art and source-backed claims.
 
-## Proposed system split
+## Proposed long-term system split
+
+The components below describe the broader hypothesis. The immediate v0.1 implementation is the smaller command-driven SPI path specified later in this document.
 
 ### ASIC
 
 1. **Host/configuration receiver.** A small framed command interface loads a program and run parameters. UART is the current candidate because it is easy to drive from a host script; pin allocation and boot protocol remain open.
-2. **Programmable protocol sequencer.** A compact instruction memory and interpreter drive selected pins, wait for a programmable number of clock cycles, sample inputs, and branch or repeat. UART, SPI, and I2C example programs must be loadable; a set of fixed, non-programmable protocol blocks alone would not meet the flexibility objective.
+2. **Programmable protocol sequencer.** A compact instruction memory and interpreter could drive selected pins, wait for a programmable number of clock cycles, sample inputs, and branch or repeat. Loading UART, SPI, and I2C example programs is a later flexibility objective; it is not a v0.1 acceptance criterion.
 3. **Timing control.** A run parameter controls the interval under study in integer clock cycles. The ASIC emits explicit start/end markers so each trial can be correlated with captured events.
 4. **Response capture.** A cycle counter timestamps selected input changes or samples them at defined protocol points. A bounded FIFO returns compact event records to the host. Counter width, FIFO depth, and overflow behavior need resource estimates before they are fixed.
 5. **Pin control.** Protocol pins use the available digital input, output, and bidirectional pads. The host-control pins, bidirectional output enables, reset sequence, and I2C open-drain behavior require a documented pin budget and electrical review.
@@ -36,7 +38,7 @@ Simulation establishes behavior only for the modeled target. It does not establi
 
 ## Minimum experiment
 
-**First candidate, not yet frozen:** a single SPI mode-0 master transaction to a simulation target that returns a known byte and changes MISO after a declared clock-to-output delay from the falling SCLK edge. Keep the high phase and all other settings fixed; sweep only the low-phase duration in integer cycles before the next rising edge samples MISO. The expected boundary follows from the target delay plus the model's explicit setup rule. Later experiments can sweep the high phase or a sample offset as separate axes.
+**Selected v0.1 experiment:** a single SPI mode-0 master transaction to a simulation target that returns a known byte and changes MISO after a declared clock-to-output delay from the falling SCLK edge. Keep the high phase and all other settings fixed; sweep only the low-phase duration in integer cycles before the next rising edge samples MISO. The expected boundary follows from the target delay plus the model's explicit setup rule. Later experiments can sweep the high phase or a sample offset as separate axes.
 
 1. Use a fixed pattern with enough transitions to expose bit/edge alignment errors and one adjustable low-phase duration.
 2. Define success and failure before collecting results; include malformed, timeout, and ambiguous responses as separate outcomes.
@@ -53,10 +55,67 @@ This is a specification proposal for the first simulation experiment, not a clai
 - Let `T` be the recorded core-clock period, `L` the programmable SCLK-low duration in whole core cycles, `H` the fixed high duration, `d` the target's declared MISO clock-to-output delay after a falling SCLK edge, and `s` the declared setup requirement at the next rising sample.
 - Preload the first response bit before the first rising edge. After each falling edge, schedule the next MISO bit after `d`; sample it at the following rising edge. Use a byte pattern with frequent bit changes so stale-bit and edge-alignment errors are visible.
 - In the deterministic model, a transition is accepted exactly when its age at the sample is at least `s`. Thus the predicted first passing low duration is `L_min = ceil((d + s) / T)` cycles, with equality passing by definition. The testbench computes this from the model parameters before running the explorer. The model must explicitly handle the first bit, which has no preceding falling edge in the transaction.
-- Define one trial as one complete, bounded SPI transaction. A trial passes only if the captured response exactly matches the expected byte before timeout; record timeout and protocol/model errors separately so the search algorithm cannot quietly treat them as ordinary timing failures.
+- Define one trial as one complete SPI transaction. In the simulation model, it passes only if the received byte matches and every intended transition meets the explicit setup rule. In hardware, record the received byte and transport/protocol status; the known-target host classifier compares the byte to its expected response. Never fold a missing response or invalid transport record into the target's timing-failure count.
 - For jitter runs, add a seeded, recorded delay perturbation to each target transition. Report the tested perturbation rule and per-setting pass counts. Do not report a single hard boundary when repeated outcomes disagree; report the transition region and uncertainty instead.
 
 Before coding, review the SPI edge ordering and equality convention against the selected simulator's event semantics. The analytical boundary is an oracle for this deliberately simplified target model; it is not a prediction of a real target's setup/hold behavior or of the ASIC pad timing.
+
+## v0.1 minimum demo contract
+
+This decision narrows the first hardware implementation to one complete host-to-target-to-host path. It does not freeze the later programmable multi-protocol architecture.
+
+### Transaction behavior
+
+- The ASIC performs one SPI mode-0, MSB-first, 8-bit transaction per accepted host command. `CS_N` is asserted for the transaction; SCLK idles low. The low phase is a command parameter in core-clock cycles; the high phase is fixed at two core-clock cycles for this first implementation.
+- The host controls the sweep and repeat count by sending one command per trial. The ASIC does not store a sweep program or choose the next timing value.
+- The target's first MISO bit must be valid before the first rising sample. Each later MISO bit is scheduled after the preceding falling edge. Model success requires the expected received byte and all declared setup checks to pass. Hardware capture reports the received byte; the host classifies it against the expected result and keeps transport/protocol failures separate from timing failures.
+- The initial expected target response is `0xAA`, selected because its adjacent bits toggle and expose bit/edge alignment errors. This is a test pattern, not a claimed device requirement.
+
+### Host command and result records
+
+UART is selected for the first host interface, with 8 data bits, no parity, one stop bit, and idle high (8N1). The baud rate is deferred until the core clock and board interface are verified. The initial fixed-length request is seven bytes:
+
+| Byte(s) | Meaning |
+|---|---|
+| 0 | Sync `0xA5` |
+| 1 | Opcode `0x01` (one SPI transaction) |
+| 2 | Request ID |
+| 3–4 | `low_cycles`, unsigned 16-bit little-endian; zero is invalid |
+| 5 | MOSI byte |
+| 6 | CRC-8, polynomial `0x07`, initial value `0x00`, xorout `0x00`, non-reflected; over bytes 0–5 |
+
+The fixed-length response is also seven bytes: sync `0x5A`, echoed request ID, status, echoed `low_cycles` (16-bit little-endian), received MISO byte, and CRC-8 with the same parameters over preceding bytes. Status values are `0=OK`, `1=BAD_CRC`, `2=BAD_OPCODE`, and `3=BAD_ARGUMENT`. For rejected commands, the received-byte field is zero and no SPI transaction is run. The host uses stop-and-wait: it does not send another request until it receives the matching response or records a host-side timeout. A timeout, UART framing failure, or missing response is recorded as missing/invalid transport data, never as a target timing failure.
+
+The host retains a JSONL record per attempted trial, including the exact request and response bytes, request ID, timing parameter, transmit byte, received byte, status, expected byte, and outcome classification. The analysis input also records the clock period if known, target model/version, sweep settings, seed, and software revision. The host owns all sweeps, retries, boundary estimation, and confidence calculations.
+
+### Initial logical pin allocation
+
+| Tiny Tapeout signal | v0.1 function |
+|---|---|
+| `ui_in[0]` | UART host-to-ASIC RX |
+| `uo_out[0]` | UART ASIC-to-host TX |
+| `uo_out[1]` | SPI SCLK |
+| `uo_out[2]` | SPI CS_N |
+| `uo_out[3]` | SPI MOSI |
+| `uio_in[0]` | SPI MISO input (`uio_oe[0]=0`) |
+| `uo_out[4]` | `TRIAL_ACTIVE` marker for logic-analyzer correlation |
+| All other user pins | Reserved in v0.1 |
+
+This is the project pin plan, not a verified board/electrical assignment. The UART baud rate and `info.yaml` clock frequency remain unset until the actual clock source, divider accuracy, and board-level pin/electrical constraints are checked. Report timing in cycles until that clock is established. The RTL and `info.yaml` pin labels remain unchanged until the implementation uses this mapping.
+
+### Explicitly deferred
+
+Instruction memory and a generic microcode ISA, UART/SPI/I2C program families, programmable high phase, multiple simultaneous buses, on-chip sweeps, a trace FIFO, adaptive search in the ASIC, and a physical external target are deferred. Revisit them only after the v0.1 transaction path passes simulation and the smallest design completes the physical flow.
+
+## Search-limit behavior
+
+Search results distinguish a measured interior transition from a limit hit:
+
+- `interior_boundary`: a failing point and a passing point were observed; the first passing candidate is reported and `bracketed=true`.
+- `lower_endpoint_pass`: the lowest tested candidate already passes. Report that candidate as the first passing value in the tested set, but set `bracketed=false`; the experiment cannot establish behavior below the search range.
+- `upper_endpoint_fail`: the highest tested candidate fails. Report `boundary=null` and `bracketed=false`; do not relabel the maximum tested value as the boundary.
+
+For noisy classification these statuses use the predeclared empirical success threshold. A no-pass result is an out-of-range/censored observation, not an estimate. Fixed sweep and binary search must report the same status vocabulary.
 
 ## Higher-risk research option
 
@@ -66,7 +125,7 @@ This could make the write-up more research-driven if it measurably reduces trial
 
 ## Decisions intentionally deferred
 
-- Host boot/loading protocol and exact pin map.
+- Final board wiring, clock source/frequency, UART baud, and electrical pin validation.
 - Instruction width, opcode set, program depth, and branch semantics.
 - Event-trigger policy, timestamp width, FIFO depth, and use of SRAM macros.
 - Target device and external pull-up/level requirements.
@@ -75,7 +134,7 @@ This could make the write-up more research-driven if it measurably reduces trial
 
 ## Decision gates
 
-1. **Interface gate:** demonstrate a host-loaded program and trace round-trip in simulation.
+1. **Interface gate:** demonstrate the fixed UART command/response round-trip and raw-trial log in simulation.
 2. **Measurement gate:** recover the known simulation threshold within a declared cycle error and classify invalid cases correctly.
 3. **Value gate:** show that refinement reduces trials at a fixed boundary-error target without increasing false classifications.
 4. **Hardware gate:** synthesize and route the smallest working engine before growing program or trace memory.

@@ -61,6 +61,7 @@
   ],
   "deterministic_binary_search": {
     "boundary": 3,
+    "boundary_status": "interior_boundary",
     "trials": 5,
     "bracketed": true,
     "observations": [

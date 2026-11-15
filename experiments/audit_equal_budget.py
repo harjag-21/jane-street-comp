@@ -91,7 +91,8 @@ def audit_reference_study() -> None:
                 left = middle
         boundary = right
     assert fixed == data["deterministic_fixed_sweep"]
-    assert {"boundary": boundary, "trials": len(obs), "bracketed": True,
+    assert {"boundary": boundary, "boundary_status": "interior_boundary",
+            "trials": len(obs), "bracketed": True,
             "observations": obs} == data["deterministic_binary_search"]
     assert response == 0xAA
 
@@ -162,6 +163,12 @@ def main() -> None:
             rate = hits / fixed_n
             fixed_rows.append((low, hits, fixed_n, rate, rate >= threshold))
         fixed_boundary = next((row[0] for row in fixed_rows if row[4]), None)
+        fixed_pass_index = next((i for i, row in enumerate(fixed_rows) if row[4]), None)
+        fixed_status = (
+            "upper_endpoint_fail" if fixed_pass_index is None
+            else "lower_endpoint_pass" if fixed_pass_index == 0
+            else "interior_boundary"
+        )
 
         binary_rows = []
 
@@ -175,8 +182,10 @@ def main() -> None:
         low, high = candidates[0], candidates[-1]
         if classify(low):
             binary_boundary = low
+            binary_status = "lower_endpoint_pass"
         elif not classify(high):
             binary_boundary = None
+            binary_status = "upper_endpoint_fail"
         else:
             left, right = low, high
             while right - left > 1:
@@ -186,6 +195,7 @@ def main() -> None:
                 else:
                     left = middle
             binary_boundary = right
+            binary_status = "interior_boundary"
 
         expected_fixed = [{"low_cycles": l, "successes": h, "trials": n,
                            "success_rate": rate, "meets_threshold": meets}
@@ -197,6 +207,10 @@ def main() -> None:
         assert expected_binary == stored["binary_search"]["observations"], seed
         assert fixed_boundary == stored["fixed_sweep"]["boundary"], seed
         assert binary_boundary == stored["binary_search"]["boundary"], seed
+        assert fixed_status == stored["fixed_sweep"]["boundary_status"], seed
+        assert stored["fixed_sweep"]["bracketed"] == (fixed_status == "interior_boundary")
+        assert binary_status == stored["binary_search"]["boundary_status"], seed
+        assert stored["binary_search"]["bracketed"] == (binary_status == "interior_boundary")
         assert stored["fixed_trials"] == len(candidates) * fixed_n
         assert stored["binary_trials"] == len(binary_rows) * binary_n
         assert stored["fixed_trials"] == stored["binary_trials"] == 800

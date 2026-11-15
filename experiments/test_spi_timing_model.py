@@ -47,8 +47,61 @@ class TimingModelTests(unittest.TestCase):
     def test_binary_search_recovers_known_boundary(self):
         result = binary_search(self.target, 1, 8)
         self.assertTrue(result["bracketed"])
+        self.assertEqual(result["boundary_status"], "interior_boundary")
         self.assertEqual(result["boundary"], self.target.minimum_passing_low_cycles)
         self.assertEqual(result["trials"], 5)
+
+    def test_search_reports_lower_endpoint_pass_as_censored(self):
+        target = Target(output_delay_fs=5_000_000)
+        deterministic = binary_search(target, 2, 8)
+        profiles = [(0,) * 7 for _ in range(10)]
+        fixed = paired_fixed_sweep(target, range(2, 9), profiles)
+        adaptive = paired_binary_search(target, 2, 8, profiles)
+
+        self.assertEqual(deterministic["boundary"], 2)
+        self.assertEqual(deterministic["boundary_status"], "lower_endpoint_pass")
+        self.assertFalse(deterministic["bracketed"])
+        for result in (fixed, adaptive):
+            self.assertEqual(result["boundary"], 2)
+            self.assertEqual(result["boundary_status"], "lower_endpoint_pass")
+            self.assertFalse(result["bracketed"])
+
+    def test_search_reports_upper_endpoint_failure_without_fake_boundary(self):
+        target = Target(output_delay_fs=100_000_000)
+        deterministic = binary_search(target, 1, 8)
+        profiles = [(0,) * 7 for _ in range(10)]
+        fixed = paired_fixed_sweep(target, range(1, 9), profiles)
+        adaptive = paired_binary_search(target, 1, 8, profiles)
+
+        self.assertIsNone(deterministic["boundary"])
+        self.assertEqual(deterministic["boundary_status"], "upper_endpoint_fail")
+        self.assertFalse(deterministic["bracketed"])
+        self.assertEqual(deterministic["trials"], 2)
+        for result in (fixed, adaptive):
+            self.assertIsNone(result["boundary"])
+            self.assertEqual(result["boundary_status"], "upper_endpoint_fail")
+            self.assertFalse(result["bracketed"])
+
+    def test_paired_search_marks_only_interior_transition_as_bracketed(self):
+        profiles = [(0,) * 7 for _ in range(10)]
+        fixed = paired_fixed_sweep(self.target, range(1, 9), profiles)
+        adaptive = paired_binary_search(self.target, 1, 8, profiles)
+        for result in (fixed, adaptive):
+            self.assertEqual(result["boundary"], 3)
+            self.assertEqual(result["boundary_status"], "interior_boundary")
+            self.assertTrue(result["bracketed"])
+
+    def test_single_candidate_range_is_classified_once(self):
+        passing_profiles = [(0,) * 7 for _ in range(10)]
+        passing = paired_binary_search(self.target, 3, 3, passing_profiles)
+        failing_target = Target(output_delay_fs=100_000_000)
+        failing = paired_binary_search(failing_target, 3, 3, passing_profiles)
+
+        self.assertEqual(passing["boundary_status"], "lower_endpoint_pass")
+        self.assertEqual(passing["trials"], 10)
+        self.assertIsNone(failing["boundary"])
+        self.assertEqual(failing["boundary_status"], "upper_endpoint_fail")
+        self.assertEqual(failing["trials"], 10)
 
     def test_seeded_jitter_is_reproducible_and_gives_transition_region(self):
         first = fixed_sweep(self.target, range(1, 7), repeats=10_000,

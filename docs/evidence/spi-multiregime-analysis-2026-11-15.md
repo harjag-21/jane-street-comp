@@ -32,7 +32,7 @@ The 23 ns / 15.176495 ns condition uses a new seed range here and is a separate 
 
 - `python experiments/run_spi_multiregime_study.py` produced the raw aggregate `spi-multiregime-equal-budget.json`.
 - `python experiments/audit_spi_multiregime.py` independently regenerated per-transition jitter profiles and event-scheduled samples, replayed all candidate counts and binary query paths, and matched each boundary, all 800-trial budgets, Wilson intervals, and paired bootstrap intervals across 6,000 unique seed runs.
-- Unit tests: 11/11 pass. The seeded Cocotb event-model check: 2/2 pass (documented separately in `spi-jitter-crosscheck-2026-11-15.md`).
+- At the time of this study, unit tests: 11/11 passed. Search-limit tests were added afterward; the current suite has 15 tests. The seeded Cocotb event-model check: 2/2 passed (documented separately in `spi-jitter-crosscheck-2026-11-15.md`).
 
 ## Interpretation and limits
 

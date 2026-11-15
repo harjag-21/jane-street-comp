@@ -5,4 +5,5 @@ Python: 3.13.7
 Result: regenerated spi-reference-study.json; JSON data match exactly.
 Result: regenerated spi-paired-jitter-study.json; JSON data match exactly.
 Result: regenerated spi-equal-budget-study.json; JSON data match exactly.
+All regenerated search records include explicit `boundary_status` and `bracketed` fields; endpoint failures do not report the maximum candidate as a boundary.
 The independent timestamp-event replay in audit_equal_budget.py also matched all 80,000 reference trials and all 1,000 equal-budget runs, including per-setting counts, boundaries, budgets, and confidence intervals.

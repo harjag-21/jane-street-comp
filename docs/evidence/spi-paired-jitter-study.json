@@ -42,6 +42,8 @@
       "seed": 20261115,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -104,6 +106,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -149,6 +153,8 @@
       "seed": 20261116,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -211,6 +217,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -256,6 +264,8 @@
       "seed": 20261117,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -318,6 +328,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -363,6 +375,8 @@
       "seed": 20261118,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -425,6 +439,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -470,6 +486,8 @@
       "seed": 20261119,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -532,6 +550,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -577,6 +597,8 @@
       "seed": 20261120,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -639,6 +661,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -684,6 +708,8 @@
       "seed": 20261121,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -746,6 +772,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -791,6 +819,8 @@
       "seed": 20261122,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -853,6 +883,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -898,6 +930,8 @@
       "seed": 20261123,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -960,6 +994,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -1005,6 +1041,8 @@
       "seed": 20261124,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -1067,6 +1105,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -1112,6 +1152,8 @@
       "seed": 20261125,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -1174,6 +1216,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -1219,6 +1263,8 @@
       "seed": 20261126,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -1281,6 +1327,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -1326,6 +1374,8 @@
       "seed": 20261127,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -1388,6 +1438,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -1433,6 +1485,8 @@
       "seed": 20261128,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -1495,6 +1549,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -1540,6 +1596,8 @@
       "seed": 20261129,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -1602,6 +1660,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -1647,6 +1707,8 @@
       "seed": 20261130,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -1709,6 +1771,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -1754,6 +1818,8 @@
       "seed": 20261131,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -1816,6 +1882,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -1861,6 +1929,8 @@
       "seed": 20261132,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -1923,6 +1993,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -1968,6 +2040,8 @@
       "seed": 20261133,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -2030,6 +2104,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -2075,6 +2151,8 @@
       "seed": 20261134,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -2137,6 +2215,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -2182,6 +2262,8 @@
       "seed": 20261135,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -2244,6 +2326,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -2289,6 +2373,8 @@
       "seed": 20261136,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -2351,6 +2437,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -2396,6 +2484,8 @@
       "seed": 20261137,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -2458,6 +2548,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -2503,6 +2595,8 @@
       "seed": 20261138,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -2565,6 +2659,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -2610,6 +2706,8 @@
       "seed": 20261139,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -2672,6 +2770,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -2717,6 +2817,8 @@
       "seed": 20261140,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -2779,6 +2881,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -2824,6 +2928,8 @@
       "seed": 20261141,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -2886,6 +2992,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -2931,6 +3039,8 @@
       "seed": 20261142,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -2993,6 +3103,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -3038,6 +3150,8 @@
       "seed": 20261143,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -3100,6 +3214,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {
@@ -3145,6 +3261,8 @@
       "seed": 20261144,
       "fixed_sweep": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1600,
         "observations": [
           {
@@ -3207,6 +3325,8 @@
       },
       "binary_search": {
         "boundary": 4,
+        "boundary_status": "interior_boundary",
+        "bracketed": true,
         "trials": 1000,
         "observations": [
           {

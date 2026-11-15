@@ -145,7 +145,7 @@ def binary_search(
     repeats: int = 1,
     *,
     seed: int = 0,
-) -> dict[str, int | bool | list[dict[str, int]]]:
+) -> dict[str, int | bool | str | None | list[dict[str, int]]]:
     """Find first passing integer L under deterministic monotonic outcomes."""
     if low < 1 or high < low or repeats < 1:
         raise ValueError("require 1 <= low <= high and repeats >= 1")
@@ -158,11 +158,17 @@ def binary_search(
         return passed == repeats
 
     if classify(low):
-        return {"boundary": low, "trials": len(observations) * repeats,
-                "bracketed": True, "observations": observations}
+        return {"boundary": low, "boundary_status": "lower_endpoint_pass",
+                "trials": len(observations) * repeats, "bracketed": False,
+                "observations": observations}
+    if high == low:
+        return {"boundary": None, "boundary_status": "upper_endpoint_fail",
+                "trials": len(observations) * repeats, "bracketed": False,
+                "observations": observations}
     if not classify(high):
-        return {"boundary": high, "trials": len(observations) * repeats,
-                "bracketed": False, "observations": observations}
+        return {"boundary": None, "boundary_status": "upper_endpoint_fail",
+                "trials": len(observations) * repeats, "bracketed": False,
+                "observations": observations}
 
     left, right = low, high
     while right - left > 1:
@@ -171,8 +177,9 @@ def binary_search(
             right = mid
         else:
             left = mid
-    return {"boundary": right, "trials": len(observations) * repeats,
-            "bracketed": True, "observations": observations}
+    return {"boundary": right, "boundary_status": "interior_boundary",
+            "trials": len(observations) * repeats, "bracketed": True,
+            "observations": observations}
 
 
 def run_reference_study(output: Path) -> dict[str, object]:
@@ -217,8 +224,11 @@ def paired_fixed_sweep(
         raise ValueError("at least one jitter profile is required")
     if not 0 <= success_threshold <= 1:
         raise ValueError("success threshold must be in [0, 1]")
+    values = list(low_values)
+    if not values or values[0] < 1 or values != sorted(set(values)):
+        raise ValueError("low_values must be a non-empty, strictly increasing sequence >= 1")
     rows = []
-    for low in low_values:
+    for low in values:
         successes = sum(
             run_trial(low, target, transition_jitter_fs=profile).passed
             for profile in jitter_profiles
@@ -227,9 +237,18 @@ def paired_fixed_sweep(
         rows.append({"low_cycles": low, "successes": successes,
                      "trials": len(jitter_profiles), "success_rate": rate,
                      "meets_threshold": rate >= success_threshold})
-    boundary = next((row["low_cycles"] for row in rows if row["meets_threshold"]), None)
-    return {"boundary": boundary, "trials": len(rows) * len(jitter_profiles),
-            "observations": rows}
+    passing = next((index for index, row in enumerate(rows)
+                    if row["meets_threshold"]), None)
+    boundary = rows[passing]["low_cycles"] if passing is not None else None
+    if passing is None:
+        status = "upper_endpoint_fail"
+    elif passing == 0:
+        status = "lower_endpoint_pass"
+    else:
+        status = "interior_boundary"
+    return {"boundary": boundary, "boundary_status": status,
+            "bracketed": status == "interior_boundary",
+            "trials": len(rows) * len(jitter_profiles), "observations": rows}
 
 
 def paired_binary_search(
@@ -259,8 +278,13 @@ def paired_binary_search(
 
     if classify(low):
         boundary = low
+        status = "lower_endpoint_pass"
+    elif high == low:
+        boundary = None
+        status = "upper_endpoint_fail"
     elif not classify(high):
         boundary = None
+        status = "upper_endpoint_fail"
     else:
         left, right = low, high
         while right - left > 1:
@@ -270,7 +294,10 @@ def paired_binary_search(
             else:
                 left = mid
         boundary = right
-    return {"boundary": boundary, "trials": len(observations) * len(jitter_profiles),
+        status = "interior_boundary"
+    return {"boundary": boundary, "boundary_status": status,
+            "bracketed": status == "interior_boundary",
+            "trials": len(observations) * len(jitter_profiles),
             "observations": observations}
 
 

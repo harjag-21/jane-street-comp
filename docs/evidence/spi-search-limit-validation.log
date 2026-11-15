@@ -1,0 +1,23 @@
+Search-range endpoint behavior
+Date: 2026-11-15
+Command: python -m unittest discover -s experiments -v
+Result: 15 tests passed.
+
+Deterministic lower endpoint
+Target delay=5 ns, setup=2 ns, T=10 ns; tested range 2..8.
+Result: boundary=2, boundary_status=lower_endpoint_pass, bracketed=false, one probe.
+The estimator does not claim to have observed a failing point below the range.
+
+Deterministic upper endpoint
+Target delay=100 ns, setup=2 ns, T=10 ns; tested range 1..8.
+Result: boundary=null, boundary_status=upper_endpoint_fail, bracketed=false, two endpoint probes.
+The maximum tested value is not mislabeled as an estimated boundary.
+
+Interior control
+Target delay=23 ns, setup=2 ns, T=10 ns; tested range 1..8 with zero-jitter profiles.
+Result: fixed and paired binary searches report boundary=3, boundary_status=interior_boundary, bracketed=true.
+
+Single-candidate range
+The paired binary search classifies a passing or failing one-value range with exactly one profile batch; it does not probe the same value twice.
+
+Fixed and paired searches exercise the same status vocabulary. No search-limit case is included in the equal-budget accuracy studies; the limit tests validate reporting behavior, not method accuracy.
