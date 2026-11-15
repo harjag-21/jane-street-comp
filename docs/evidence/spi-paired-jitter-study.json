@@ -1,0 +1,3253 @@
+{
+  "evidence_class": "software simulation of the declared reference model",
+  "target": {
+    "clock_fs": 10000000,
+    "output_delay_fs": 23000000,
+    "setup_fs": 2000000,
+    "high_cycles": 2,
+    "response": 170
+  },
+  "estimand": "first integer low phase with empirical exact-byte success rate >= threshold",
+  "success_threshold": 0.95,
+  "jitter": {
+    "distribution": "independent uniform integer per transition",
+    "range_fs": [
+      -6000000,
+      6000000
+    ],
+    "repeats_per_probe": 200,
+    "paired_profiles_reused_across_settings_and_methods": true
+  },
+  "candidate_low_cycles": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+  ],
+  "summary": {
+    "runs": 30,
+    "oracle_boundary_at_threshold": 4,
+    "fixed_boundary_recovery_rate": 1.0,
+    "binary_boundary_recovery_rate": 1.0,
+    "fixed_median_trials": 1600.0,
+    "binary_median_trials": 1000.0,
+    "median_trial_reduction_fraction": 0.375
+  },
+  "runs": [
+    {
+      "seed": 20261115,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 107,
+            "trials": 200,
+            "success_rate": 0.535,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 107,
+            "trials": 200,
+            "success_rate": 0.535,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261116,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 109,
+            "trials": 200,
+            "success_rate": 0.545,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 109,
+            "trials": 200,
+            "success_rate": 0.545,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261117,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 108,
+            "trials": 200,
+            "success_rate": 0.54,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 108,
+            "trials": 200,
+            "success_rate": 0.54,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261118,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 110,
+            "trials": 200,
+            "success_rate": 0.55,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 110,
+            "trials": 200,
+            "success_rate": 0.55,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261119,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 114,
+            "trials": 200,
+            "success_rate": 0.57,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 114,
+            "trials": 200,
+            "success_rate": 0.57,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261120,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 112,
+            "trials": 200,
+            "success_rate": 0.56,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 112,
+            "trials": 200,
+            "success_rate": 0.56,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261121,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 111,
+            "trials": 200,
+            "success_rate": 0.555,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 111,
+            "trials": 200,
+            "success_rate": 0.555,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261122,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 103,
+            "trials": 200,
+            "success_rate": 0.515,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 103,
+            "trials": 200,
+            "success_rate": 0.515,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261123,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 103,
+            "trials": 200,
+            "success_rate": 0.515,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 103,
+            "trials": 200,
+            "success_rate": 0.515,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261124,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 102,
+            "trials": 200,
+            "success_rate": 0.51,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 102,
+            "trials": 200,
+            "success_rate": 0.51,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261125,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 103,
+            "trials": 200,
+            "success_rate": 0.515,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 103,
+            "trials": 200,
+            "success_rate": 0.515,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261126,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 109,
+            "trials": 200,
+            "success_rate": 0.545,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 109,
+            "trials": 200,
+            "success_rate": 0.545,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261127,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 119,
+            "trials": 200,
+            "success_rate": 0.595,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 119,
+            "trials": 200,
+            "success_rate": 0.595,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261128,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 105,
+            "trials": 200,
+            "success_rate": 0.525,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 105,
+            "trials": 200,
+            "success_rate": 0.525,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261129,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 104,
+            "trials": 200,
+            "success_rate": 0.52,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 104,
+            "trials": 200,
+            "success_rate": 0.52,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261130,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 111,
+            "trials": 200,
+            "success_rate": 0.555,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 111,
+            "trials": 200,
+            "success_rate": 0.555,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261131,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 106,
+            "trials": 200,
+            "success_rate": 0.53,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 106,
+            "trials": 200,
+            "success_rate": 0.53,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261132,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 98,
+            "trials": 200,
+            "success_rate": 0.49,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 98,
+            "trials": 200,
+            "success_rate": 0.49,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261133,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 115,
+            "trials": 200,
+            "success_rate": 0.575,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 115,
+            "trials": 200,
+            "success_rate": 0.575,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261134,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 108,
+            "trials": 200,
+            "success_rate": 0.54,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 108,
+            "trials": 200,
+            "success_rate": 0.54,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261135,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 101,
+            "trials": 200,
+            "success_rate": 0.505,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 101,
+            "trials": 200,
+            "success_rate": 0.505,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261136,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 103,
+            "trials": 200,
+            "success_rate": 0.515,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 103,
+            "trials": 200,
+            "success_rate": 0.515,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261137,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 111,
+            "trials": 200,
+            "success_rate": 0.555,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 111,
+            "trials": 200,
+            "success_rate": 0.555,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261138,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 111,
+            "trials": 200,
+            "success_rate": 0.555,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 111,
+            "trials": 200,
+            "success_rate": 0.555,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261139,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 130,
+            "trials": 200,
+            "success_rate": 0.65,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 130,
+            "trials": 200,
+            "success_rate": 0.65,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261140,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 118,
+            "trials": 200,
+            "success_rate": 0.59,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 118,
+            "trials": 200,
+            "success_rate": 0.59,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261141,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 104,
+            "trials": 200,
+            "success_rate": 0.52,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 104,
+            "trials": 200,
+            "success_rate": 0.52,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261142,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 117,
+            "trials": 200,
+            "success_rate": 0.585,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 117,
+            "trials": 200,
+            "success_rate": 0.585,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261143,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 107,
+            "trials": 200,
+            "success_rate": 0.535,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 107,
+            "trials": 200,
+            "success_rate": 0.535,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    },
+    {
+      "seed": 20261144,
+      "fixed_sweep": {
+        "boundary": 4,
+        "trials": 1600,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 120,
+            "trials": 200,
+            "success_rate": 0.6,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 5,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 6,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 7,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          }
+        ]
+      },
+      "binary_search": {
+        "boundary": 4,
+        "trials": 1000,
+        "observations": [
+          {
+            "low_cycles": 1,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 8,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 4,
+            "successes": 200,
+            "trials": 200,
+            "success_rate": 1.0,
+            "meets_threshold": true
+          },
+          {
+            "low_cycles": 2,
+            "successes": 0,
+            "trials": 200,
+            "success_rate": 0.0,
+            "meets_threshold": false
+          },
+          {
+            "low_cycles": 3,
+            "successes": 120,
+            "trials": 200,
+            "success_rate": 0.6,
+            "meets_threshold": false
+          }
+        ]
+      },
+      "same_jitter_profiles": true
+    }
+  ],
+  "limit": "simulation comparison only; no RTL, pad, board, or silicon evidence"
+}

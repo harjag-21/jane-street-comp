@@ -1,0 +1,13 @@
+﻿Paired jitter comparison validation
+Date: 2026-11-15
+Python: 3.13.7 (host)
+Command: python -m unittest discover -s experiments -v
+Result: 6 tests passed.
+Study command: run_paired_jitter_study(Path('docs/evidence/spi-paired-jitter-study.json'))
+Comparison rule: estimate the first integer low phase whose empirical exact-byte success rate is >= 0.95. This 95% value is a study convention, not a universal protocol requirement.
+Per seed: 200 pre-generated seven-transition jitter profiles; uniform integer perturbation [-6 ns,+6 ns]; same profiles reused at all timing settings and by both methods; candidate low phases 1..8 cycles.
+Runs: 30 seeds (20261115 through 20261144).
+Observed boundary: 4 cycles for both algorithms in 30/30 runs.
+Median transactions: fixed sweep 1600; binary search 1000; observed reduction 37.5% for this model and candidate range.
+Evidence class: software simulation of a declared model. This comparison uses equal repeats per probed setting and reports total transactions; it is not a same-total-budget accuracy comparison and does not establish RTL, hardware, physical timing, or novelty.
+Raw paired observations: docs/evidence/spi-paired-jitter-study.json

@@ -12,6 +12,7 @@ import json
 import math
 import random
 from pathlib import Path
+from statistics import median
 from typing import Iterable
 
 
@@ -52,6 +53,7 @@ def run_trial(
     *,
     jitter_fs: int = 0,
     rng: random.Random | None = None,
+    transition_jitter_fs: tuple[int, ...] | None = None,
 ) -> Trial:
     """Simulate one bounded mode-0 byte transaction.
 
@@ -67,6 +69,8 @@ def run_trial(
         raise ValueError("jitter magnitude must be non-negative")
     if jitter_fs and rng is None:
         raise ValueError("provide a seeded RNG when jitter is enabled")
+    if transition_jitter_fs is not None and len(transition_jitter_fs) != 7:
+        raise ValueError("one jitter value is required for each of seven transitions")
 
     bits = [(target.response >> shift) & 1 for shift in range(7, -1, -1)]
     sampled = [bits[0]]  # first bit is stable before the first rising edge
@@ -74,7 +78,11 @@ def run_trial(
     low_fs = low_cycles * target.clock_fs
 
     for index in range(1, 8):
-        perturbation = rng.randint(-jitter_fs, jitter_fs) if rng else 0
+        perturbation = (
+            transition_jitter_fs[index - 1]
+            if transition_jitter_fs is not None
+            else rng.randint(-jitter_fs, jitter_fs) if rng else 0
+        )
         actual_delay = max(0, target.output_delay_fs + perturbation)
         slack = low_fs - actual_delay - target.setup_fs
         slacks.append(slack)
@@ -162,6 +170,127 @@ def run_reference_study(output: Path) -> dict[str, object]:
         "deterministic_binary_search": binary,
         "seeded_jitter": {"magnitude_fs": 6_000_000, "seed": 20261115,
                           "repeats_per_setting": 10_000, "fixed_sweep": jitter},
+    }
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    return result
+
+
+def make_jitter_profiles(repeats: int, jitter_fs: int, seed: int) -> list[tuple[int, ...]]:
+    """Create exogenous per-trial jitter used unchanged at every timing value."""
+    if repeats < 1 or jitter_fs < 0:
+        raise ValueError("repeats must be positive and jitter non-negative")
+    rng = random.Random(seed)
+    return [tuple(rng.randint(-jitter_fs, jitter_fs) for _ in range(7))
+            for _ in range(repeats)]
+
+
+def paired_fixed_sweep(
+    target: Target,
+    low_values: Iterable[int],
+    jitter_profiles: list[tuple[int, ...]],
+    success_threshold: float = 0.95,
+) -> dict[str, object]:
+    """Scan every setting using the same profile IDs at every setting."""
+    rows = []
+    for low in low_values:
+        successes = sum(
+            run_trial(low, target, transition_jitter_fs=profile).passed
+            for profile in jitter_profiles
+        )
+        rate = successes / len(jitter_profiles)
+        rows.append({"low_cycles": low, "successes": successes,
+                     "trials": len(jitter_profiles), "success_rate": rate,
+                     "meets_threshold": rate >= success_threshold})
+    boundary = next((row["low_cycles"] for row in rows if row["meets_threshold"]), None)
+    return {"boundary": boundary, "trials": len(rows) * len(jitter_profiles),
+            "observations": rows}
+
+
+def paired_binary_search(
+    target: Target,
+    low: int,
+    high: int,
+    jitter_profiles: list[tuple[int, ...]],
+    success_threshold: float = 0.95,
+) -> dict[str, object]:
+    """Binary search using identical paired profiles and the same rate rule."""
+    if low < 1 or high < low or not jitter_profiles:
+        raise ValueError("require 1 <= low <= high and at least one jitter profile")
+    observations = []
+
+    def classify(value: int) -> bool:
+        successes = sum(
+            run_trial(value, target, transition_jitter_fs=profile).passed
+            for profile in jitter_profiles
+        )
+        rate = successes / len(jitter_profiles)
+        observations.append({"low_cycles": value, "successes": successes,
+                             "trials": len(jitter_profiles), "success_rate": rate,
+                             "meets_threshold": rate >= success_threshold})
+        return rate >= success_threshold
+
+    if classify(low):
+        boundary = low
+    elif not classify(high):
+        boundary = None
+    else:
+        left, right = low, high
+        while right - left > 1:
+            mid = (left + right) // 2
+            if classify(mid):
+                right = mid
+            else:
+                left = mid
+        boundary = right
+    return {"boundary": boundary, "trials": len(observations) * len(jitter_profiles),
+            "observations": observations}
+
+
+def run_paired_jitter_study(
+    output: Path,
+    *,
+    seeds: Iterable[int] = range(20261115, 20261145),
+    repeats: int = 200,
+    jitter_fs: int = 6_000_000,
+    success_threshold: float = 0.95,
+) -> dict[str, object]:
+    """Compare methods over paired jitter streams and save every observation."""
+    target = Target()
+    candidates = list(range(1, 9))
+    runs = []
+    for seed in seeds:
+        profiles = make_jitter_profiles(repeats, jitter_fs, seed)
+        sweep = paired_fixed_sweep(target, candidates, profiles, success_threshold)
+        binary = paired_binary_search(target, candidates[0], candidates[-1],
+                                      profiles, success_threshold)
+        runs.append({"seed": seed, "fixed_sweep": sweep, "binary_search": binary,
+                     "same_jitter_profiles": True})
+
+    fixed_trials = [run["fixed_sweep"]["trials"] for run in runs]
+    binary_trials = [run["binary_search"]["trials"] for run in runs]
+    result: dict[str, object] = {
+        "evidence_class": "software simulation of the declared reference model",
+        "target": asdict(target),
+        "estimand": "first integer low phase with empirical exact-byte success rate >= threshold",
+        "success_threshold": success_threshold,
+        "jitter": {"distribution": "independent uniform integer per transition",
+                   "range_fs": [-jitter_fs, jitter_fs], "repeats_per_probe": repeats,
+                   "paired_profiles_reused_across_settings_and_methods": True},
+        "candidate_low_cycles": candidates,
+        "summary": {"runs": len(runs),
+                    "oracle_boundary_at_threshold": 4,
+                    "fixed_boundary_recovery_rate": sum(
+                        run["fixed_sweep"]["boundary"] == 4 for run in runs
+                    ) / len(runs),
+                    "binary_boundary_recovery_rate": sum(
+                        run["binary_search"]["boundary"] == 4 for run in runs
+                    ) / len(runs),
+                    "fixed_median_trials": median(fixed_trials),
+                    "binary_median_trials": median(binary_trials),
+                    "median_trial_reduction_fraction": 1 - median(binary_trials) / median(fixed_trials)},
+        "runs": runs,
+        "limit": "simulation comparison only; no RTL, pad, board, or silicon evidence",
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")

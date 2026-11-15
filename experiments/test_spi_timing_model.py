@@ -1,7 +1,15 @@
 import random
 import unittest
 
-from spi_timing_model import Target, binary_search, fixed_sweep, run_trial
+from spi_timing_model import (
+    Target,
+    binary_search,
+    fixed_sweep,
+    make_jitter_profiles,
+    paired_binary_search,
+    paired_fixed_sweep,
+    run_trial,
+)
 
 
 class TimingModelTests(unittest.TestCase):
@@ -36,6 +44,18 @@ class TimingModelTests(unittest.TestCase):
     def test_jitter_requires_explicit_seeded_rng(self):
         with self.assertRaises(ValueError):
             run_trial(3, self.target, jitter_fs=1)
+
+    def test_paired_jitter_searches_use_same_profiles_and_threshold(self):
+        profiles = make_jitter_profiles(repeats=30, jitter_fs=6_000_000, seed=17)
+        sweep = paired_fixed_sweep(self.target, range(1, 9), profiles, 0.95)
+        binary = paired_binary_search(self.target, 1, 8, profiles, 0.95)
+        self.assertEqual(sweep["boundary"], 4)
+        self.assertEqual(binary["boundary"], 4)
+        self.assertEqual(sweep["trials"], 240)
+        self.assertEqual(binary["trials"], 150)
+        sweep_l3 = next(row for row in sweep["observations"] if row["low_cycles"] == 3)
+        binary_l3 = next(row for row in binary["observations"] if row["low_cycles"] == 3)
+        self.assertEqual(sweep_l3, binary_l3)
 
 
 if __name__ == "__main__":
