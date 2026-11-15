@@ -168,15 +168,15 @@ For each final protocol claim, state protocol role, pin mapping, supported modes
 
 ## 8. Current status (setup gate)
 
-- Workspace began with only an uncommitted Git repository. The official Tiny Tapeout CMOS5L template scaffold was copied from upstream `main` at commit `4b1204ab387b5ab94db1d57067051d8d89a2f83c` (upstream commit date 2026-10-28); `info.yaml` allocation is `8x4`.
+- Workspace began with an unborn local Git repository. A local setup snapshot was committed as `2321a8ca9deb6a8880e4684cc901c388461a62f9` so Tiny Tapeout's tools can identify the source revision; no remote is configured and nothing was published. The official Tiny Tapeout CMOS5L template scaffold was copied from upstream `main` at commit `4b1204ab387b5ab94db1d57067051d8d89a2f83c` (upstream commit date 2026-10-28); `info.yaml` allocation is `8x4`.
 - Project identity is provisional: title `Timing Boundary Explorer`, author `TBD`, top module `tt_um_example`, and working description in `info.yaml`. Replace author and top-module name before publication/submission.
 - Host inventory: Git 2.51.2, Python 3.13.7, Icarus Verilog 13.0, Docker CLI 29.6.2. Verilator, Yosys, OpenLane, `tt_tool.py`, `make`, Cocotb, and GitHub CLI were not found on the host PATH. Docker Desktop was started and its daemon responds.
-- The template development image builds as `jane-street-asic-dev:diagnostic` from the template `.devcontainer/Dockerfile` with a temporary Dockerfile-only explicit PyPI index override. The unmodified template RTL test passed in that image: Cocotb 2.0.1, Icarus 12.0, `1/1 PASS`. Raw output: `docs/evidence/template-rtl-baseline.log`. This establishes the RTL simulation baseline only.
-- The first image build failed when the default package index did not resolve pinned `kiwisolver==1.4.9`; explicit `https://pypi.org/simple` resolved it. No dependency file was changed. The working image contains LibreLane 3.1.0.dev4 and the template's pinned support-tool dependencies.
+- The template development image was built as `jane-street-asic-dev:diagnostic` with an explicit PyPI index after the default package index failed to resolve pinned packages. The unmodified template RTL test passed in that image: Cocotb 2.0.1, Icarus 12.0, `1/1 PASS`. Raw output: `docs/evidence/template-rtl-baseline.log`. This establishes the RTL simulation baseline only.
+- The repository's `.devcontainer/Dockerfile` now sets the public PyPI index and retry/timeout values to fetch the pinned packages in this environment. `.gitattributes` keeps copied shell scripts LF-terminated for Linux containers. A container built from a cached base plus the Tiny Tapeout Docker-in-Docker feature has a responding nested Docker daemon. Its first startup hook failed because the cached base contained a CRLF copy of the support-tools script. The source shell file is now LF-normalized; the existing container hook was not rerun.
 - Tiny Tapeout support tools were copied into ignored local `tt/` from upstream commit `9d13ff3e3e6202090740110438c6a10c1d62ca0f`. `tt_tool.py --pdk ihp-sg13cmos5l --create-user-config` succeeded and generated an 8x4 configuration (`DIE_AREA: 0 0 1724.16 710.64`). This validates metadata/config generation, not GDS, timing, or precheck.
-- CIEL remote PDK versions were queried on 2026-11-15. Fetch of the first currently listed IHP-SG13 version (`cc9afba57e0ec1b5ba77e6bbb638ba9dbe5866b8`) is in progress to persistent `.ttsetup/pdk`; do not call it installed until CIEL completes and `ciel ls` confirms it.
-- Project architecture: not frozen. RTL remains the untouched template example. Target DUT, timing parameter, and response oracle are not selected.
-- Tiny Tapeout hardening/GDS/precheck has not been run. Verified design results: template RTL baseline only; no project RTL, GDS, gate-level, FPGA, or silicon results.
+- CIEL release manifest for IHP-SG13 version `cc9afba57e0ec1b5ba77e6bbb638ba9dbe5866b8` was fetched and checked. The 505,034,071-byte `common.tar.zst` asset was fully downloaded, decompressed, and extracted (8,155 members; 899,174,064 uncompressed member bytes). CMOS5L I/O, SRAM, and standard-cell archives were also verified and extracted (12,619,905; 2,596,008; and 6,290,705 compressed bytes respectively). `ciel enable --pdk ihp-sg13cmos5l cc9afba57e0ec1b5ba77e6bbb638ba9dbe5866b8` succeeded; `ciel output` and `ciel ls` returned that version. The active PDK is under the running development container's `/home/vscode/ttsetup/pdk`; the download archives remain in ignored `.ttsetup/downloads` for recovery. A separate incomplete extraction remains under ignored workspace `.ttsetup/pdk`; it is not the active PDK root.
+- Project architecture: not frozen. RTL remains the untouched template example. A proposal-only question, experiment, system split, and decision gates are in `docs/TIMING_BOUNDARY_EXPLORER_ARCHITECTURE.md`. No target DUT, final timing parameter, pin map, instruction set, or response oracle is selected.
+- Tiny Tapeout hardening has been attempted on the untouched template. Attempt 1 stopped before LibreLane because the repository had no commit; raw log is `docs/evidence/template-hardening-attempt-01.log`. Attempt 2 passed the Git gate and is still downloading the official LibreLane 3.1.0.dev4 runner image. `docs/evidence/template-hardening-baseline.log` is in progress and is not a GDS/precheck result. No project RTL, completed GDS, gate-level, FPGA, or silicon result exists.
 - Official competition facts above were checked against the organizer’s page on 2026-11-15.
 
 ## 9. Decision log
@@ -188,10 +188,10 @@ For each final protocol claim, state protocol role, pin mapping, supported modes
 
 ## 10. Immediate next actions
 
-1. Complete the persistent CIEL PDK installation; confirm it with `ciel ls`.
-2. Run official local hardening and precheck on the untouched template if feasible; otherwise document and configure the GitHub Actions route before design freeze.
-3. Define the smallest target model with a known timing threshold and one parameter sweep.
-4. Write an end-to-end interface sketch: host command → program/configuration → generated signal → timestamped response → report.
-5. Freeze the minimum viable engine/loader/pin assumptions, then begin RTL.
+1. Let the active template hardening run finish; inspect the final logs and any required precheck separately from simulation.
+2. Define the smallest target model with a known timing threshold and one parameter sweep.
+3. Resolve host boot/loading and protocol-pin allocation against the UART/SPI/I2C examples.
+4. Freeze the minimum viable engine, trace record, and loader only after the simulation measurement gate passes.
+5. Start explorer RTL, then synthesize and harden early before growing program or capture memory.
 
 Update this document whenever a rule is rechecked, an architecture decision is made, a result is produced, or a risk changes. Keep raw logs and generated evidence in the repository; this ledger is an index, not a substitute for them.
