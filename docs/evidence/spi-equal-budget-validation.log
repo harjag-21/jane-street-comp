@@ -1,0 +1,14 @@
+﻿Equal-total-budget paired comparison
+Date: 2026-11-15
+Command: python -m unittest discover -s experiments -v
+Unit tests: 8 passed.
+Study command: run_equal_budget_study(Path('docs/evidence/spi-equal-budget-study.json'))
+Python: 3.13.7; reference model in experiments/spi_timing_model.py.
+Estimand: first low phase with exact-byte success probability >= 0.95. The 0.95 threshold is a study convention. Exact model probabilities put the boundary at 4 cycles (P(success at 3)=0.05735; at 4=0.95999996; at 5=1.0).
+Noise: independently uniform integer perturbation in [-15,176,495 fs,+15,176,495 fs] per target transition.
+Paired runs: 1,000 seeds, 200 candidate profiles per seed, reused across timing settings and both algorithms. Each method uses exactly 800 transactions per seed: fixed sweep uses 100 per each of 8 settings; binary search uses 160 per each of 5 probes.
+Fixed sweep recovered boundary 4 in 769/1000 runs (76.9%; Wilson 95% CI 74.2%-79.4%).
+Binary search recovered boundary 4 in 789/1000 runs (78.9%; Wilson 95% CI 76.3%-81.3%).
+Paired accuracy difference (binary minus fixed): +2.0 percentage points; seed-bootstrap 95% interval [-0.3,+4.3] percentage points. This interval includes zero; this study does not establish an accuracy advantage for binary search.
+All binary runs used 800 transactions. Equal-budget paired raw data: docs/evidence/spi-equal-budget-study.json.
+Limit: synthetic target and jitter model only; no RTL, physical target, pad, board, silicon, or novelty evidence.

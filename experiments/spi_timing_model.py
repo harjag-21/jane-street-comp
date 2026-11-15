@@ -295,3 +295,128 @@ def run_paired_jitter_study(
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     return result
+
+
+def theoretical_success_probability(
+    low_cycles: int, target: Target, jitter_fs: int
+) -> float:
+    """Exact-byte probability for independent integer-uniform edge jitter."""
+    if low_cycles < 1 or jitter_fs < 0:
+        raise ValueError("low_cycles must be positive and jitter non-negative")
+    slack_without_jitter = (
+        low_cycles * target.clock_fs - target.output_delay_fs - target.setup_fs
+    )
+    total = 2 * jitter_fs + 1
+    per_edge_passes = min(total, max(0, slack_without_jitter + jitter_fs + 1))
+    return (per_edge_passes / total) ** 7
+
+
+def wilson_interval(successes: int, trials: int, z: float = 1.959963984540054) -> list[float]:
+    """95% Wilson interval for a binomial proportion (default z)."""
+    if trials < 1 or not 0 <= successes <= trials:
+        raise ValueError("require trials >= 1 and 0 <= successes <= trials")
+    p = successes / trials
+    z2 = z * z
+    denominator = 1 + z2 / trials
+    center = (p + z2 / (2 * trials)) / denominator
+    radius = z * math.sqrt(p * (1 - p) / trials + z2 / (4 * trials * trials)) / denominator
+    return [max(0.0, center - radius), min(1.0, center + radius)]
+
+
+def run_equal_budget_study(
+    output: Path,
+    *,
+    seeds: Iterable[int] = range(20261115, 20262115),
+    fixed_repeats_per_setting: int = 100,
+    binary_repeats_per_probe: int = 160,
+    jitter_fs: int = 15_176_495,
+    success_threshold: float = 0.95,
+) -> dict[str, object]:
+    """Compare methods under an equal transaction budget over paired seeds.
+
+    Fixed sweep uses 100 transactions at each of eight values (800 total).
+    Binary search gets 160 paired transactions at each of five probes (800
+    total on this range). The first 100 perturbation profiles are shared at
+    every value, and binary search receives the additional 60 only at values
+    it probes. Each seed is an independent study replicate.
+    """
+    target = Target()
+    candidates = list(range(1, 9))
+    fixed_budget = len(candidates) * fixed_repeats_per_setting
+    binary_max_probes = 5  # endpoints plus at most three bisection probes
+    binary_budget = binary_max_probes * binary_repeats_per_probe
+    if fixed_budget != binary_budget:
+        raise ValueError("fixed and binary transaction budgets must match")
+
+    runs = []
+    for seed in seeds:
+        profiles = make_jitter_profiles(binary_repeats_per_probe, jitter_fs, seed)
+        fixed = paired_fixed_sweep(
+            target, candidates, profiles[:fixed_repeats_per_setting], success_threshold
+        )
+        binary = paired_binary_search(
+            target, candidates[0], candidates[-1], profiles, success_threshold
+        )
+        runs.append({"seed": seed, "fixed_sweep": fixed,
+                     "binary_search": binary,
+                     "paired_profiles": True,
+                     "fixed_trials": fixed["trials"],
+                     "binary_trials": binary["trials"]})
+
+    count = len(runs)
+    if count == 0:
+        raise ValueError("at least one seed is required")
+    fixed_correct = [run["fixed_sweep"]["boundary"] == 4 for run in runs]
+    binary_correct = [run["binary_search"]["boundary"] == 4 for run in runs]
+    paired_differences = [int(b) - int(f) for b, f in zip(binary_correct, fixed_correct)]
+
+    bootstrap_rng = random.Random(20262115)
+    boot_means = []
+    for _ in range(5000):
+        sample = [paired_differences[bootstrap_rng.randrange(count)] for _ in range(count)]
+        boot_means.append(sum(sample) / count)
+    boot_means.sort()
+    delta_ci = [boot_means[int(0.025 * len(boot_means))],
+                boot_means[min(len(boot_means) - 1, int(0.975 * len(boot_means)))] ]
+
+    fixed_trials = [run["fixed_trials"] for run in runs]
+    binary_trials = [run["binary_trials"] for run in runs]
+    result: dict[str, object] = {
+        "evidence_class": "paired software simulation of the declared reference model",
+        "target": asdict(target),
+        "jitter": {"distribution": "independent uniform integer per transition",
+                   "range_fs": [-jitter_fs, jitter_fs]},
+        "estimand": "first integer low phase with exact-byte success probability >= threshold",
+        "success_threshold": success_threshold,
+        "theoretical_success_probabilities": {
+            str(low): theoretical_success_probability(low, target, jitter_fs)
+            for low in candidates
+        },
+        "oracle_boundary_cycles": 4,
+        "budget": {"fixed_transactions": fixed_budget,
+                   "binary_transactions": binary_budget,
+                   "fixed_repeats_per_setting": fixed_repeats_per_setting,
+                   "binary_repeats_per_probe": binary_repeats_per_probe,
+                   "candidate_settings": candidates,
+                   "binary_max_probes": binary_max_probes},
+        "summary": {
+            "paired_seed_runs": count,
+            "fixed_correct": sum(fixed_correct),
+            "binary_correct": sum(binary_correct),
+            "fixed_accuracy": sum(fixed_correct) / count,
+            "fixed_accuracy_wilson_95": wilson_interval(sum(fixed_correct), count),
+            "binary_accuracy": sum(binary_correct) / count,
+            "binary_accuracy_wilson_95": wilson_interval(sum(binary_correct), count),
+            "paired_binary_minus_fixed_accuracy": sum(paired_differences) / count,
+            "paired_accuracy_difference_bootstrap_95": delta_ci,
+            "fixed_median_transactions": median(fixed_trials),
+            "binary_median_transactions": median(binary_trials),
+            "median_transactions_used_fraction": median(binary_trials) / fixed_budget,
+            "median_unused_binary_budget": fixed_budget - median(binary_trials),
+        },
+        "runs": runs,
+        "limit": "model-only evidence; confidence intervals cover seeded simulation replicates, not physical devices",
+    }
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    return result

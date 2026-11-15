@@ -1,4 +1,6 @@
 import random
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 
 from spi_timing_model import (
@@ -8,7 +10,10 @@ from spi_timing_model import (
     make_jitter_profiles,
     paired_binary_search,
     paired_fixed_sweep,
+    run_equal_budget_study,
     run_trial,
+    theoretical_success_probability,
+    wilson_interval,
 )
 
 
@@ -56,6 +61,26 @@ class TimingModelTests(unittest.TestCase):
         sweep_l3 = next(row for row in sweep["observations"] if row["low_cycles"] == 3)
         binary_l3 = next(row for row in binary["observations"] if row["low_cycles"] == 3)
         self.assertEqual(sweep_l3, binary_l3)
+
+    def test_probability_oracle_and_wilson_interval(self):
+        self.assertLess(theoretical_success_probability(3, self.target, 15_176_495), 0.95)
+        self.assertAlmostEqual(
+            theoretical_success_probability(4, self.target, 15_176_495), 0.96, places=5
+        )
+        self.assertEqual(theoretical_success_probability(5, self.target, 15_176_495), 1.0)
+        lower, upper = wilson_interval(95, 100)
+        self.assertLess(lower, 0.95)
+        self.assertGreater(upper, 0.95)
+
+    def test_equal_budget_study_keeps_both_methods_within_800_trials(self):
+        with TemporaryDirectory() as temp_dir:
+            result = run_equal_budget_study(
+                Path(temp_dir) / "study.json", seeds=range(20)
+            )
+        self.assertEqual(result["budget"]["fixed_transactions"], 800)
+        self.assertEqual(result["budget"]["binary_transactions"], 800)
+        self.assertTrue(all(run["fixed_trials"] == 800 for run in result["runs"]))
+        self.assertTrue(all(run["binary_trials"] == 800 for run in result["runs"]))
 
 
 if __name__ == "__main__":
