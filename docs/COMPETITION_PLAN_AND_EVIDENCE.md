@@ -200,8 +200,8 @@ For each final protocol claim, state protocol role, pin mapping, supported modes
 
 ## 10. Immediate next actions
 
-1. Implement the v0.1 UART command/response and one parameterized SPI transaction in RTL; verify the documented frame and pin behavior in simulation.
-2. Synthesize/harden that vertical slice early for an area/timing baseline, then design the minimum program engine, loader, and toolchain needed for post-fabrication reprogrammability.
+1. Repair the Tiny Tapeout development-container dependencies, then rerun the v0.1 simulation there and synthesize/harden the vertical slice for an area/timing baseline.
+2. Implement the proposed minimum program engine, loader, and toolchain in `docs/PROGRAMMABLE_ENGINE_ARCHITECTURE.md` needed for post-fabrication reprogrammability.
 3. Implement documented UART, SPI, and I2C example programs on that engine; verify each protocol and connect the host timing sweep to the program interface.
 4. Resolve the input clock frequency, UART baud/divider, and board electrical checks before updating `info.yaml` or making timing-in-nanoseconds claims.
 5. Run the final measurement gate and complete the Tiny Tapeout flow/precheck on the required reprogrammable design.
