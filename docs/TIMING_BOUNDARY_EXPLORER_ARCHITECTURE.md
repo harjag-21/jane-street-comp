@@ -1,6 +1,6 @@
 # Timing Boundary Explorer — Architecture Draft
 
-**Status:** v0.1 single-SPI vertical-slice contract selected for implementation; generic protocol architecture remains a proposal.
+**Status:** v0.1 single-SPI bring-up contract selected; the final reprogrammable protocol engine and ISA remain to be designed.
 **Purpose:** keep the experiment, ASIC, host software, and evidence plan aligned before RTL work.
 
 ## Research question (hypothesis)
@@ -60,9 +60,15 @@ This is a specification proposal for the first simulation experiment, not a clai
 
 Before coding, review the SPI edge ordering and equality convention against the selected simulator's event semantics. The analytical boundary is an oracle for this deliberately simplified target model; it is not a prediction of a real target's setup/hold behavior or of the ASIC pad timing.
 
-## v0.1 minimum demo contract
+## Competition compliance gate
 
-This decision narrows the first hardware implementation to one complete host-to-target-to-host path. It does not freeze the later programmable multi-protocol architecture.
+The [organizer's brief and FAQ](https://blog.janestreet.com/protocol-emulator-asic-competition/#faq) require a chip that can be reprogrammed after fabrication to support protocols beyond fixed-function blocks, plus a software toolchain and example programs. UART, SPI, and I2C are the starting protocol set, and flexibility is the main judging criterion. A CPU is not required; a small sequencer, interpreter, or another reprogrammable architecture may qualify. This is a final-submission requirement, not an optional future enhancement. The v0.1 contract below is only a risk-reduction milestone and must grow into this required architecture before feature freeze.
+
+The final architecture gate is passed only when a loaded program can configure pin direction/value, cycle waits, and sampling (or equivalent primitives), and documented programs demonstrate UART, SPI, and I2C. The repository must include the loader/toolchain and examples. The timing-boundary host tool will compile/use those programs to run controlled sweeps. Reset and reload after board deselection must be verified because the organizer's FAQ notes the design loses state when deselected. Keep fixed-function helper blocks only where they do not prevent post-fabrication reprogramming.
+
+## v0.1 minimum bring-up contract
+
+This decision narrows the first hardware milestone to one complete host-to-target-to-host path. It is not, by itself, a compliant final competition design and does not freeze the later programmable multi-protocol architecture. Treat the byte framing as a bring-up interface; the final loader may version or replace it after the ISA/program model is designed.
 
 ### Transaction behavior
 
@@ -105,7 +111,7 @@ This is the project pin plan, not a verified board/electrical assignment. The UA
 
 ### Explicitly deferred
 
-Instruction memory and a generic microcode ISA, UART/SPI/I2C program families, programmable high phase, multiple simultaneous buses, on-chip sweeps, a trace FIFO, adaptive search in the ASIC, and a physical external target are deferred. Revisit them only after the v0.1 transaction path passes simulation and the smallest design completes the physical flow.
+Instruction memory or another post-fabrication program mechanism, the final loader/assembler/toolchain, configurable pin selection, and UART/SPI/I2C example programs are deferred only until the v0.1 transaction path passes simulation; they are mandatory before final submission. Evaluate the smallest program engine and synthesize it early. Programmable high phase, multiple simultaneous buses, on-chip sweeps, a trace FIFO, adaptive search in the ASIC, and a physical external target remain optional unless measurements justify them.
 
 ## Search-limit behavior
 
