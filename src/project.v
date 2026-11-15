@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /* Timing Boundary Explorer v0.1 simulation bring-up; not the final engine. */
+`ifndef __librelane__
 `timescale 1ns/1ps
+`endif
 `default_nettype none
 module tt_um_example #(
     parameter integer CLKS_PER_BIT = 8
@@ -17,13 +19,13 @@ module tt_um_example #(
                    CMD_WAIT=4, CMD_PREP=5, CMD_SEND=6, CMD_TX_BUSY=7,
                    CMD_TX_DONE=8;
 
-  reg [2:0] rx_state; reg [31:0] rx_count; reg [2:0] rx_bit;
+  reg [2:0] rx_state; reg [15:0] rx_count; reg [2:0] rx_bit;
   reg [7:0] rx_shift, rx_byte; reg rx_byte_valid;
-  reg [1:0] tx_state; reg [31:0] tx_count; reg [2:0] tx_bit;
+  reg [1:0] tx_state; reg [15:0] tx_count; reg [2:0] tx_bit;
   reg [7:0] tx_shift, tx_data; reg tx_start, tx_busy;
-  reg [1:0] spi_state; reg [31:0] spi_count; reg [2:0] spi_bit;
+  reg [1:0] spi_state; reg [15:0] spi_count; reg [2:0] spi_bit;
   reg [15:0] spi_low_cycles; reg [7:0] spi_mosi, spi_miso;
-  reg spi_start, spi_busy, spi_done, sclk, cs_n, mosi, trial_active;
+  reg spi_start, spi_done, sclk, cs_n, mosi, trial_active;
   reg [3:0] cmd_state; reg [2:0] body_index, response_index;
   reg [7:0] crc_work, opcode, request_id, low_lo, low_hi, request_mosi;
   reg [7:0] command_status, response [0:6]; integer i;
@@ -43,20 +45,20 @@ module tt_um_example #(
     else begin
       rx_byte_valid <= 0;
       case (rx_state)
-        RX_IDLE: if (!ui_in[0]) begin rx_state<=RX_START; rx_count<=HALF_BIT-1; end
+        RX_IDLE: if (!ui_in[0]) begin rx_state<=RX_START; rx_count<=HALF_BIT[15:0]-16'd1; end
         RX_START: if (rx_count==0) begin
-          if (!ui_in[0]) begin rx_state<=RX_DATA; rx_count<=CLKS_PER_BIT-1; rx_bit<=0; end
+          if (!ui_in[0]) begin rx_state<=RX_DATA; rx_count<=CLKS_PER_BIT[15:0]-16'd1; rx_bit<=0; end
           else rx_state<=RX_IDLE;
-        end else rx_count<=rx_count-1'b1;
+        end else rx_count<=rx_count-16'd1;
         RX_DATA: if (rx_count==0) begin
-          rx_count<=CLKS_PER_BIT-1;
+          rx_count<=CLKS_PER_BIT[15:0]-16'd1;
           if (rx_bit==7) begin rx_shift[7]<=ui_in[0]; rx_state<=RX_STOP; end
           else begin rx_shift[rx_bit]<=ui_in[0]; rx_bit<=rx_bit+1'b1; end
-        end else rx_count<=rx_count-1'b1;
+        end else rx_count<=rx_count-16'd1;
         RX_STOP: if (rx_count==0) begin
           rx_state<=RX_IDLE;
           if (ui_in[0]) begin rx_byte<=rx_shift; rx_byte_valid<=1; end
-        end else rx_count<=rx_count-1'b1;
+        end else rx_count<=rx_count-16'd1;
         default: rx_state<=RX_IDLE;
       endcase
     end
@@ -66,14 +68,14 @@ module tt_um_example #(
   always @(posedge clk) begin
     if (!rst_n) begin tx_state<=TX_IDLE; tx_count<=0; tx_bit<=0; tx_shift<=8'hff; tx_busy<=0; end
     else case (tx_state)
-      TX_IDLE: begin tx_busy<=0; if (tx_start) begin tx_shift<=tx_data; tx_bit<=0; tx_count<=CLKS_PER_BIT-1; tx_state<=TX_START; tx_busy<=1; end end
-      TX_START: if (tx_count==0) begin tx_state<=TX_DATA; tx_count<=CLKS_PER_BIT-1; end else tx_count<=tx_count-1'b1;
+      TX_IDLE: begin tx_busy<=0; if (tx_start) begin tx_shift<=tx_data; tx_bit<=0; tx_count<=CLKS_PER_BIT[15:0]-16'd1; tx_state<=TX_START; tx_busy<=1; end end
+      TX_START: if (tx_count==0) begin tx_state<=TX_DATA; tx_count<=CLKS_PER_BIT[15:0]-16'd1; end else tx_count<=tx_count-16'd1;
       TX_DATA: if (tx_count==0) begin
-        tx_count<=CLKS_PER_BIT-1;
+        tx_count<=CLKS_PER_BIT[15:0]-16'd1;
         if (tx_bit==7) tx_state<=TX_STOP;
         else begin tx_bit<=tx_bit+1'b1; tx_shift<={1'b0,tx_shift[7:1]}; end
-      end else tx_count<=tx_count-1'b1;
-      TX_STOP: if (tx_count==0) begin tx_state<=TX_IDLE; tx_busy<=0; end else tx_count<=tx_count-1'b1;
+      end else tx_count<=tx_count-16'd1;
+      TX_STOP: if (tx_count==0) begin tx_state<=TX_IDLE; tx_busy<=0; end else tx_count<=tx_count-16'd1;
       default: tx_state<=TX_IDLE;
     endcase
   end
@@ -82,24 +84,25 @@ module tt_um_example #(
   always @(posedge clk) begin
     if (!rst_n) begin
       spi_state<=SPI_IDLE; spi_count<=0; spi_bit<=0; spi_low_cycles<=0; spi_mosi<=0; spi_miso<=0;
-      spi_busy<=0; spi_done<=0; sclk<=0; cs_n<=1; mosi<=0; trial_active<=0;
+      spi_done<=0; sclk<=0; cs_n<=1; mosi<=0; trial_active<=0;
     end else begin
       spi_done<=0;
       case (spi_state)
         SPI_IDLE: begin
-          sclk<=0; cs_n<=1; trial_active<=0; spi_busy<=0;
+          sclk<=0; cs_n<=1; trial_active<=0;
           if (spi_start) begin
-            spi_state<=SPI_LOW; spi_count<=0; spi_bit<=0; spi_miso<=0; cs_n<=0; mosi<=spi_mosi[7]; trial_active<=1; spi_busy<=1;
+            spi_low_cycles<={low_hi,low_lo}; spi_mosi<=request_mosi;
+            spi_state<=SPI_LOW; spi_count<=0; spi_bit<=0; spi_miso<=0; cs_n<=0; mosi<=request_mosi[7]; trial_active<=1;
           end
         end
-        SPI_LOW: if (spi_count==spi_low_cycles-1'b1) begin
+        SPI_LOW: if (spi_count==spi_low_cycles-16'd1) begin
           sclk<=1; spi_count<=0; spi_miso<={spi_miso[6:0],uio_in[0]}; spi_state<=SPI_HIGH;
-        end else spi_count<=spi_count+1'b1;
-        SPI_HIGH: if (spi_count==1) begin
+        end else spi_count<=spi_count+16'd1;
+        SPI_HIGH: if (spi_count==16'd1) begin
           sclk<=0; spi_count<=0;
-          if (spi_bit==7) begin cs_n<=1; trial_active<=0; spi_busy<=0; spi_done<=1; spi_state<=SPI_IDLE; end
-          else begin spi_bit<=spi_bit+1'b1; mosi<=spi_mosi[6-spi_bit]; spi_state<=SPI_LOW; end
-        end else spi_count<=spi_count+1'b1;
+          if (spi_bit==7) begin cs_n<=1; trial_active<=0; spi_done<=1; spi_state<=SPI_IDLE; end
+          else begin spi_bit<=spi_bit+1'b1; mosi<=spi_mosi[3'd6-spi_bit]; spi_state<=SPI_LOW; end
+        end else spi_count<=spi_count+16'd1;
         default: spi_state<=SPI_IDLE;
       endcase
     end
@@ -132,7 +135,7 @@ module tt_um_example #(
           cmd_state<=CMD_START;
         end
         CMD_START: if (command_status==0) begin
-          spi_low_cycles<={low_hi,low_lo}; spi_mosi<=request_mosi; spi_start<=1; cmd_state<=CMD_WAIT;
+          spi_start<=1; cmd_state<=CMD_WAIT;
         end else cmd_state<=CMD_PREP;
         CMD_WAIT: if (spi_done) cmd_state<=CMD_PREP;
         CMD_PREP: begin
@@ -155,6 +158,6 @@ module tt_um_example #(
   assign uo_out[0]=(tx_state==TX_START)?0:(tx_state==TX_DATA)?tx_shift[0]:1;
   assign uo_out[1]=sclk; assign uo_out[2]=cs_n; assign uo_out[3]=mosi; assign uo_out[4]=trial_active; assign uo_out[7:5]=0;
   assign uio_out=0; assign uio_oe=0;
-  wire _unused=&{ena,uio_in[7:1],1'b0};
+  wire _unused=&{ena,ui_in[7:1],uio_in[7:1],1'b0};
 endmodule
 `default_nettype wire
