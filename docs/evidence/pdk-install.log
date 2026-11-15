@@ -1,0 +1,10 @@
+PDK_ROOT=/home/vscode/ttsetup/pdk
+$ ciel output --pdk ihp-sg13cmos5l
+cc9afba57e0ec1b5ba77e6bbb638ba9dbe5866b8
+$ ciel ls --pdk ihp-sg13cmos5l
+cc9afba57e0ec1b5ba77e6bbb638ba9dbe5866b8
+PRESENT /home/vscode/ttsetup/pdk/ciel/ihp-sg13/versions/cc9afba57e0ec1b5ba77e6bbb638ba9dbe5866b8/ihp-sg13cmos5l/libs.ref/sg13cmos5l_io
+PRESENT /home/vscode/ttsetup/pdk/ciel/ihp-sg13/versions/cc9afba57e0ec1b5ba77e6bbb638ba9dbe5866b8/ihp-sg13cmos5l/libs.ref/sg13cmos5l_sram
+PRESENT /home/vscode/ttsetup/pdk/ciel/ihp-sg13/versions/cc9afba57e0ec1b5ba77e6bbb638ba9dbe5866b8/ihp-sg13cmos5l/libs.ref/sg13cmos5l_stdcell
+$ du -sh /home/vscode/ttsetup/pdk/ciel/ihp-sg13/versions/cc9afba57e0ec1b5ba77e6bbb638ba9dbe5866b8
+1004M	/home/vscode/ttsetup/pdk/ciel/ihp-sg13/versions/cc9afba57e0ec1b5ba77e6bbb638ba9dbe5866b8
