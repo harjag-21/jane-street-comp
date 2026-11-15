@@ -1,0 +1,8 @@
+Model regression audit after event-accurate late-transition correction
+Date: 2026-11-15
+Command: python experiments/audit_model_regression.py
+Python: 3.13.7
+Result: regenerated spi-reference-study.json; JSON data match exactly.
+Result: regenerated spi-paired-jitter-study.json; JSON data match exactly.
+Result: regenerated spi-equal-budget-study.json; JSON data match exactly.
+The independent timestamp-event replay in audit_equal_budget.py also matched all 80,000 reference trials and all 1,000 equal-budget runs, including per-setting counts, boundaries, budgets, and confidence intervals.

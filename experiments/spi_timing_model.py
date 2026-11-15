@@ -1,4 +1,4 @@
-"""Cycle-level reference model for the Timing Boundary Explorer's first study.
+"""Event-level reference model for the Timing Boundary Explorer's first study.
 
 This is a software oracle for an explicitly simplified SPI mode-0 target. It
 does not model analog pad behavior, metastability, or fabricated silicon.
@@ -61,7 +61,8 @@ def run_trial(
     schedules the next bit after target delay plus optional per-edge uniform
     integer jitter in [-jitter_fs, +jitter_fs]. A transition is valid iff its
     data has been stable for at least setup_fs at the next rising sample.
-    Equality passes by definition. A stale sampled bit is retained.
+    Equality passes by definition. Delayed transitions remain scheduled after
+    a missed sample and may therefore affect later samples.
     """
     if low_cycles < 1:
         raise ValueError("low phase must be at least one reference cycle")
@@ -73,25 +74,45 @@ def run_trial(
         raise ValueError("one jitter value is required for each of seven transitions")
 
     bits = [(target.response >> shift) & 1 for shift in range(7, -1, -1)]
-    sampled = [bits[0]]  # first bit is stable before the first rising edge
     slacks: list[int] = []
     low_fs = low_cycles * target.clock_fs
+    high_fs = target.high_cycles * target.clock_fs
+    sample_period_fs = low_fs + high_fs
+    sample_times_fs = [low_fs + index * sample_period_fs for index in range(8)]
+    events: list[tuple[int, int, int]] = []
 
-    for index in range(1, 8):
+    for index in range(7):
         perturbation = (
-            transition_jitter_fs[index - 1]
+            transition_jitter_fs[index]
             if transition_jitter_fs is not None
             else rng.randint(-jitter_fs, jitter_fs) if rng else 0
         )
         actual_delay = max(0, target.output_delay_fs + perturbation)
         slack = low_fs - actual_delay - target.setup_fs
         slacks.append(slack)
-        sampled.append(bits[index] if slack >= 0 else sampled[-1])
+        falling_edge_fs = sample_times_fs[index] + high_fs
+        events.append((falling_edge_fs + actual_delay, index + 1, index))
+
+    # Apply target output events in timestamp order. A transition that misses
+    # its intended sample is not discarded; the line can change later and be
+    # observed by a subsequent sample. Events are transport-delayed updates.
+    events.sort()
+    sampled = []
+    current_bit = bits[0]  # first bit is stable before the first rising edge
+    event_index = 0
+    for sample_time_fs in sample_times_fs:
+        while event_index < len(events) and events[event_index][0] <= sample_time_fs:
+            _, next_bit, _transition_index = events[event_index]
+            current_bit = bits[next_bit]
+            event_index += 1
+        sampled.append(current_bit)
 
     observed = 0
     for bit in sampled:
         observed = (observed << 1) | bit
-    return Trial(low_cycles, observed, target.response, observed == target.response, tuple(slacks))
+    setup_valid = all(slack >= 0 for slack in slacks)
+    return Trial(low_cycles, observed, target.response,
+                 observed == target.response and setup_valid, tuple(slacks))
 
 
 def fixed_sweep(
@@ -334,11 +355,13 @@ def wilson_interval(successes: int, trials: int, z: float = 1.959963984540054) -
 def run_equal_budget_study(
     output: Path,
     *,
+    target: Target | None = None,
     seeds: Iterable[int] = range(20261115, 20262115),
     fixed_repeats_per_setting: int = 100,
     binary_repeats_per_probe: int = 160,
     jitter_fs: int = 15_176_495,
     success_threshold: float = 0.95,
+    bootstrap_seed: int = 20262115,
 ) -> dict[str, object]:
     """Compare methods under an equal transaction budget over paired seeds.
 
@@ -348,7 +371,7 @@ def run_equal_budget_study(
     every value, and binary search receives the additional 60 only at values
     it probes. Each seed is an independent study replicate.
     """
-    target = Target()
+    target = target or Target()
     candidates = list(range(1, 9))
     if not 0 < success_threshold < 1:
         raise ValueError("success threshold must be strictly between 0 and 1")
@@ -359,6 +382,18 @@ def run_equal_budget_study(
     binary_budget = binary_max_probes * binary_repeats_per_probe
     if fixed_budget != binary_budget:
         raise ValueError("fixed and binary transaction budgets must match")
+
+    theoretical_probabilities = {
+        str(low): theoretical_success_probability(low, target, jitter_fs)
+        for low in candidates
+    }
+    oracle_boundary = next(
+        (low for low in candidates
+         if theoretical_probabilities[str(low)] >= success_threshold),
+        None,
+    )
+    if oracle_boundary is None:
+        raise ValueError("candidate settings do not include the oracle boundary")
 
     runs = []
     for seed in seeds:
@@ -378,11 +413,11 @@ def run_equal_budget_study(
     count = len(runs)
     if count == 0:
         raise ValueError("at least one seed is required")
-    fixed_correct = [run["fixed_sweep"]["boundary"] == 4 for run in runs]
-    binary_correct = [run["binary_search"]["boundary"] == 4 for run in runs]
+    fixed_correct = [run["fixed_sweep"]["boundary"] == oracle_boundary for run in runs]
+    binary_correct = [run["binary_search"]["boundary"] == oracle_boundary for run in runs]
     paired_differences = [int(b) - int(f) for b, f in zip(binary_correct, fixed_correct)]
 
-    bootstrap_rng = random.Random(20262115)
+    bootstrap_rng = random.Random(bootstrap_seed)
     boot_means = []
     for _ in range(5000):
         sample = [paired_differences[bootstrap_rng.randrange(count)] for _ in range(count)]
@@ -400,11 +435,8 @@ def run_equal_budget_study(
                    "range_fs": [-jitter_fs, jitter_fs]},
         "estimand": "first integer low phase with exact-byte success probability >= threshold",
         "success_threshold": success_threshold,
-        "theoretical_success_probabilities": {
-            str(low): theoretical_success_probability(low, target, jitter_fs)
-            for low in candidates
-        },
-        "oracle_boundary_cycles": 4,
+        "theoretical_success_probabilities": theoretical_probabilities,
+        "oracle_boundary_cycles": oracle_boundary,
         "budget": {"fixed_transactions": fixed_budget,
                    "binary_transactions": binary_budget,
                    "fixed_repeats_per_setting": fixed_repeats_per_setting,
@@ -414,7 +446,7 @@ def run_equal_budget_study(
         "interval_methods": {"wilson_z": 1.959963984540054,
                              "paired_bootstrap": "percentile",
                              "paired_bootstrap_resamples": 5000,
-                             "paired_bootstrap_seed": 20262115},
+                             "paired_bootstrap_seed": bootstrap_seed},
         "summary": {
             "paired_seed_runs": count,
             "fixed_correct": sum(fixed_correct),

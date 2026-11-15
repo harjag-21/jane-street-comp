@@ -1,0 +1,11 @@
+Multi-regime equal-budget study
+Date: 2026-11-15
+Generator: python experiments/run_spi_multiregime_study.py
+Auditor: python experiments/audit_spi_multiregime.py
+Python: 3.13.7
+Conditions: 6 predeclared delay/jitter regimes; 1,000 unique paired seeds each.
+Budget: fixed 8 x 100 and binary 5 x 160; every run used exactly 800 transactions per method.
+Independent audit: all per-setting observations, search paths, boundaries, Wilson intervals, and paired bootstrap intervals matched across 6,000 runs.
+Outcome: five regimes had 1,000/1,000 recovery for both methods. In the near-threshold regime (23 ns delay, ±15,176,495 fs jitter), fixed recovered 789/1,000 and binary 803/1,000; paired difference +1.4 points, bootstrap 95% interval [-0.7,+3.7] points.
+Raw data: spi-multiregime-equal-budget.json. Independent checker: ../../experiments/audit_spi_multiregime.py.
+Limit: synthetic model only; matrix restricted to oracle boundaries 4 and 5.

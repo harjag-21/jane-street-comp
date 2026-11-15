@@ -26,3 +26,7 @@ Audited the software SPI reference model, the 1–8-cycle Cocotb event-model cro
 - Updated the ledger's next action: the deterministic Cocotb cycle sweep is complete; jittered Cocotb cross-checking remains future work.
 
 The machine-readable source data are in `spi-equal-budget-study.json`; the independent replay is in `../../experiments/audit_equal_budget.py`.
+
+## Later model extension
+
+The subsequent seeded Cocotb cross-check found that this version's stale-bit behavior did not account for delayed transitions that arrive after their intended sample. The model was corrected to schedule timed output events, and the original stored study data were regenerated and matched exactly. See `spi-jitter-crosscheck-2026-11-15.md` for that follow-up audit and the updated 9-test / 2-test counts.

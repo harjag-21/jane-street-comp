@@ -10,11 +10,37 @@ import random
 from pathlib import Path
 
 
-def success(low: int, period: int, delay: int, setup: int,
-            profile: tuple[int, ...]) -> bool:
-    # The response toggles on every bit; exact byte success requires all seven
-    # independently delayed target transitions to meet setup.
-    return all(low * period - delay - setup - jitter >= 0 for jitter in profile)
+def success(low: int, period: int, delay: int, setup: int, high_cycles: int,
+            response: int, profile: tuple[int, ...]) -> bool:
+    """Independently replay timestamped output events and sample points."""
+    bits = [(response >> shift) & 1 for shift in range(7, -1, -1)]
+    low_fs = low * period
+    high_fs = high_cycles * period
+    sample_period_fs = low_fs + high_fs
+    sample_times = [low_fs + index * sample_period_fs for index in range(8)]
+    events = []
+    slacks = []
+    for index, jitter in enumerate(profile):
+        actual_delay = max(0, delay + jitter)
+        slacks.append(low_fs - actual_delay - setup)
+        falling_edge = sample_times[index] + high_fs
+        events.append((falling_edge + actual_delay, index + 1))
+    events.sort()
+
+    sampled = []
+    current_bit = bits[0]
+    event_index = 0
+    for sample_time in sample_times:
+        while event_index < len(events) and events[event_index][0] <= sample_time:
+            _, next_bit = events[event_index]
+            current_bit = bits[next_bit]
+            event_index += 1
+        sampled.append(current_bit)
+
+    observed = 0
+    for bit in sampled:
+        observed = (observed << 1) | bit
+    return observed == response and all(slack >= 0 for slack in slacks)
 
 
 def wilson(k: int, n: int, z: float) -> list[float]:
@@ -34,10 +60,11 @@ def audit_reference_study() -> None:
     delay = target["output_delay_fs"]
     setup = target["setup_fs"]
     response = target["response"]
+    high_cycles = target["high_cycles"]
     candidates = range(1, 9)
 
     def deterministic_pass(low: int) -> bool:
-        return all(low * period - delay - setup >= 0 for _ in range(7))
+        return success(low, period, delay, setup, high_cycles, response, (0,) * 7)
 
     fixed = [{"low_cycles": low, "successes": int(deterministic_pass(low)),
               "trials": 1, "success_rate": float(deterministic_pass(low))}
@@ -75,12 +102,9 @@ def audit_reference_study() -> None:
     for value in candidates:
         hits = 0
         for _ in range(repeats):
-            all_edges_pass = True
-            for _edge in range(7):
-                perturbation = rng.randint(-jitter, jitter)
-                actual_delay = max(0, delay + perturbation)
-                all_edges_pass &= value * period - actual_delay - setup >= 0
-            hits += int(all_edges_pass)
+            profile = tuple(rng.randint(-jitter, jitter) for _ in range(7))
+            hits += int(success(value, period, delay, setup, high_cycles,
+                                response, profile))
         rows.append({"low_cycles": value, "successes": hits, "trials": repeats,
                      "success_rate": hits / repeats})
     assert rows == data["seeded_jitter"]["fixed_sweep"]
@@ -94,6 +118,8 @@ def main() -> None:
     period = data["target"]["clock_fs"]
     delay = data["target"]["output_delay_fs"]
     setup = data["target"]["setup_fs"]
+    high_cycles = data["target"]["high_cycles"]
+    response = data["target"]["response"]
     jitter = data["jitter"]["range_fs"][1]
     threshold = data["success_threshold"]
     candidates = data["budget"]["candidate_settings"]
@@ -130,7 +156,8 @@ def main() -> None:
 
         fixed_rows = []
         for low in candidates:
-            hits = sum(success(low, period, delay, setup, profile)
+            hits = sum(success(low, period, delay, setup, high_cycles,
+                               response, profile)
                        for profile in profiles[:fixed_n])
             rate = hits / fixed_n
             fixed_rows.append((low, hits, fixed_n, rate, rate >= threshold))
@@ -139,7 +166,8 @@ def main() -> None:
         binary_rows = []
 
         def classify(low: int) -> bool:
-            hits = sum(success(low, period, delay, setup, profile) for profile in profiles)
+            hits = sum(success(low, period, delay, setup, high_cycles,
+                               response, profile) for profile in profiles)
             rate = hits / binary_n
             binary_rows.append((low, hits, binary_n, rate, rate >= threshold))
             return rate >= threshold

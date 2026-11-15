@@ -30,6 +30,20 @@ class TimingModelTests(unittest.TestCase):
         trial = run_trial(1, self.target)
         self.assertEqual((trial.observed >> 7) & 1, (self.target.response >> 7) & 1)
 
+    def test_late_transitions_can_affect_later_samples(self):
+        trial = run_trial(1, self.target)
+        # At L=1, each 23 ns response update misses its 10 ns sample but
+        # arrives during a later high phase. The line therefore produces D5.
+        self.assertEqual(trial.observed, 0xD5)
+        self.assertFalse(trial.passed)
+        self.assertTrue(all(slack < 0 for slack in trial.transition_slack_fs))
+
+    def test_correct_digital_byte_with_setup_violation_is_not_a_pass(self):
+        trial = run_trial(3, self.target, transition_jitter_fs=(6_000_000,) * 7)
+        self.assertEqual(trial.observed, self.target.response)
+        self.assertTrue(all(slack == -1_000_000 for slack in trial.transition_slack_fs))
+        self.assertFalse(trial.passed)
+
     def test_binary_search_recovers_known_boundary(self):
         result = binary_search(self.target, 1, 8)
         self.assertTrue(result["bracketed"])
@@ -81,6 +95,18 @@ class TimingModelTests(unittest.TestCase):
         self.assertEqual(result["budget"]["binary_transactions"], 800)
         self.assertTrue(all(run["fixed_trials"] == 800 for run in result["runs"]))
         self.assertTrue(all(run["binary_trials"] == 800 for run in result["runs"]))
+
+    def test_equal_budget_study_uses_target_specific_oracle_boundary(self):
+        target = Target(output_delay_fs=28_000_000)
+        with TemporaryDirectory() as temp_dir:
+            result = run_equal_budget_study(
+                Path(temp_dir) / "study.json",
+                target=target,
+                seeds=range(20),
+                jitter_fs=15_176_495,
+            )
+        self.assertEqual(result["oracle_boundary_cycles"], 5)
+        self.assertEqual(result["summary"]["paired_seed_runs"], 20)
 
 
 if __name__ == "__main__":

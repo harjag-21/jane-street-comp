@@ -1,0 +1,27 @@
+rm -f results.xml
+"make" -f Makefile results.xml
+make[1]: Entering directory '/workspaces/Jane Street ASIC/experiments/cocotb_spi'
+rm -f results.xml
+COCOTB_TEST_MODULES=test_spi_timing COCOTB_TESTCASE= COCOTB_TEST_FILTER= COCOTB_TOPLEVEL=spi_timing_top TOPLEVEL_LANG=verilog \
+         /usr/bin/vvp -M /ttsetup/venv/lib/python3.12/site-packages/cocotb/libs -m libcocotbvpi_icarus   sim_build/sim.vvp
+     -.--ns INFO     gpi                                ..mbed/gpi_embed.cpp:93   in _embed_init_python              Using Python 3.12.4 interpreter at /ttsetup/venv/bin/python
+     -.--ns INFO     gpi                                ../gpi/GpiCommon.cpp:79   in gpi_print_registered_impl       VPI registered
+     0.00ns INFO     cocotb                             Running on Icarus Verilog version 12.0 (stable)
+     0.00ns INFO     cocotb                             Seeding Python random module with supplied seed 20261116
+     0.00ns INFO     cocotb                             Initialized cocotb v2.0.1 from /ttsetup/venv/lib/python3.12/site-packages/cocotb
+     0.00ns INFO     cocotb                             Running tests
+     0.00ns INFO     cocotb.regression                  running test_spi_timing.test_spi_mode0_timing_boundary (1/2)
+  4569.00ns INFO     cocotb.spi_timing_top              Cocotb 1..8-cycle sweep matched oracle; equality byte=0xAA with transition ages [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0] ns
+  4569.00ns INFO     cocotb.regression                  test_spi_timing.test_spi_mode0_timing_boundary passed
+  4569.00ns INFO     cocotb.regression                  running test_spi_timing.test_seeded_transition_jitter_matches_python_oracle (2/2)
+ 43557.00ns INFO     cocotb.spi_timing_top              Seeded jitter cross-check matched Python oracle for 108 transactions (seed=20261116, profiles=27, late edges=334)
+ 43557.00ns INFO     cocotb.regression                  test_spi_timing.test_seeded_transition_jitter_matches_python_oracle passed
+ 43557.00ns INFO     cocotb.regression                  *****************************************************************************************************************************
+                                                        ** TEST                                                                 STATUS  SIM TIME (ns)  REAL TIME (s)  RATIO (ns/s) **
+                                                        *****************************************************************************************************************************
+                                                        ** test_spi_timing.test_spi_mode0_timing_boundary                        PASS        4569.00           0.01     678243.67  **
+                                                        ** test_spi_timing.test_seeded_transition_jitter_matches_python_oracle   PASS       38988.00           0.08     478338.08  **
+                                                        *****************************************************************************************************************************
+                                                        ** TESTS=2 PASS=2 FAIL=0 SKIP=0                                                     43557.00           0.10     450832.50  **
+                                                        *****************************************************************************************************************************
+make[1]: Leaving directory '/workspaces/Jane Street ASIC/experiments/cocotb_spi'
