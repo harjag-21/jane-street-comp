@@ -1,77 +1,74 @@
-# Programmable Protocol Engine — v1 Architecture Proposal
+# Programmable Protocol Engine — v1 Architecture
 
-**Status:** design proposal; no RTL, area result, or protocol program has been implemented from this document.
+**Status:** implemented in RTL (`src/protocol_sequencer.v`, `src/project.v`), assembled with `tools/protocol_asm.py`, and verified in Icarus Verilog + Cocotb RTL simulation (`test/tb_v1_sequencer.v`, `test/test.py`). Standalone sequencer synthesis/PnR/STA on `ihp-sg13cmos5l` passed; full top-level CMOS5L hardening and gate-level verification are tracked in `docs/COMPETITION_PLAN_AND_EVIDENCE.md`.
 
 ## Purpose
 
-The fixed UART-to-SPI path in `src/project.v` establishes an integration baseline. The final competition design must be reprogrammable after fabrication, so this document defines the smallest useful program model that can replace that fixed transaction path.
+The fixed UART-to-SPI path (`master` / `67f63ab`) established a clean Tiny Tapeout CMOS5L physical hardening baseline. The competition design (`feat/v1-engine`) replaces that fixed controller with a post-silicon programmable protocol engine for the **Timing Boundary Explorer**: the host loads any protocol program over UART, sweeps a 12-bit runtime timing parameter across trials, and records sampled bytes plus cycle-accurate `MARK` timestamps.
 
-The intended differentiator remains the Timing Boundary Explorer: the host loads a protocol program, varies a declared timing parameter, and records results. The engine must also be useful without that host experiment.
+## Implemented v1 architecture
 
-## Chosen first architecture
+One deterministic, single-issue microsequencer (`protocol_sequencer` in `src/protocol_sequencer.v`) owns eight bidirectional protocol pins (`uio[7:0]`) and executes one instruction per core clock cycle except during `WAIT` / `WAIT_PARAM` holds. It intentionally omits instruction caches, pipelines, privilege levels, concurrent engines, and autonomous on-chip search loops in v1.
 
-Use one deterministic, single-issue microsequencer with a small instruction store. It owns eight bidirectional protocol pins and executes one instruction per core cycle except for `WAIT` and host-access operations. It has no instruction cache, pipeline, CPU privilege model, concurrent engines, or autonomous search logic in v1.
-
-| Block | v1 choice | Reason |
+| Block | v1 implementation | Reason |
 |---|---|---|
-| Program store | 64 words × 16 bits, loaded over UART | Supports complete first examples while limiting flop-based storage risk before SRAM integration is justified. |
-| Protocol pins | `uio[7:0]`; separate output-value and output-enable registers | Supports push-pull and open-drain patterns with the same program model. |
-| Loader transport | UART RX on `ui_in[0]`, UART TX on `uo_out[0]` | Reuses the v0.1 host path; a board clock/baud choice remains open. |
-| Engine control | Reset, load, start, halt, status/readback commands | Supports the required reload after board deselection and enables reproducible host runs. |
-| Data state | `last_sample` bit, eight-bit sample register, two loop counters | Enough for sampled protocol response, polling, and bounded loops without a general CPU register file. |
-| Timing unit | Whole core cycles only | Makes timing explicit and avoids a false claim of sub-cycle resolution. |
+| Program store | `64 × 16`-bit flop array loaded over UART | Supports UART, SPI mode-0 sweep, and I2C open-drain programs within `8×4` tile area without custom SRAM macro integration risk. |
+| Protocol pins | `uio[7:0]`; separate 8-bit `uio_out_o` and `uio_oe_o` registers | Supports push-pull and open-drain (`OE`-driven low / high-Z release) protocols with the same ISA. |
+| Event FIFO | `8`-entry timestamped FIFO (`ev_tag[7:0]`, `ev_ts[15:0]` from 16-bit `cycle_cnt_o`) with overflow flag | Captures cycle-exact boundary/protocol events (`MARK`) for host readback after a trial. |
+| Loader transport | UART RX on `ui_in[0]` (2-FF synchronized), UART TX on `uo_out[0]`, `CLKS_PER_BIT = 8` default (`8N1`) | Reuses the v0.1 host interface with deterministic framing, CRC-8/07 integrity, and timeout recovery (`64 × CLKS_PER_BIT`). |
+| Status outputs | `uo_out[1] = trial_active`, `uo_out[2] = prog_valid`, `uo_out[4:3] = eng_state`, `uo_out[5] = event_overflow`, `uo_out[7:6] = 2'b00` | Gives external instrumentation direct single-cycle observability alongside UART telemetry. |
+| Engine reset & select | `rst_active_n = rst_n & ena` | Clears `prog_valid`, `uio_oe_o`, event FIFO, and loader state cleanly on chip deselection or reset. |
+| Data state | `last_sample_o` (1-bit), `sample_reg_o` (8-bit shift register), `loop_cnt0/1` (8-bit counters), `run_param` (12-bit runtime parameter) | Enables sampled response branching, MSB-first 8-bit capture, bounded loops, and parameterized timing sweeps without a CPU register file. |
+| Timing unit | Whole core clock cycles (`1` cycle per non-wait instruction; `WAIT n` adds `n` extra hold cycles, total `n + 1` cycles on the instruction) | Makes timing explicit and verifiable to the exact clock edge. |
 
-The final pin allocation remains open until the board wiring and electrical review. This table reserves the `uio` bank for protocol use; it is a resource plan, not an `info.yaml` declaration.
+## 16-bit instruction format (`tools/protocol_asm.py`, `src/protocol_sequencer.v`)
 
-## 16-bit instruction format
+Each instruction word is `{opcode[3:0], imm[11:0]}` (`opcode[15:12] | operand[11:0]`). When idle (`wait_cnt == 0`) inside `ENG_RUN`, one instruction executes each `posedge clk`:
 
-Each word is `opcode[15:12] | operand[11:0]`. All instructions are deterministic at the core-clock edge. `WAIT n` takes `n + 1` core cycles after its decode cycle, so zero is a valid one-cycle delay.
+| Opcode | Mnemonic | Operand encoding (`imm[11:0]`) | Effect |
+|---|---|---|---|
+| `0x0` | `NOP` | ignored | Advance `pc_o`. |
+| `0x1` | `OUT` | `value = imm[7:0]` | Update `uio_out_o <= imm[7:0]`; advance `pc_o`. |
+| `0x2` | `OE` | `enable = imm[7:0]` | Update `uio_oe_o <= imm[7:0]` (`0` = high-Z input); advance `pc_o`. |
+| `0x3` | `WAIT` | `cycles = imm[11:0]` | Hold outputs and `pc_o` for `imm` additional cycles (`WAIT 0` takes `1` cycle total; `WAIT n` takes `n + 1` cycles total). |
+| `0x4` | `SAMPLE` | `pin = imm[2:0]`, `no_shift = imm[11]` | Sample `uio_in[pin]` into `last_sample_o`; if `!no_shift`, shift `{sample_reg_o[6:0], sampled}` into `sample_reg_o`. |
+| `0x5` | `JZ` | `addr = imm[5:0]` | Jump to `addr` if `last_sample_o == 0`, else `pc_o + 1`. |
+| `0x6` | `JMP` | `addr = imm[5:0]` | Unconditional jump to `addr`. |
+| `0x7` | `LOOP` | `ctr = imm[8]`, `addr = imm[5:0]` | If `cur_cnt > 1`, decrement selected counter and jump to `addr`; else zero it and advance `pc_o + 1`. |
+| `0x8` | `SETCOUNT` | `ctr = imm[8]`, `count = imm[7:0]` | Set `loop_cnt0` or `loop_cnt1` to `count`; advance `pc_o`. |
+| `0x9` | `MARK` | `from_sample = imm[8]`, `tag = imm[7:0]` | Push `{tag_or_sample_reg, cycle_cnt_o}` into the 8-entry event FIFO (sets `event_overflow_o` if full and not simultaneously popped). |
+| `0xA` | `HALT` | `keep_oe = imm[0]` | Transition to `ENG_HALTED`; clear `uio_oe_o <= 8'h00` unless `keep_oe == 1`. Preserve program store, `sample_reg_o`, `cycle_cnt_o`, and FIFO for host readback. |
+| `0xB` | `OUT_SAMPLE` | `no_shift = imm[11]`, `pin = imm[10:8]`, `val = imm[7:0]` | Atomically drive `uio_out_o <= val` and sample `uio_in[pin]` (into `last_sample_o` and optionally `sample_reg_o`) on the same clock edge, enabling tight SPI clock/sample timing. |
+| `0xC` | `WAIT_PARAM` | `offset = imm[7:0]` | Wait `saturate_12b(run_param + offset)` additional cycles (`WAIT_PARAM 0` waits `run_param` extra cycles, so `run_param == 0` takes `1` cycle total). |
+| `0xD–0xF` | reserved | any | Transition to `ENG_FAULT` and immediately force `uio_oe_o <= 8'h00`. |
 
-| Opcode | Operand | Effect |
-|---|---|---|
-| `0x0 NOP` | ignored | Advance PC. |
-| `0x1 OUT` | `value[7:0]` | Replace the protocol output-value register. |
-| `0x2 OE` | `enable[7:0]` | Replace the protocol output-enable register; zero means input/high-Z. |
-| `0x3 WAIT` | `cycles_minus_1[7:0]` | Hold outputs and PC for the requested cycle count. |
-| `0x4 SAMPLE` | `pin[2:0]`, `shift[2:0]` | Read one protocol pin into `last_sample`; shift it into the sample register. |
-| `0x5 JZ` | `address[5:0]` | Jump if `last_sample` is zero. |
-| `0x6 JMP` | `address[5:0]` | Unconditional jump. |
-| `0x7 LOOP` | `counter[0]`, `address[5:0]` | Decrement a preloaded counter and jump while nonzero. |
-| `0x8 SETCOUNT` | `counter[0]`, `count[7:0]` | Set a loop counter. |
-| `0x9 MARK` | `tag[7:0]` | Emit a compact host-visible event record. |
-| `0xA HALT` | ignored | Stop execution; preserve program and sample state for readback. |
-| `0xB–0xF` | reserved | Decode to a safe halt with an illegal-instruction status. |
+## UART loading and control protocol (`src/project.v`)
 
-`SAMPLE` shifts the prior sample register left and writes the sampled pin at bit zero. SPI programs therefore sample MSB-first with eight `SAMPLE` instructions; the host receives a defined bit order. The assembler will provide named pins and macros so programs do not expose raw bit masks everywhere.
+Host requests and device responses use fixed **8-byte frames** with big-endian CRC-8/ATM (`poly = 0x07`, `init = 0x00`, computed over bytes `[0..6]`):
 
-## Loading and observability contract
+- **Request frame:** `[0xA5, op, req_id, arg0, arg1, arg2, arg3, crc8]`
+- **Response frame:** `[0x5A, req_id, status, d0, d1, d2, d3, crc8]`
 
-The UART control plane will have a versioned loader protocol rather than reuse the v0.1 fixed-SPI command as a permanent ABI:
+If `CMD_BODY` or `CMD_CRC` stalls for `64 × CLKS_PER_BIT` cycles, the loader parser returns to `CMD_SYNC` so truncated frames cannot wedge the receiver.
 
-1. Reset places the engine in `HALTED`, clears pin output enables, and invalidates the loaded-program flag.
-2. `BEGIN_LOAD(length, checksum)` clears the program-valid flag.
-3. `WRITE_WORD(address, word)` loads each word within the 64-word limit.
-4. `COMMIT_LOAD` verifies the declared length/checksum and marks the program valid.
-5. `START(run_parameters)` starts at PC zero only when program valid.
-6. `READ_STATUS` returns halted/running/fault state, PC, last sample byte, and bounded event data.
+| Request `op` | Command | Request arguments | Response `d0..d3` (on `ST_OK`) |
+|---|---|---|---|
+| `0x10` | `PING_INFO` | ignored | `d0 = 0x01` (version), `d1 = 64` (`PROG_DEPTH`), `d2 = 8` (`EVENT_DEPTH`), `d3 = {4'd0, prog_valid, event_overflow, eng_state}` |
+| `0x11` | `BEGIN_LOAD` | `arg0 = len` (`1..64`), `arg1 = exp_crc8`, `arg2 = exp_sum8` | Clears `prog_valid`; echoes `len, exp_crc, exp_sum, 0` (`ST_BAD_STATE` if `ENG_RUN`, `ST_BAD_ARG` if `len == 0` or `len > 64`) |
+| `0x12` | `WRITE_WORD` | `arg0 = addr`, `arg1 = word[7:0]`, `arg2 = word[15:8]` | Sequential write (`addr == load_idx`); updates incremental `calc_crc` and `calc_sum`; returns `addr, next_idx, 0, 0` |
+| `0x13` | `COMMIT_LOAD` | ignored | Verifies `load_idx == len`, `calc_crc == exp_crc`, `calc_sum == exp_sum`; sets `prog_valid` (`d3 = 1`) or returns `ST_CHECKSUM` (`0x05`) |
+| `0x14` | `START` | `arg0 = param[7:0]`, `arg1[3:0] = param[11:8]` | Starts at `pc_o = 0` with `cmd_param = 12b` if `prog_valid` and not running; clears FIFO & `cycle_cnt_o` |
+| `0x15` | `HALT` | ignored | Stops sequencer (`ENG_HALTED`), clears `uio_oe_o`, returns state and `pc` |
+| `0x16` | `READ_STATUS` | ignored | `d0 = flags/state`, `d1 = pc`, `d2 = sample_reg`, `d3 = {last_sample, 3'd0, event_count}` |
+| `0x17` | `POP_EVENT` | ignored | Returns `d0 = event_count` (pre-pop), `d1 = tag`, `d2 = ts[7:0]`, `d3 = ts[15:8]` and pops FIFO if nonempty |
+| `0x18` | `READ_CYCLE_CNT` | ignored | Returns `d0 = cycle_cnt[7:0]`, `d1 = cycle_cnt[15:8]`, `d2 = sample_reg`, `d3 = event_count` |
 
-The host must reload after a selection/power cycle. Program loading is part of the ASIC interface and will be tested in RTL; it is not an external software convenience.
+Status codes: `0x00 ST_OK`, `0x01 ST_BAD_CRC`, `0x02 ST_BAD_OP`, `0x03 ST_BAD_ARG`, `0x04 ST_BAD_STATE`, `0x05 ST_CHECKSUM`.
 
-## Example-program acceptance criteria
+## Verified example programs (`tools/protocol_asm.py`, `test/test.py`)
 
-The v1 architecture is acceptable only if the assembler can emit and RTL simulation can execute all three examples below:
+All three acceptance programs compile cleanly via `tools/protocol_asm.py` (`--example uart|spi|i2c`) and execute end-to-end over the UART loader in Cocotb (`test/test.py`):
 
-| Example | Required evidence |
-|---|---|
-| UART transmitter | A configured output pin emits an 8N1 byte at a program-declared whole-cycle bit period. |
-| SPI mode-0 controller | Program drives CS/SCLK/MOSI, samples eight MISO bits, and returns the received byte. Timing-boundary sweeps vary a declared `WAIT` value. |
-| I2C controller | Program produces start/stop and open-drain SCL/SDA behavior, releases pins through `OE`, and samples SDA for ACK. |
-
-The first timing explorer demonstration will use the SPI example. UART and I2C examples demonstrate that the mechanism is programmable rather than a renamed fixed SPI controller.
-
-## Risks and decision gates
-
-1. Synthesize the engine with a 64 × 16 flop store before implementing the full loader. If mapped area or routing margin is poor, compare an IHP SRAM macro and a 32-word program limit with equal example coverage.
-2. Simulate reset, partial/invalid load, checksum rejection, reload, illegal instruction, and `HALT` with all protocol outputs disabled where safe.
-3. Do not claim a protocol speed until post-route timing and the selected board clock are recorded.
-4. Only add a second engine, trace FIFO, adaptive search hardware, larger memory, or SRAM after the one-engine programs and physical baseline fit.
+1. **UART TX (`24` words):** Loaded over `ui_in[0]`, emits `0x55` (`8N1`) on `uio[0]`, and logs `MARK` start/end timestamps (`test_uart_tx_loaded_program`: `PASS`).
+2. **SPI Mode-0 Timing Sweep (`38` words):** Loaded over UART and invoked repeatedly via `START(param)` across `run_param` delays; verifies transition from failed capture (`run_param=0`, MISO delayed too long -> `0x00 != 0xA5`) to exact capture (`run_param=8` -> `sample_reg == 0xA5`) plus deterministic `cycle_cnt` scaling (`test_spi_mode0_timing_sweep_over_uart`: `PASS`).
+3. **I2C Open-Drain ACK/NACK (`62` words):** Generates START, shifts 8-bit address (`0xA0`) using `OE`-controlled open-drain drive and high-Z release, samples ACK (`0`) vs NACK (`1`), generates STOP, and emits `MARK` tags checked by the host (`test_i2c_open_drain_ack_and_nack`: `PASS`).
