@@ -1,0 +1,15 @@
+﻿Reference model validation
+Date: 2026-11-15
+Python: 3.13.7 (host)
+Source: experiments/spi_timing_model.py
+Tests: experiments/test_spi_timing_model.py
+Command: python -m unittest discover -s experiments -v
+Result: 5 tests passed.
+Study command: from experiments.spi_timing_model import run_reference_study; run_reference_study(Path('docs/evidence/spi-reference-study.json'))
+Model: T=10 ns, target clock-to-output delay=23 ns, setup=2 ns, CPOL=0/CPHA=0, response=0xAA; success requires exact byte.
+Oracle: ceil((23 ns + 2 ns)/10 ns) = 3 low-phase cycles.
+Deterministic binary search: boundary=3 cycles, 5 trials; fixed sweep evaluated 8 settings.
+Jitter model: independently perturb each target transition by seeded uniform integer jitter in [-6 ns,+6 ns], seed=20261115, 10,000 transactions per setting.
+Jitter exact-byte success counts for low phases 1..8 cycles: 0, 0, 5485, 10000, 10000, 10000, 10000, 10000.
+Limit: software reference-model evidence only; not Cocotb event-scheduler, RTL, pad, board, or silicon evidence.
+Raw result: docs/evidence/spi-reference-study.json

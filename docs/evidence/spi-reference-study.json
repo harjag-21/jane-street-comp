@@ -1,0 +1,149 @@
+{
+  "evidence_class": "software simulation of a declared reference model",
+  "model_limit": "does not establish RTL, pad, board, or silicon timing",
+  "target": {
+    "clock_fs": 10000000,
+    "output_delay_fs": 23000000,
+    "setup_fs": 2000000,
+    "high_cycles": 2,
+    "response": 170
+  },
+  "oracle_boundary_cycles": 3,
+  "deterministic_fixed_sweep": [
+    {
+      "low_cycles": 1,
+      "successes": 0,
+      "trials": 1,
+      "success_rate": 0.0
+    },
+    {
+      "low_cycles": 2,
+      "successes": 0,
+      "trials": 1,
+      "success_rate": 0.0
+    },
+    {
+      "low_cycles": 3,
+      "successes": 1,
+      "trials": 1,
+      "success_rate": 1.0
+    },
+    {
+      "low_cycles": 4,
+      "successes": 1,
+      "trials": 1,
+      "success_rate": 1.0
+    },
+    {
+      "low_cycles": 5,
+      "successes": 1,
+      "trials": 1,
+      "success_rate": 1.0
+    },
+    {
+      "low_cycles": 6,
+      "successes": 1,
+      "trials": 1,
+      "success_rate": 1.0
+    },
+    {
+      "low_cycles": 7,
+      "successes": 1,
+      "trials": 1,
+      "success_rate": 1.0
+    },
+    {
+      "low_cycles": 8,
+      "successes": 1,
+      "trials": 1,
+      "success_rate": 1.0
+    }
+  ],
+  "deterministic_binary_search": {
+    "boundary": 3,
+    "trials": 5,
+    "bracketed": true,
+    "observations": [
+      {
+        "low_cycles": 1,
+        "successes": 0,
+        "trials": 1
+      },
+      {
+        "low_cycles": 8,
+        "successes": 1,
+        "trials": 1
+      },
+      {
+        "low_cycles": 4,
+        "successes": 1,
+        "trials": 1
+      },
+      {
+        "low_cycles": 2,
+        "successes": 0,
+        "trials": 1
+      },
+      {
+        "low_cycles": 3,
+        "successes": 1,
+        "trials": 1
+      }
+    ]
+  },
+  "seeded_jitter": {
+    "magnitude_fs": 6000000,
+    "seed": 20261115,
+    "repeats_per_setting": 10000,
+    "fixed_sweep": [
+      {
+        "low_cycles": 1,
+        "successes": 0,
+        "trials": 10000,
+        "success_rate": 0.0
+      },
+      {
+        "low_cycles": 2,
+        "successes": 0,
+        "trials": 10000,
+        "success_rate": 0.0
+      },
+      {
+        "low_cycles": 3,
+        "successes": 5485,
+        "trials": 10000,
+        "success_rate": 0.5485
+      },
+      {
+        "low_cycles": 4,
+        "successes": 10000,
+        "trials": 10000,
+        "success_rate": 1.0
+      },
+      {
+        "low_cycles": 5,
+        "successes": 10000,
+        "trials": 10000,
+        "success_rate": 1.0
+      },
+      {
+        "low_cycles": 6,
+        "successes": 10000,
+        "trials": 10000,
+        "success_rate": 1.0
+      },
+      {
+        "low_cycles": 7,
+        "successes": 10000,
+        "trials": 10000,
+        "success_rate": 1.0
+      },
+      {
+        "low_cycles": 8,
+        "successes": 10000,
+        "trials": 10000,
+        "success_rate": 1.0
+      }
+    ]
+  }
+}
