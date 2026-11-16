@@ -9,12 +9,34 @@ You can also include images in this folder and reference them in the markdown. E
 
 ## How it works
 
-Explain how your project works
+**Timing Boundary Explorer** is a post-silicon programmable protocol emulator built on Tiny Tapeout IHP 130 nm CMOS5L (`8×4` tiles). Instead of fixed UART, SPI, or I2C state machines, the chip pairs a **CRC-8-verified UART control plane** (`src/project.v`) with a **deterministic single-issue 16-bit microsequencer** (`src/protocol_sequencer.v`):
+
+- **Instruction store & state:** `64 × 16`-bit program memory (`OP_WRITE_WORD`), 8-bit pin value and direction registers (`uio_out[7:0]`, `uio_oe[7:0]`), 1-bit `last_sample`, an 8-bit MSB-first shift register (`sample_reg`), two 8-bit loop counters, a 12-bit runtime sweep parameter (`run_param` via `WAIT_PARAM`), a 16-bit free-running cycle counter (`cycle_cnt`), and an 8-entry timestamped `MARK` event FIFO.
+- **Deterministic ISA (`0x0`–`0xC`, `0xD`–`0xF` fault):** Single-cycle instructions (`NOP`, `OUT`, `OE`, `SAMPLE`, `JZ`, `JMP`, `SETCOUNT`, `LOOP`, `MARK`, `HALT`, atomic `OUT_SAMPLE`) plus cycle-exact `WAIT` and `WAIT_PARAM` holds. Illegal opcodes immediately halt in `ENG_FAULT` with `uio_oe[7:0] = 0`.
+- **Host UART loader (`ui_in[0]` RX, `uo_out[0]` TX, 8N1, `CLKS_PER_BIT = 8` default):** Uses 8-byte request frames `[0xA5, op, id, arg0..3, crc8]` and response frames `[0x5A, id, status, d0..3, crc8]` (`CRC-8/07`), with 2-FF RX synchronization, parser timeout recovery, and `ena & rst_n` deselection reset (requiring reload after deselection/power cycle).
+- **Live telemetry outputs:** `uo_out[1] = trial_active`, `uo_out[2] = prog_valid`, `uo_out[4:3] = eng_state`, `uo_out[5] = event_overflow`.
+
+By loading a protocol program (such as SPI mode-0) once and sweeping the 12-bit `START` parameter (`run_param`), a host computer can locate reproducible cycle-level response boundaries and drain `MARK` event timestamps over UART.
 
 ## How to test
 
-Explain how to use your project
+1. **Assemble and run protocol programs against the RTL simulation bridge** (`tools/timing_explorer.py`, `tools/protocol_asm.py`):
+   - `python tools/timing_explorer.py run-example --sim --example uart` (loads an 8N1 UART TX program driving `uio[0]`)
+   - `python tools/timing_explorer.py run-example --sim --example i2c --i2c-ack 1` (open-drain START/byte/ACK/NACK/STOP on `uio[0]=SCL`, `uio[1]=SDA`)
+   - `python tools/timing_explorer.py sweep --sim --delay-ns 23 --min-low 2 --max-low 8 --method sweep --out trace.jsonl --report report.md` (sweeps SPI mode-0 `WAIT_PARAM` across a delayed target and writes a replayable trace)
+   - `python tools/timing_explorer.py replay trace.jsonl` (verifies program CRC-8 and recomputes the boundary summary)
+2. **Run repository unit and Cocotb verification suites:**
+   - Software timing oracle & equal-budget tests: `python -m unittest discover -s experiments -v`
+   - Explorer CLI + live-RTL bridge tests: `python -m unittest discover -s tools -v`
+   - Standalone sequencer testbench: `iverilog -g2012 -Wall -s tb_v1_sequencer src/protocol_sequencer.v test/tb_v1_sequencer.v`
+   - Full Cocotb top-level verification (`RTL` and `GATES=yes` in a path without spaces): `cd test && make -B`
+3. **Hardware testing via UART:** Once target `clock_hz` and baud rate are matched (`baud = clk / CLKS_PER_BIT`), connect a host UART to `ui_in[0]` / `uo_out[0]` and invoke `tools/timing_explorer.py --port <device> --baud <rate>`.
 
 ## External hardware
 
-List external hardware used in your project (e.g. PMOD, LED display, etc), if any
+- Required only when testing **I2C open-drain** programs on physical hardware: external pull-up resistors (typically `4.7 kOhm` to the I/O rail) on `uio[0]` (`SCL`) and `uio[1]` (`SDA`), because open-drain mode releases pins via `OE = 0` rather than driving high.
+- Standard push-pull UART/SPI targets and logic-analyzer probes can attach directly to `uio[7:0]`. (Final `info.yaml` pinout labels and `clock_hz` remain open until the carrier-board clock and wiring are finalized.)
+
+## AI tool usage disclosure
+
+Portions of repository planning, RTL implementation/lint cleanup, testbench/toolchain code, and documentation formatting were developed with an AI coding assistant, with every RTL, synthesis, place-and-route, DRC/LVS, and simulation result independently executed and verified in the recorded logs under `docs/`.
