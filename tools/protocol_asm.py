@@ -406,6 +406,45 @@ def build_spi_two_txn_sequence(
     return words, meta
 
 
+def build_spi_2d_program(
+    cmd0: int,
+    cmd1: int,
+    sclk_low_cycles: int = 4,
+    cs_pin: int = 0,
+    sclk_pin: int = 1,
+    mosi_pin: int = 2,
+    miso_pin: int = 3,
+) -> List[int]:
+    """Assemble a 2-txn SPI program (59 words <= 64) with X=`sclk_low_cycles` (>=2) and Y=`WAIT_PARAM`."""
+    if sclk_low_cycles < 2:
+        raise ValueError("sclk_low_cycles must be >= 2")
+    w = sclk_low_cycles - 2
+    cs_mask = 1 << cs_pin
+    sclk_mask = 1 << sclk_pin
+    mosi_mask = 1 << mosi_pin
+    oe_mask = cs_mask | sclk_mask | mosi_mask
+
+    lines = [
+        f"OUT 0x{cs_mask:02x}",
+        f"OE  0x{oe_mask:02x}",
+    ]
+    for idx, cmd in enumerate((cmd0, cmd1)):
+        if idx > 0:
+            lines.append("WAIT_PARAM 0")
+        lines.append("OUT 0x00")
+        for bit in range(7, -1, -1):
+            m = mosi_mask if ((cmd >> bit) & 1) else 0
+            lines.append(f"OUT 0x{m:02x}")
+            lines.append(f"WAIT {w}")
+            lines.append(f"OUT_SAMPLE 0x{(sclk_mask | m):02x}, {miso_pin}, 0")
+        lines.append("OUT 0x00")
+        lines.append(f"OUT 0x{cs_mask:02x}")
+        if idx == 0:
+            lines.append("MARK_SAMPLE")
+    lines.append("HALT 0")
+    return assemble(lines)
+
+
 def predict_straight_line_cycles(words: Sequence[int], run_param: int) -> Dict[str, Any]:
     """Statically compute exact cycle_cnt and MARK offsets for branch/loop-free programs."""
     cycles = 0

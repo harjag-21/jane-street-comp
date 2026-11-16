@@ -14,6 +14,7 @@
 //   7 = Held-out Multi-bug stateful SPI (`delay_ns`: 0=Ref, 1=DUT, D1..D4 + held-out D5)
 //   8 = Held-out Shape Suite (`delay_ns`: 0=Ref, 1=DUT, 4 distinct failure-shape bugs H1..H4)
 //   9 = Independently parameterized 4-slot SPI target configured via stdin `p`/`n`
+//   10 = 2D timing-surface SPI target (`delay_ns` = surface_id 0..6, measures SCLK low X & CS high Y)
 module sim_explorer_tb;
   localparam integer CLKS_PER_BIT       = 8;
   localparam integer MODE_SPI           = 0;
@@ -26,6 +27,7 @@ module sim_explorer_tb;
   localparam integer MODE_SPI_HELD      = 7;
   localparam integer MODE_SPI_SHAPES    = 8;
   localparam integer MODE_SPI_PARAM     = 9;
+  localparam integer MODE_SPI_SURFACE   = 10;
 
   reg        clk = 1'b0;
   reg        rst_n = 1'b0;
@@ -117,6 +119,16 @@ module sim_explorer_tb;
   integer    pt_cs_high_cnt = 100;
   integer    pt_last_gap    = 100;
 
+  // 2D surface target state (MODE_SPI_SURFACE)
+  reg        sf_in_cmd1     = 1'b0;
+  reg  [7:0] sf_tx_byte     = 8'h00;
+  reg  [3:0] sf_bit_idx     = 4'd0;
+  integer    sf_cs_high_cnt = 100;
+  integer    sf_low_cnt     = 0;
+  integer    sf_x_latched   = 4;
+  integer    sf_y_latched   = 4;
+  reg        sf_prev_sclk   = 1'b0;
+
   reg  [7:0] uart_mon_byte = 8'h00;
   reg        uart_mon_seen = 1'b0;
   reg        uart_mon_busy = 1'b0;
@@ -138,7 +150,7 @@ module sim_explorer_tb;
     if ((target_mode == MODE_SPI) || (target_mode == MODE_SPI_STATEFUL) ||
         (target_mode == MODE_SPI_MULTISPEC) || (target_mode == MODE_SPI_NOISY) ||
         (target_mode == MODE_SPI_HELD) || (target_mode == MODE_SPI_SHAPES) ||
-        (target_mode == MODE_SPI_PARAM)) begin
+        (target_mode == MODE_SPI_PARAM) || (target_mode == MODE_SPI_SURFACE)) begin
       uio_in = {4'hF, spi_miso_drv, 3'b111};
     end else if ((target_mode == MODE_I2C) || (target_mode == MODE_I2C_STRETCH)) begin
       uio_in = {6'h3F, sda_bus, scl_bus};
@@ -508,6 +520,102 @@ module sim_explorer_tb;
     end
   end
 
+  // MODE_SPI_SURFACE: measures X=sclk_low_cycles and Y=gap_wait directly from SPI wires
+  always @(posedge clk) begin
+    if (target_mode == MODE_SPI_SURFACE) begin
+      if (spi_cs_n) begin
+        sf_cs_high_cnt <= sf_cs_high_cnt + 1;
+        sf_low_cnt     <= 0;
+      end else begin
+        sf_cs_high_cnt <= 0;
+        if (spi_sclk && !sf_prev_sclk) begin
+          // Capture SCLK low duration measured prior to bit 6..0 rising edge
+          if (sf_bit_idx >= 4'd1) begin
+            sf_x_latched <= sf_low_cnt;
+          end
+          sf_low_cnt <= 0;
+        end else if (!spi_sclk) begin
+          sf_low_cnt <= sf_low_cnt + 1;
+        end else begin
+          sf_low_cnt <= 0;
+        end
+      end
+      sf_prev_sclk <= spi_sclk;
+    end
+  end
+
+  always @(negedge spi_cs_n) begin : surface_cs_blk
+    integer xx, yy, sid;
+    if (target_mode == MODE_SPI_SURFACE) begin
+      sf_bit_idx = 4'd0;
+      if (!sf_in_cmd1) begin
+        sf_tx_byte   = 8'h00;
+        sf_in_cmd1   = 1'b1;
+      end else begin
+        xx  = sf_x_latched;
+        yy  = sf_cs_high_cnt - 3;
+        sf_y_latched = yy;
+        sid = spi_delay_ns;
+        sf_tx_byte = 8'hAA;
+        case (sid)
+          0: begin
+            if (xx <= 3) sf_tx_byte = 8'h55;
+            else if (yy >= 13) sf_tx_byte = 8'hC4;
+            else if ((xx >= 7) && (xx <= 8) && (yy >= 6) && (yy <= 7)) sf_tx_byte = 8'hEE;
+          end
+          1: begin
+            if (xx <= 2) sf_tx_byte = 8'h55;
+            else if ((xx >= 4) && (xx <= 6) && (yy >= 2) && (yy <= 3)) sf_tx_byte = 8'h77;
+            else if ((xx >= 9) && (xx <= 11) && (yy >= 11) && (yy <= 12)) sf_tx_byte = 8'h88;
+          end
+          2: begin
+            if (yy >= 12) sf_tx_byte = 8'hC4;
+            else if ((2 * xx + yy) < 16) sf_tx_byte = 8'h00;
+            else if ((xx >= 9) && (xx <= 10) && (yy >= 5) && (yy <= 6)) sf_tx_byte = 8'hEE;
+          end
+          3: begin
+            if (xx <= 2) sf_tx_byte = 8'h55;
+            else if ((xx >= 5) && (xx <= 11) && (xx >= (yy + 1)) && (xx <= (yy + 2))) sf_tx_byte = 8'hEE;
+            else if (yy <= 1) sf_tx_byte = 8'h00;
+          end
+          4: begin
+            if (yy <= 1) sf_tx_byte = 8'h00;
+            else if ((xx >= 4) && (xx <= 5) && (yy >= 11) && (yy <= 12)) sf_tx_byte = 8'h33;
+            else if ((xx >= 10) && (xx <= 11) && (yy >= 4) && (yy <= 5)) sf_tx_byte = 8'h44;
+          end
+          5: begin
+            if ((xx >= 8) && (xx <= 9) && (yy >= 8) && (yy <= 9)) sf_tx_byte = 8'hEE;
+            else if ((xx <= 5) && (yy <= 6)) sf_tx_byte = 8'h11;
+            else if ((xx >= 9) && (yy >= 11)) sf_tx_byte = 8'h22;
+          end
+          6: begin
+            if (xx <= 3) sf_tx_byte = 8'h55;
+            else if ((xx >= 6) && (xx <= 9) &&
+                     (((yy >= 1) && (yy <= 2)) || ((yy >= 6) && (yy <= 7)) || ((yy >= 11) && (yy <= 12))))
+              sf_tx_byte = 8'h66;
+          end
+          default: sf_tx_byte = 8'hAA;
+        endcase
+      end
+      spi_miso_drv <= sf_tx_byte[7];
+    end
+  end
+
+  always @(posedge spi_sclk) begin
+    if ((target_mode == MODE_SPI_SURFACE) && !spi_cs_n) begin
+      spi_mosi_rx = {spi_mosi_rx[6:0], uio_out[2]};
+    end
+  end
+
+  always @(negedge spi_sclk) begin
+    if ((target_mode == MODE_SPI_SURFACE) && !spi_cs_n) begin
+      if (sf_bit_idx < 4'd7) begin
+        sf_bit_idx   = sf_bit_idx + 4'd1;
+        spi_miso_drv <= sf_tx_byte[7 - sf_bit_idx];
+      end
+    end
+  end
+
   // MODE_UART: framed 8N1 receiver at fixed 8 clks/bit on uio[0]
   wire uart_tx_line = uio_oe[0] ? uio_out[0] : 1'b1;
   always @(negedge uart_tx_line) begin : uart_mon_blk
@@ -682,6 +790,14 @@ module sim_explorer_tb;
           pt_prev_cmd    = 8'h00;
           pt_cs_high_cnt = 100;
           pt_last_gap    = 100;
+          sf_in_cmd1     = 1'b0;
+          sf_tx_byte     = 8'h00;
+          sf_bit_idx     = 4'd0;
+          sf_cs_high_cnt = 100;
+          sf_low_cnt     = 0;
+          sf_x_latched   = 4;
+          sf_y_latched   = 4;
+          sf_prev_sclk   = 1'b0;
           cur_tx_delay_ns = spi_delay_ns;
           spi_mosi_rx    = 8'h00;
           spi_miso_drv   = spi_resp_byte[7];
@@ -749,6 +865,14 @@ module sim_explorer_tb;
           pt_prev_cmd    = 8'h00;
           pt_cs_high_cnt = 100;
           pt_last_gap    = 100;
+          sf_in_cmd1     = 1'b0;
+          sf_tx_byte     = 8'h00;
+          sf_bit_idx     = 4'd0;
+          sf_cs_high_cnt = 100;
+          sf_low_cnt     = 0;
+          sf_x_latched   = 4;
+          sf_y_latched   = 4;
+          sf_prev_sclk   = 1'b0;
           $display("OK");
           $fflush(32'h8000_0001);
         end

@@ -1,0 +1,459 @@
+{
+  "budget": 64,
+  "dev_summary": {
+    "adaptive_cartographer": {
+      "mean_boundary_accuracy": 0.7394,
+      "mean_failure_region_recall": 0.9333,
+      "mean_small_island_recall": 0.8,
+      "mean_unseen_accuracy": 0.9307,
+      "runs": 15
+    },
+    "blind_random": {
+      "mean_boundary_accuracy": 0.6911,
+      "mean_failure_region_recall": 1.0,
+      "mean_small_island_recall": 1.0,
+      "mean_unseen_accuracy": 0.8937,
+      "runs": 15
+    },
+    "uniform_grid": {
+      "mean_boundary_accuracy": 0.6767,
+      "mean_failure_region_recall": 1.0,
+      "mean_small_island_recall": 1.0,
+      "mean_unseen_accuracy": 0.8932,
+      "runs": 15
+    }
+  },
+  "elapsed_seconds": 35.61,
+  "evidence_class": "rtl_simulation_2d_cartographer_stage1",
+  "grid_size": 192,
+  "heldout_summary": {
+    "adaptive_cartographer": {
+      "mean_boundary_accuracy": 0.7028,
+      "mean_failure_region_recall": 0.95,
+      "mean_small_island_recall": 0.925,
+      "mean_unseen_accuracy": 0.9094,
+      "runs": 20
+    },
+    "blind_random": {
+      "mean_boundary_accuracy": 0.6567,
+      "mean_failure_region_recall": 0.95,
+      "mean_small_island_recall": 0.9,
+      "mean_unseen_accuracy": 0.8703,
+      "runs": 20
+    },
+    "uniform_grid": {
+      "mean_boundary_accuracy": 0.7432,
+      "mean_failure_region_recall": 1.0,
+      "mean_small_island_recall": 1.0,
+      "mean_unseen_accuracy": 0.9004,
+      "runs": 20
+    }
+  },
+  "per_surface_summary": [
+    {
+      "adaptive_cartographer": {
+        "boundary_acc": 0.7899,
+        "fail_hit": 2.4,
+        "small_hit": 0.4,
+        "unseen_acc": 0.9453
+      },
+      "blind_random": {
+        "boundary_acc": 0.743,
+        "fail_hit": 3,
+        "small_hit": 1,
+        "unseen_acc": 0.9
+      },
+      "failure_regions": 3,
+      "name": "S0_notch_watchdog",
+      "role": "dev",
+      "small_islands": 1,
+      "surface_id": 0,
+      "uniform_grid": {
+        "boundary_acc": 0.3778,
+        "fail_hit": 3,
+        "small_hit": 1,
+        "unseen_acc": 0.7812
+      }
+    },
+    {
+      "adaptive_cartographer": {
+        "boundary_acc": 0.813,
+        "fail_hit": 3,
+        "small_hit": 2,
+        "unseen_acc": 0.9484
+      },
+      "blind_random": {
+        "boundary_acc": 0.6631,
+        "fail_hit": 3,
+        "small_hit": 2,
+        "unseen_acc": 0.8844
+      },
+      "failure_regions": 3,
+      "name": "S1_bimodal_islands",
+      "role": "dev",
+      "small_islands": 2,
+      "surface_id": 1,
+      "uniform_grid": {
+        "boundary_acc": 0.7838,
+        "fail_hit": 3,
+        "small_hit": 2,
+        "unseen_acc": 0.9375
+      }
+    },
+    {
+      "adaptive_cartographer": {
+        "boundary_acc": 0.6153,
+        "fail_hit": 3,
+        "small_hit": 1,
+        "unseen_acc": 0.8984
+      },
+      "blind_random": {
+        "boundary_acc": 0.6674,
+        "fail_hit": 3,
+        "small_hit": 1,
+        "unseen_acc": 0.8969
+      },
+      "failure_regions": 3,
+      "name": "S2_diagonal_resonance",
+      "role": "dev",
+      "small_islands": 1,
+      "surface_id": 2,
+      "uniform_grid": {
+        "boundary_acc": 0.8684,
+        "fail_hit": 3,
+        "small_hit": 1,
+        "unseen_acc": 0.9609
+      }
+    },
+    {
+      "adaptive_cartographer": {
+        "boundary_acc": 0.6516,
+        "fail_hit": 3,
+        "small_hit": 0,
+        "unseen_acc": 0.8656
+      },
+      "blind_random": {
+        "boundary_acc": 0.6125,
+        "fail_hit": 3,
+        "small_hit": 0,
+        "unseen_acc": 0.825
+      },
+      "failure_regions": 3,
+      "name": "S3_held_tilted_ridge",
+      "role": "held_out",
+      "small_islands": 0,
+      "surface_id": 3,
+      "uniform_grid": {
+        "boundary_acc": 0.8269,
+        "fail_hit": 3,
+        "small_hit": 0,
+        "unseen_acc": 0.9297
+      }
+    },
+    {
+      "adaptive_cartographer": {
+        "boundary_acc": 0.6605,
+        "fail_hit": 2.4,
+        "small_hit": 1.4,
+        "unseen_acc": 0.9391
+      },
+      "blind_random": {
+        "boundary_acc": 0.6323,
+        "fail_hit": 2.6,
+        "small_hit": 1.6,
+        "unseen_acc": 0.9031
+      },
+      "failure_regions": 3,
+      "name": "S4_held_twin_pinholes",
+      "role": "held_out",
+      "small_islands": 2,
+      "surface_id": 4,
+      "uniform_grid": {
+        "boundary_acc": 0.8125,
+        "fail_hit": 3,
+        "small_hit": 2,
+        "unseen_acc": 0.9531
+      }
+    },
+    {
+      "adaptive_cartographer": {
+        "boundary_acc": 0.7592,
+        "fail_hit": 3,
+        "small_hit": 1,
+        "unseen_acc": 0.9531
+      },
+      "blind_random": {
+        "boundary_acc": 0.6766,
+        "fail_hit": 2.8,
+        "small_hit": 0.8,
+        "unseen_acc": 0.9094
+      },
+      "failure_regions": 3,
+      "name": "S5_held_4zone_core",
+      "role": "held_out",
+      "small_islands": 1,
+      "surface_id": 5,
+      "uniform_grid": {
+        "boundary_acc": 0.7576,
+        "fail_hit": 3,
+        "small_hit": 1,
+        "unseen_acc": 0.9375
+      }
+    },
+    {
+      "adaptive_cartographer": {
+        "boundary_acc": 0.7401,
+        "fail_hit": 4,
+        "small_hit": 3,
+        "unseen_acc": 0.8797
+      },
+      "blind_random": {
+        "boundary_acc": 0.7053,
+        "fail_hit": 4,
+        "small_hit": 3,
+        "unseen_acc": 0.8437
+      },
+      "failure_regions": 4,
+      "name": "S6_held_periodic_comb",
+      "role": "held_out",
+      "small_islands": 3,
+      "surface_id": 6,
+      "uniform_grid": {
+        "boundary_acc": 0.5758,
+        "fail_hit": 4,
+        "small_hit": 3,
+        "unseen_acc": 0.7812
+      }
+    }
+  ],
+  "replay_verification": [
+    {
+      "component_label": "0x55",
+      "matches": 5,
+      "repeats": 5,
+      "size": 32,
+      "surface_id": 0,
+      "surface_name": "S0_notch_watchdog",
+      "x_sclk_low": 2,
+      "y_gap_wait": 0
+    },
+    {
+      "component_label": "0xc4",
+      "matches": 5,
+      "repeats": 5,
+      "size": 30,
+      "surface_id": 0,
+      "surface_name": "S0_notch_watchdog",
+      "x_sclk_low": 4,
+      "y_gap_wait": 13
+    },
+    {
+      "component_label": "0xee",
+      "matches": 5,
+      "repeats": 5,
+      "size": 4,
+      "surface_id": 0,
+      "surface_name": "S0_notch_watchdog",
+      "x_sclk_low": 7,
+      "y_gap_wait": 6
+    },
+    {
+      "component_label": "0x55",
+      "matches": 5,
+      "repeats": 5,
+      "size": 16,
+      "surface_id": 1,
+      "surface_name": "S1_bimodal_islands",
+      "x_sclk_low": 2,
+      "y_gap_wait": 0
+    },
+    {
+      "component_label": "0x77",
+      "matches": 5,
+      "repeats": 5,
+      "size": 6,
+      "surface_id": 1,
+      "surface_name": "S1_bimodal_islands",
+      "x_sclk_low": 4,
+      "y_gap_wait": 2
+    },
+    {
+      "component_label": "0x88",
+      "matches": 5,
+      "repeats": 5,
+      "size": 6,
+      "surface_id": 1,
+      "surface_name": "S1_bimodal_islands",
+      "x_sclk_low": 9,
+      "y_gap_wait": 11
+    },
+    {
+      "component_label": "0x00",
+      "matches": 5,
+      "repeats": 5,
+      "size": 42,
+      "surface_id": 2,
+      "surface_name": "S2_diagonal_resonance",
+      "x_sclk_low": 2,
+      "y_gap_wait": 0
+    },
+    {
+      "component_label": "0xc4",
+      "matches": 5,
+      "repeats": 5,
+      "size": 48,
+      "surface_id": 2,
+      "surface_name": "S2_diagonal_resonance",
+      "x_sclk_low": 2,
+      "y_gap_wait": 12
+    },
+    {
+      "component_label": "0xee",
+      "matches": 5,
+      "repeats": 5,
+      "size": 4,
+      "surface_id": 2,
+      "surface_name": "S2_diagonal_resonance",
+      "x_sclk_low": 9,
+      "y_gap_wait": 5
+    },
+    {
+      "component_label": "0x55",
+      "matches": 5,
+      "repeats": 5,
+      "size": 16,
+      "surface_id": 3,
+      "surface_name": "S3_held_tilted_ridge",
+      "x_sclk_low": 2,
+      "y_gap_wait": 0
+    },
+    {
+      "component_label": "0x00",
+      "matches": 5,
+      "repeats": 5,
+      "size": 22,
+      "surface_id": 3,
+      "surface_name": "S3_held_tilted_ridge",
+      "x_sclk_low": 3,
+      "y_gap_wait": 0
+    },
+    {
+      "component_label": "0xee",
+      "matches": 5,
+      "repeats": 5,
+      "size": 14,
+      "surface_id": 3,
+      "surface_name": "S3_held_tilted_ridge",
+      "x_sclk_low": 5,
+      "y_gap_wait": 3
+    },
+    {
+      "component_label": "0x00",
+      "matches": 5,
+      "repeats": 5,
+      "size": 24,
+      "surface_id": 4,
+      "surface_name": "S4_held_twin_pinholes",
+      "x_sclk_low": 2,
+      "y_gap_wait": 0
+    },
+    {
+      "component_label": "0x33",
+      "matches": 5,
+      "repeats": 5,
+      "size": 4,
+      "surface_id": 4,
+      "surface_name": "S4_held_twin_pinholes",
+      "x_sclk_low": 4,
+      "y_gap_wait": 11
+    },
+    {
+      "component_label": "0x44",
+      "matches": 5,
+      "repeats": 5,
+      "size": 4,
+      "surface_id": 4,
+      "surface_name": "S4_held_twin_pinholes",
+      "x_sclk_low": 10,
+      "y_gap_wait": 4
+    },
+    {
+      "component_label": "0x11",
+      "matches": 5,
+      "repeats": 5,
+      "size": 28,
+      "surface_id": 5,
+      "surface_name": "S5_held_4zone_core",
+      "x_sclk_low": 2,
+      "y_gap_wait": 0
+    },
+    {
+      "component_label": "0xee",
+      "matches": 5,
+      "repeats": 5,
+      "size": 4,
+      "surface_id": 5,
+      "surface_name": "S5_held_4zone_core",
+      "x_sclk_low": 8,
+      "y_gap_wait": 8
+    },
+    {
+      "component_label": "0x22",
+      "matches": 5,
+      "repeats": 5,
+      "size": 25,
+      "surface_id": 5,
+      "surface_name": "S5_held_4zone_core",
+      "x_sclk_low": 9,
+      "y_gap_wait": 11
+    },
+    {
+      "component_label": "0x55",
+      "matches": 5,
+      "repeats": 5,
+      "size": 32,
+      "surface_id": 6,
+      "surface_name": "S6_held_periodic_comb",
+      "x_sclk_low": 2,
+      "y_gap_wait": 0
+    },
+    {
+      "component_label": "0x66",
+      "matches": 5,
+      "repeats": 5,
+      "size": 8,
+      "surface_id": 6,
+      "surface_name": "S6_held_periodic_comb",
+      "x_sclk_low": 6,
+      "y_gap_wait": 1
+    },
+    {
+      "component_label": "0x66",
+      "matches": 5,
+      "repeats": 5,
+      "size": 8,
+      "surface_id": 6,
+      "surface_name": "S6_held_periodic_comb",
+      "x_sclk_low": 6,
+      "y_gap_wait": 6
+    },
+    {
+      "component_label": "0x66",
+      "matches": 5,
+      "repeats": 5,
+      "size": 8,
+      "surface_id": 6,
+      "surface_name": "S6_held_periodic_comb",
+      "x_sclk_low": 6,
+      "y_gap_wait": 11
+    }
+  ],
+  "seeds": [
+    20267001,
+    20267002,
+    20267003,
+    20267004,
+    20267005
+  ],
+  "timestamp_utc": "2026-11-16T20:05:19.800023+00:00"
+}
