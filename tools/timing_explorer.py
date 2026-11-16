@@ -25,6 +25,7 @@ from tools.protocol_asm import (  # noqa: E402
     UART_OP_BEGIN_LOAD,
     UART_OP_COMMIT_LOAD,
     UART_OP_HALT,
+    UART_OP_PATCH_WORD,
     UART_OP_PING_INFO,
     UART_OP_POP_EVENT,
     UART_OP_READ_CYCLE_CNT,
@@ -32,11 +33,13 @@ from tools.protocol_asm import (  # noqa: E402
     UART_OP_START,
     UART_OP_WRITE_WORD,
     assemble,
+    build_i2c_stretch_probe_program,
     build_i2c_write_byte_program,
     build_spi_mode0_program,
     build_uart_tx_program,
     crc8_07,
     make_uart_request,
+    predict_straight_line_cycles,
     program_checksums,
 )
 
@@ -190,6 +193,11 @@ class IcarusSimTransport(ProtocolTransport):
         if resp != "OK":
             raise ProtocolError(f"Unexpected configure response: {resp}")
 
+    def set_baud_sel(self, sel: int) -> None:
+        resp = self._send_line(f"b {sel & 3}")
+        if resp != "OK":
+            raise ProtocolError(f"Unexpected baud-sel response: {resp}")
+
     def exchange(self, frame: Sequence[int]) -> List[int]:
         if len(frame) != 8:
             raise ValueError("UART request frame must be 8 bytes")
@@ -293,6 +301,9 @@ class ProtocolClient:
             self.require_ok(UART_OP_WRITE_WORD, addr, word & 0xFF, (word >> 8) & 0xFF)
         d = self.require_ok(UART_OP_COMMIT_LOAD)
         return {"words": d[0], "crc8": d[1], "sum8": d[2], "prog_valid": d[3]}
+
+    def patch_word(self, addr: int, word: int) -> None:
+        self.require_ok(UART_OP_PATCH_WORD, addr, word & 0xFF, (word >> 8) & 0xFF)
 
     def start(self, run_param: int) -> None:
         if not (0 <= run_param <= 0xFFF):
@@ -506,13 +517,25 @@ def run_spi_boundary_exploration(
     def eval_low(low_cycles: int) -> Dict[str, Any]:
         run_param = low_cycles - 2
         res = client.run_trial(run_param)
-        passed = res["sample_reg"] == expected_miso and res["eng_state"] == "ENG_HALTED"
+        contract = predict_straight_line_cycles(words, run_param)
+        obs_marks = [e["ts_cycles"] for e in res["events"]]
+        contract_ok = (
+            res["cycle_cnt"] == contract["total_cycles"]
+            and obs_marks == contract["mark_cycles"]
+        )
+        passed = (
+            res["sample_reg"] == expected_miso
+            and res["eng_state"] == "ENG_HALTED"
+            and contract_ok
+        )
         if "sim_observations" in res:
             passed = passed and (res["sim_observations"]["spi_mosi_rx"] == mosi_byte)
         observed[low_cycles] = passed
         res["type"] = "trial"
         res["low_cycles"] = low_cycles
         res["expected_miso"] = expected_miso
+        res["contract_cycles"] = contract["total_cycles"]
+        res["contract_ok"] = contract_ok
         res["passed"] = passed
         records.append(res)
         return res
@@ -592,6 +615,126 @@ def replay_records(records: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def execute_replay(
+    records: Sequence[Dict[str, Any]],
+    client: ProtocolClient,
+    *,
+    repeats: int = 5,
+    only_failures: bool = True,
+) -> Dict[str, Any]:
+    """Experiment 2: reload saved program onto the ASIC and re-execute recorded cases."""
+    verified = replay_records(records)
+    meta = verified["metadata"]
+    prog_rec = next(r for r in records if r.get("type") == "program")
+    words = [int(w, 16) for w in prog_rec["words_hex"]]
+    if isinstance(client.transport, IcarusSimTransport) and meta.get("oracle"):
+        client.transport.configure_target(
+            0,
+            delay_ns=meta["oracle"]["target_delay_ns"],
+            spi_resp=meta["expected_miso"],
+        )
+    client.load_program(words)
+
+    selected = [t for t in verified["trials"] if (not only_failures or not t["passed"])]
+    if not selected:
+        selected = verified["trials"][:1]
+
+    case_reports: List[Dict[str, Any]] = []
+    for orig in selected:
+        matches = 0
+        trials_detail: List[Dict[str, Any]] = []
+        for _ in range(repeats):
+            rerun = client.run_trial(orig["run_param"])
+            exact = (
+                rerun["sample_reg"] == orig["sample_reg"]
+                and rerun["cycle_cnt"] == orig["cycle_cnt"]
+                and rerun["eng_state"] == orig["eng_state"]
+                and rerun["events"] == orig["events"]
+            )
+            if exact:
+                matches += 1
+            trials_detail.append(rerun)
+        case_reports.append(
+            {
+                "run_param": orig["run_param"],
+                "low_cycles": orig.get("low_cycles"),
+                "expected_sample_reg": orig["sample_reg"],
+                "expected_cycle_cnt": orig["cycle_cnt"],
+                "repeats": repeats,
+                "exact_matches": matches,
+                "replay_rate": matches / repeats if repeats else 0.0,
+            }
+        )
+    return {
+        "protocol": meta["protocol"],
+        "cases": case_reports,
+        "all_deterministic": all(c["exact_matches"] == repeats for c in case_reports),
+    }
+
+
+def run_i2c_stretch_sweep(
+    client: ProtocolClient,
+    stretch_cycles: int,
+    max_wait_values: Sequence[int],
+) -> Dict[str, Any]:
+    """Experiment 1 (I2C): measure slave clock-stretch release latency using WAIT_EDGE."""
+    words = build_i2c_stretch_probe_program(scl_pin=0, sda_pin=1, half_cycles=4)
+    if isinstance(client.transport, IcarusSimTransport):
+        client.transport.configure_target(4, delay_ns=stretch_cycles)
+    client.load_program(words)
+    obs: Dict[int, bool] = {}
+    trials: List[Dict[str, Any]] = []
+    for mw in max_wait_values:
+        res = client.run_trial(mw)
+        tags = [e["tag"] for e in res["events"]]
+        tss = [e["ts_cycles"] for e in res["events"]]
+        passed = (len(tags) >= 2) and (tags[1] == 0x51)
+        obs[mw] = passed
+        stretch_measured = (tss[1] - tss[0]) if len(tss) >= 2 else None
+        trials.append(
+            {
+                "max_wait": mw,
+                "passed": passed,
+                "tags": tags,
+                "timestamps": tss,
+                "measured_release_delta_cycles": stretch_measured,
+            }
+        )
+    return {
+        "target_stretch_cycles": stretch_cycles,
+        "boundary": classify_boundary(obs),
+        "trials": trials,
+    }
+
+
+def run_uart_period_sweep(
+    client: ProtocolClient,
+    byte_val: int = 0xA3,
+    bit_cycles_list: Sequence[int] = (5, 6, 7, 8, 9, 10, 11),
+) -> Dict[str, Any]:
+    """Experiment 1 (UART): sweep TX bit_cycles against a fixed CLKS_PER_BIT=8 receiver."""
+    trials: List[Dict[str, Any]] = []
+    for bc in bit_cycles_list:
+        words = build_uart_tx_program(byte_val, bit_cycles=bc, pin=0)
+        if isinstance(client.transport, IcarusSimTransport):
+            client.transport.configure_target(1)
+        client.load_program(words)
+        res = client.run_trial(0)
+        sim_obs = res.get("sim_observations", {})
+        passed = bool(sim_obs.get("uart_mon_seen")) and (sim_obs.get("uart_mon_byte") == byte_val)
+        trials.append(
+            {
+                "bit_cycles": bc,
+                "passed": passed,
+                "rx_seen": sim_obs.get("uart_mon_seen"),
+                "rx_byte": sim_obs.get("uart_mon_byte"),
+                "cycle_cnt": res["cycle_cnt"],
+            }
+        )
+    passing = [t["bit_cycles"] for t in trials if t["passed"]]
+    return {"expected_byte": byte_val, "passing_bit_cycles": passing, "trials": trials}
+
+
 def format_report_markdown(replayed: Dict[str, Any]) -> str:
     meta = replayed["metadata"]
     boundary = replayed["boundary"]
@@ -661,9 +804,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     p_sweep.add_argument("--out", type=Path, help="Output JSONL trace path")
     p_sweep.add_argument("--report", type=Path, help="Output Markdown summary report path")
 
-    p_replay = sub.add_parser("replay", help="Verify and report on a saved JSONL trace")
+    p_replay = sub.add_parser("replay", help="Verify and optionally re-execute a saved JSONL trace")
     p_replay.add_argument("trace", type=Path)
     p_replay.add_argument("--report", type=Path)
+    p_replay.add_argument("--exec", dest="do_exec", action="store_true", help="Re-run stored cases on target")
+    p_replay.add_argument("--sim", action="store_true")
+    p_replay.add_argument("--port")
+    p_replay.add_argument("--baud", type=int, default=115200)
+    p_replay.add_argument("--trials", type=int, default=5)
+    p_replay.add_argument("--all", dest="all_cases", action="store_true")
 
     p_ex = sub.add_parser("run-example", help="Run built-in uart/spi/i2c example over UART")
     p_ex.add_argument("--sim", action="store_true")
@@ -676,8 +825,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     args = parser.parse_args(argv)
     if args.cmd == "replay":
-        replayed = replay_records(read_jsonl(args.trace))
+        records = read_jsonl(args.trace)
+        replayed = replay_records(records)
         md = format_report_markdown(replayed)
+        if args.do_exec:
+            with _make_transport(args) as transport:
+                transport.reset(1)
+                exec_res = execute_replay(
+                    records,
+                    ProtocolClient(transport),
+                    repeats=args.trials,
+                    only_failures=not args.all_cases,
+                )
+            md += "\n## Live Execution Replay Results\n\n```json\n" + json.dumps(exec_res, indent=2) + "\n```\n"
         if args.report:
             args.report.write_text(md, encoding="utf-8")
         print(md)

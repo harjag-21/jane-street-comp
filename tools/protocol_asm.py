@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from typing import Dict, Iterable, List, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 PROG_DEPTH = 64
 
@@ -23,6 +23,7 @@ OPCODES: Dict[str, int] = {
     "HALT": 0xA,
     "OUT_SAMPLE": 0xB,
     "WAIT_PARAM": 0xC,
+    "WAIT_EDGE": 0xD,
 }
 
 UART_OP_PING_INFO = 0x10
@@ -34,6 +35,7 @@ UART_OP_HALT = 0x15
 UART_OP_READ_STATUS = 0x16
 UART_OP_POP_EVENT = 0x17
 UART_OP_READ_CYCLE_CNT = 0x18
+UART_OP_PATCH_WORD = 0x19
 
 
 def crc8_07(data: Sequence[int]) -> int:
@@ -130,6 +132,11 @@ def assemble(lines: Iterable[str]) -> List[int]:
         elif mnem == "WAIT_PARAM":
             offset = _parse_int(args[0], labels) if args else 0
             words.append(insn("WAIT_PARAM", offset & 0xFF))
+        elif mnem == "WAIT_EDGE":
+            pol = _parse_int(args[0], labels) & 0x1
+            pin = _parse_int(args[1], labels) & 0x7
+            max_wait = (_parse_int(args[2], labels) & 0xFF) if len(args) > 2 else 0
+            words.append(insn("WAIT_EDGE", (pol << 11) | (pin << 8) | max_wait))
         elif mnem == "SAMPLE":
             pin = _parse_int(args[0], labels) & 0x7
             no_shift = (_parse_int(args[1], labels) & 0x1) if len(args) > 1 else 0
@@ -284,15 +291,157 @@ def build_i2c_write_byte_program(
     return assemble(lines)
 
 
+def build_i2c_stretch_probe_program(
+    scl_pin: int = 0,
+    sda_pin: int = 1,
+    half_cycles: int = 4,
+    released_tag: int = 0x51,
+    timeout_tag: int = 0xEE,
+) -> List[int]:
+    """Drive one open-drain SCL low pulse, release SCL, and timestamp slave clock-stretch release."""
+    scl_oe = 1 << scl_pin
+    w = max(0, half_cycles - 2)
+    lines = [
+        "OUT 0x00",
+        f"OE 0x{scl_oe:02x}",       # pull SCL low
+        f"WAIT {w}",
+        "MARK 0x50, 0",             # release marker before freeing SCL
+        "OE 0x00",                  # release SCL; slave may hold SCL low (stretch)
+        f"WAIT_EDGE 1, {scl_pin}, 0",  # wait up to run_param cycles for SCL==1
+        "JZ timeout_lbl",
+        f"MARK 0x{released_tag:02x}, 0",
+        "JMP done_lbl",
+        "timeout_lbl:",
+        f"MARK 0x{timeout_tag:02x}, 0",
+        "done_lbl:",
+        "HALT 0",
+    ]
+    return assemble(lines)
+
+
+def build_spi_target_responder_program(
+    miso_byte: int,
+    cs_pin: int = 0,
+    sclk_pin: int = 1,
+    mosi_pin: int = 2,
+    miso_pin: int = 3,
+    max_wait: int = 0,
+) -> List[int]:
+    """SPI mode-0 responder (target) polling CS_N and SCLK via WAIT_EDGE."""
+    miso_oe = 1 << miso_pin
+    lines = [
+        "OUT 0x00",
+        f"OE 0x{miso_oe:02x}",
+        f"WAIT_EDGE 0, {cs_pin}, {max_wait}",
+        "JZ cs_timeout",
+    ]
+    for bit in range(7, -1, -1):
+        val = miso_oe if ((miso_byte >> bit) & 1) else 0
+        lines += [
+            f"OUT 0x{val:02x}",
+            f"WAIT_EDGE 1, {sclk_pin}, {max_wait}",
+            f"SAMPLE {mosi_pin}, 0",
+            f"WAIT_EDGE 0, {sclk_pin}, {max_wait}",
+        ]
+    lines += [
+        "MARK_SAMPLE",
+        "JMP end_lbl",
+        "cs_timeout:",
+        "MARK 0xEE, 0",
+        "end_lbl:",
+        "HALT 0",
+    ]
+    return assemble(lines)
+
+
+def build_spi_two_txn_sequence(
+    cmd0: int,
+    cmd1: int,
+    bit_low_wait: int = 4,
+    cs_pin: int = 0,
+    sclk_pin: int = 1,
+    mosi_pin: int = 2,
+    miso_pin: int = 3,
+) -> Tuple[List[int], Dict[str, int]]:
+    """Build a parameterized 2-transaction SPI sequence returning word indices for patching."""
+    cs_mask = 1 << cs_pin
+    sclk_mask = 1 << sclk_pin
+    mosi_mask = 1 << mosi_pin
+    oe_mask = cs_mask | sclk_mask | mosi_mask
+    lines = [
+        f"OUT 0x{cs_mask:02x}",
+        f"OE 0x{oe_mask:02x}",
+    ]
+    # Note: keep compact loop over bits using explicit unrolled or loop pattern?
+    # Loop fits well inside 64 words!
+    # Put cmd0 bytes as unrolled fast path: 2 transactions in <= 52 words
+    #Wait: 2 * 8 bits = 16 bits * 3 insns = 48 words if unrolled! Or use WAIT fixed and WAIT_PARAM only on inter-CS gap!
+    # 16 bits * 3 words + overhead = 56 words <= 64, AND byte0/byte1 offsets are patchable!
+    meta: Dict[str, int] = {"cmd0_word_start": 2, "cmd1_word_start": 0, "gap_word": 0}
+    w = max(0, bit_low_wait)
+
+    def emit_byte(byte_val: int) -> None:
+        lines.append("OUT 0x00")
+        lines.append("WAIT 0")
+        for bit in range(7, -1, -1):
+            m = mosi_mask if ((byte_val >> bit) & 1) else 0
+            lines.append(f"OUT 0x{m:02x}")
+            if w > 0:
+                lines.append(f"WAIT {w - 1}")
+            lines.append(f"OUT_SAMPLE 0x{(sclk_mask | m):02x}, {miso_pin}, 0")
+
+    emit_byte(cmd0)
+    lines.append("OUT 0x00")
+    lines.append("MARK_SAMPLE")
+    lines.append(f"OUT 0x{cs_mask:02x}")  # deassert CS_N
+    meta["gap_word"] = len(lines)
+    lines.append("WAIT_PARAM 0")           # swept inter-transaction CS_N high gap
+    meta["cmd1_word_start"] = len(lines) + 2
+    emit_byte(cmd1)
+    lines.append("OUT 0x00")
+    lines.append(f"OUT 0x{cs_mask:02x}")
+    lines.append("MARK_SAMPLE")
+    lines.append("HALT 0")
+    words = assemble(lines)
+    return words, meta
+
+
+def predict_straight_line_cycles(words: Sequence[int], run_param: int) -> Dict[str, Any]:
+    """Statically compute exact cycle_cnt and MARK offsets for branch/loop-free programs."""
+    cycles = 0
+    marks: List[int] = []
+    for pc, w in enumerate(words):
+        op = (w >> 12) & 0xF
+        imm = w & 0xFFF
+        if op in (0x5, 0x6, 0x7, 0xD):
+            raise ValueError(f"Dynamic branch/edge op 0x{op:x} at PC {pc} requires dynamic trace")
+        if op == 0x9:  # MARK records pre-increment cycle_cnt_o
+            marks.append(cycles)
+        cycles += 1
+        if op == 0x3:  # WAIT adds imm extra cycles
+            cycles += imm
+        elif op == 0xC:  # WAIT_PARAM adds min(0xFFF, run_param + imm[7:0])
+            cycles += min(0xFFF, run_param + (imm & 0xFF))
+        elif op == 0xA:  # HALT stops incrementing after its decode cycle
+            break
+    return {"total_cycles": cycles, "mark_cycles": marks}
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="v1 Protocol Engine assembler helper")
-    parser.add_argument("--example", choices=["uart", "spi", "i2c"], required=True)
+    parser.add_argument(
+        "--example", choices=["uart", "spi", "i2c", "i2c_stretch", "spi_target"], required=True
+    )
     args = parser.parse_args()
     if args.example == "uart":
         prog = build_uart_tx_program(0xA3, bit_cycles=8)
     elif args.example == "spi":
         prog = build_spi_mode0_program(0x55)
-    else:
+    elif args.example == "i2c":
         prog = build_i2c_write_byte_program(0xA0)
+    elif args.example == "i2c_stretch":
+        prog = build_i2c_stretch_probe_program()
+    else:
+        prog = build_spi_target_responder_program(0x5A)
     crc, s8 = program_checksums(prog)
     print(json.dumps({"example": args.example, "length": len(prog), "crc8": crc, "sum8": s8, "words": [f"0x{w:04x}" for w in prog]}, indent=2))

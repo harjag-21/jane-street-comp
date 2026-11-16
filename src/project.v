@@ -5,7 +5,7 @@
 `endif
 `default_nettype none
 
-module tt_um_example #(
+module tt_um_harjag_21_timing_explorer #(
     parameter integer CLKS_PER_BIT = 8
 ) (
     input  wire [7:0] ui_in,
@@ -18,10 +18,20 @@ module tt_um_example #(
     input  wire       rst_n
 );
 
-  localparam integer PROG_DEPTH         = 64;
-  localparam integer EVENT_DEPTH        = 8;
-  localparam integer HALF_BIT           = (CLKS_PER_BIT < 2) ? 1 : (CLKS_PER_BIT / 2);
-  localparam integer FRAME_TIMEOUT_CLKS = 64 * CLKS_PER_BIT;
+  localparam integer PROG_DEPTH  = 64;
+  localparam integer EVENT_DEPTH = 8;
+
+  // Runtime baud-rate divider selectable via ui_in[2:1] (for 115200 baud at common clocks):
+  //   00 -> CLKS_PER_BIT parameter (8 default: fast sim or 921.6 kHz clock)
+  //   01 -> 104 (12 MHz clock)
+  //   10 -> 217 (25 MHz clock)
+  //   11 -> 434 (50 MHz clock)
+  wire [15:0] bit_clks = (ui_in[2:1] == 2'b01) ? 16'd104 :
+                         (ui_in[2:1] == 2'b10) ? 16'd217 :
+                         (ui_in[2:1] == 2'b11) ? 16'd434 :
+                                                 CLKS_PER_BIT[15:0];
+  wire [15:0] half_bit_clks     = (bit_clks < 16'd2) ? 16'd1 : {1'b0, bit_clks[15:1]};
+  wire [15:0] frame_timeout_lim = {bit_clks[9:0], 6'd0};
 
   localparam [2:0] RX_IDLE = 3'd0, RX_START = 3'd1, RX_DATA = 3'd2, RX_STOP = 3'd3;
   localparam [1:0] TX_IDLE = 2'd0, TX_START = 2'd1, TX_DATA = 2'd2, TX_STOP = 2'd3;
@@ -43,7 +53,8 @@ module tt_um_example #(
                    OP_HALT           = 8'h15,
                    OP_READ_STATUS    = 8'h16,
                    OP_POP_EVENT      = 8'h17,
-                   OP_READ_CYCLE_CNT = 8'h18;
+                   OP_READ_CYCLE_CNT = 8'h18,
+                   OP_PATCH_WORD     = 8'h19;
 
   localparam [7:0] ST_OK        = 8'h00,
                    ST_BAD_CRC   = 8'h01,
@@ -171,14 +182,14 @@ module tt_um_example #(
         RX_IDLE: begin
           if (!rx_d2) begin
             rx_state <= RX_START;
-            rx_count <= HALF_BIT[15:0] - 16'd1;
+            rx_count <= half_bit_clks - 16'd1;
           end
         end
         RX_START: begin
           if (rx_count == 16'd0) begin
             if (!rx_d2) begin
               rx_state <= RX_DATA;
-              rx_count <= CLKS_PER_BIT[15:0] - 16'd1;
+              rx_count <= bit_clks - 16'd1;
               rx_bit   <= 3'd0;
             end else begin
               rx_state <= RX_IDLE;
@@ -189,7 +200,7 @@ module tt_um_example #(
         end
         RX_DATA: begin
           if (rx_count == 16'd0) begin
-            rx_count         <= CLKS_PER_BIT[15:0] - 16'd1;
+            rx_count         <= bit_clks - 16'd1;
             rx_shift[rx_bit] <= rx_d2;
             if (rx_bit == 3'd7) begin
               rx_state <= RX_STOP;
@@ -231,7 +242,7 @@ module tt_um_example #(
           if (tx_start) begin
             tx_shift <= tx_data;
             tx_bit   <= 3'd0;
-            tx_count <= CLKS_PER_BIT[15:0] - 16'd1;
+            tx_count <= bit_clks - 16'd1;
             tx_state <= TX_START;
             tx_busy  <= 1'b1;
           end
@@ -239,14 +250,14 @@ module tt_um_example #(
         TX_START: begin
           if (tx_count == 16'd0) begin
             tx_state <= TX_DATA;
-            tx_count <= CLKS_PER_BIT[15:0] - 16'd1;
+            tx_count <= bit_clks - 16'd1;
           end else begin
             tx_count <= tx_count - 16'd1;
           end
         end
         TX_DATA: begin
           if (tx_count == 16'd0) begin
-            tx_count <= CLKS_PER_BIT[15:0] - 16'd1;
+            tx_count <= bit_clks - 16'd1;
             if (tx_bit == 3'd7) begin
               tx_state <= TX_STOP;
             end else begin
@@ -347,7 +358,7 @@ module tt_um_example #(
             end else begin
               body_idx <= body_idx + 3'd1;
             end
-          end else if (frame_timer == FRAME_TIMEOUT_CLKS[15:0]) begin
+          end else if (frame_timer == frame_timeout_lim) begin
             cmd_state   <= CMD_SYNC;
             frame_timer <= 16'd0;
           end else begin
@@ -368,7 +379,7 @@ module tt_um_example #(
             end else begin
               cmd_state <= CMD_EXEC;
             end
-          end else if (frame_timer == FRAME_TIMEOUT_CLKS[15:0]) begin
+          end else if (frame_timer == frame_timeout_lim) begin
             cmd_state   <= CMD_SYNC;
             frame_timer <= 16'd0;
           end else begin
@@ -497,6 +508,23 @@ module tt_um_example #(
               resp_d3    <= {4'd0, event_count};
             end
 
+            OP_PATCH_WORD: begin
+              if ((eng_state == ENG_RUN) || !prog_valid) begin
+                cmd_status <= ST_BAD_STATE;
+              end else if (req_arg0 >= PROG_DEPTH[7:0]) begin
+                cmd_status <= ST_BAD_ARG;
+              end else begin
+                cmd_status <= ST_OK;
+                prog_we    <= 1'b1;
+                prog_addr  <= req_arg0[5:0];
+                prog_wdata <= {req_arg2, req_arg1};
+                resp_d0    <= req_arg0;
+                resp_d1    <= req_arg1;
+                resp_d2    <= req_arg2;
+                resp_d3    <= 8'h01;
+              end
+            end
+
             default: begin
               cmd_status <= ST_BAD_OP;
             end
@@ -559,7 +587,7 @@ module tt_um_example #(
   assign uo_out[5]   = event_overflow;
   assign uo_out[7:6] = 2'b00;
 
-  wire _unused = &{ui_in[7:1], req_arg3, 1'b0};
+  wire _unused = &{ui_in[7:3], req_arg3, 1'b0};
 
 endmodule
 `default_nettype wire

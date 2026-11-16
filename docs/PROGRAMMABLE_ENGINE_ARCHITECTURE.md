@@ -15,7 +15,7 @@ One deterministic, single-issue microsequencer (`protocol_sequencer` in `src/pro
 | Program store | `64 × 16`-bit flop array loaded over UART | Supports UART, SPI mode-0 sweep, and I2C open-drain programs within `8×4` tile area without custom SRAM macro integration risk. |
 | Protocol pins | `uio[7:0]`; separate 8-bit `uio_out_o` and `uio_oe_o` registers | Supports push-pull and open-drain (`OE`-driven low / high-Z release) protocols with the same ISA. |
 | Event FIFO | `8`-entry timestamped FIFO (`ev_tag[7:0]`, `ev_ts[15:0]` from 16-bit `cycle_cnt_o`) with overflow flag | Captures cycle-exact boundary/protocol events (`MARK`) for host readback after a trial. |
-| Loader transport | UART RX on `ui_in[0]` (2-FF synchronized), UART TX on `uo_out[0]`, `CLKS_PER_BIT = 8` default (`8N1`) | Reuses the v0.1 host interface with deterministic framing, CRC-8/07 integrity, and timeout recovery (`64 × CLKS_PER_BIT`). |
+| Loader transport | UART RX on `ui_in[0]` (2-FF synchronized), UART TX on `uo_out[0]`, runtime baud divider on `ui_in[2:1]` (`00=CLKS_PER_BIT/8`, `01=104`, `10=217`, `11=434` for `115200` baud at `12/25/50 MHz`) | Reuses the v0.1 host interface while supporting `50 MHz` Tiny Tapeout crystals/PLLs and fast `div8` simulation. |
 | Status outputs | `uo_out[1] = trial_active`, `uo_out[2] = prog_valid`, `uo_out[4:3] = eng_state`, `uo_out[5] = event_overflow`, `uo_out[7:6] = 2'b00` | Gives external instrumentation direct single-cycle observability alongside UART telemetry. |
 | Engine reset & select | `rst_active_n = rst_n & ena` | Clears `prog_valid`, `uio_oe_o`, event FIFO, and loader state cleanly on chip deselection or reset. |
 | Data state | `last_sample_o` (1-bit), `sample_reg_o` (8-bit shift register), `loop_cnt0/1` (8-bit counters), `run_param` (12-bit runtime parameter) | Enables sampled response branching, MSB-first 8-bit capture, bounded loops, and parameterized timing sweeps without a CPU register file. |
@@ -40,7 +40,8 @@ Each instruction word is `{opcode[3:0], imm[11:0]}` (`opcode[15:12] | operand[11
 | `0xA` | `HALT` | `keep_oe = imm[0]` | Transition to `ENG_HALTED`; clear `uio_oe_o <= 8'h00` unless `keep_oe == 1`. Preserve program store, `sample_reg_o`, `cycle_cnt_o`, and FIFO for host readback. |
 | `0xB` | `OUT_SAMPLE` | `no_shift = imm[11]`, `pin = imm[10:8]`, `val = imm[7:0]` | Atomically drive `uio_out_o <= val` and sample `uio_in[pin]` (into `last_sample_o` and optionally `sample_reg_o`) on the same clock edge, enabling tight SPI clock/sample timing. |
 | `0xC` | `WAIT_PARAM` | `offset = imm[7:0]` | Wait `saturate_12b(run_param + offset)` additional cycles (`WAIT_PARAM 0` waits `run_param` extra cycles, so `run_param == 0` takes `1` cycle total). |
-| `0xD–0xF` | reserved | any | Transition to `ENG_FAULT` and immediately force `uio_oe_o <= 8'h00`. |
+| `0xD` | `WAIT_EDGE` | `pol = imm[11]`, `pin = imm[10:8]`, `max = imm[7:0]` | Wait up to `max` (or `run_param` if `max == 0`) cycles for `uio_in[pin] == pol`. Sets `last_sample_o = 1` on hit or `0` on timeout; used for I2C clock stretching and SPI target polling. |
+| `0xE–0xF` | reserved | any | Transition to `ENG_FAULT` and immediately force `uio_oe_o <= 8'h00`. |
 
 ## UART loading and control protocol (`src/project.v`)
 
@@ -62,6 +63,7 @@ If `CMD_BODY` or `CMD_CRC` stalls for `64 × CLKS_PER_BIT` cycles, the loader pa
 | `0x16` | `READ_STATUS` | ignored | `d0 = flags/state`, `d1 = pc`, `d2 = sample_reg`, `d3 = {last_sample, 3'd0, event_count}` |
 | `0x17` | `POP_EVENT` | ignored | Returns `d0 = event_count` (pre-pop), `d1 = tag`, `d2 = ts[7:0]`, `d3 = ts[15:8]` and pops FIFO if nonempty |
 | `0x18` | `READ_CYCLE_CNT` | ignored | Returns `d0 = cycle_cnt[7:0]`, `d1 = cycle_cnt[15:8]`, `d2 = sample_reg`, `d3 = event_count` |
+| `0x19` | `PATCH_WORD` | `arg0 = addr`, `arg1 = word[7:0]`, `arg2 = word[15:8]` | Random-access single-word patch when `prog_valid == 1` and halted (accelerates fuzzing/minimization without reloading all 64 words) |
 
 Status codes: `0x00 ST_OK`, `0x01 ST_BAD_CRC`, `0x02 ST_BAD_OP`, `0x03 ST_BAD_ARG`, `0x04 ST_BAD_STATE`, `0x05 ST_CHECKSUM`.
 

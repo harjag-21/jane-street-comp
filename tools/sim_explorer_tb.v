@@ -3,13 +3,19 @@
 `default_nettype none
 
 // Stdin/stdout simulation bridge for Timing Boundary Explorer host CLI.
-// Instantiates the actual ASIC top module `tt_um_example` and models
-// a configurable SPI mode-0 target, UART monitor, or I2C open-drain target on `uio[7:0]`.
+// Instantiates `tt_um_harjag_21_timing_explorer` and models configurable targets:
+//   0 = SPI mode-0 delayed MISO responder (`delay_ns`)
+//   1 = UART 8N1 RX monitor (fixed 8 clocks/bit, start+stop framed) on uio[0]
+//   2 = I2C open-drain byte receiver + ACK/NACK on uio[0]=SCL, uio[1]=SDA
+//   3 = Stateful SPI peripheral (Ref vs DUT deselect-gap bug threshold `min_cs_high`)
+//   4 = I2C clock-stretching responder (`stretch_cycles` on SCL after release)
 module sim_explorer_tb;
-  localparam integer CLKS_PER_BIT = 8;
-  localparam integer MODE_SPI     = 0;
-  localparam integer MODE_UART    = 1;
-  localparam integer MODE_I2C     = 2;
+  localparam integer CLKS_PER_BIT      = 8;
+  localparam integer MODE_SPI          = 0;
+  localparam integer MODE_UART         = 1;
+  localparam integer MODE_I2C          = 2;
+  localparam integer MODE_SPI_STATEFUL = 3;
+  localparam integer MODE_I2C_STRETCH  = 4;
 
   reg        clk = 1'b0;
   reg        rst_n = 1'b0;
@@ -20,7 +26,9 @@ module sim_explorer_tb;
   wire [7:0] uio_out;
   wire [7:0] uio_oe;
 
-  tt_um_example #(
+  integer    tb_bit_clks = CLKS_PER_BIT;
+
+  tt_um_harjag_21_timing_explorer #(
       .CLKS_PER_BIT(CLKS_PER_BIT)
   ) dut (
       .ui_in  (ui_in),
@@ -33,7 +41,7 @@ module sim_explorer_tb;
       .rst_n  (rst_n)
   );
 
-  // 100 MHz nominal core clock (T = 10 ns) so integer cycles map cleanly to ns.
+  // 100 MHz nominal core clock (T = 10 ns) so integer cycles map 1:1 to 10 ns units.
   always #5 clk = ~clk;
 
   // Target model configuration
@@ -47,6 +55,14 @@ module sim_explorer_tb;
   reg  [3:0] spi_bit_idx   = 4'd0;
   reg        spi_miso_drv  = 1'b1;
 
+  // Stateful SPI flash-style responder state (MODE_SPI_STATEFUL)
+  reg        st_wren        = 1'b0;
+  reg  [7:0] st_prev_cmd    = 8'h00;
+  reg  [7:0] st_tx_byte     = 8'h00;
+  reg  [7:0] st_rx_byte     = 8'h00;
+  reg  [3:0] st_bit_idx     = 4'd0;
+  integer    st_cs_high_cnt = 100;
+
   reg  [7:0] uart_mon_byte = 8'h00;
   reg        uart_mon_seen = 1'b0;
   reg        uart_mon_busy = 1'b0;
@@ -54,27 +70,30 @@ module sim_explorer_tb;
   reg  [7:0] i2c_rx_byte   = 8'h00;
   reg        i2c_seen      = 1'b0;
   reg        i2c_sda_low   = 1'b0;
+  reg        i2c_scl_low   = 1'b0;
   reg        i2c_od_fault  = 1'b0;
+  reg        i2c_st_armed  = 1'b0;
+  integer    i2c_st_cnt    = 0;
 
-  // Open-drain resolved wires for I2C mode (pins 0=SCL, 1=SDA)
-  wire scl_bus = uio_oe[0] ? uio_out[0] : 1'b1;
+  // Open-drain resolved wires for I2C modes (pins 0=SCL, 1=SDA)
+  wire scl_ctrl_low = uio_oe[0] && !uio_out[0];
+  wire scl_bus = i2c_scl_low ? 1'b0 : (uio_oe[0] ? uio_out[0] : 1'b1);
   wire sda_bus = i2c_sda_low ? 1'b0 : (uio_oe[1] ? uio_out[1] : 1'b1);
 
-  // Drive uio_in according to active mode
   always @(*) begin
-    if (target_mode == MODE_SPI) begin
+    if ((target_mode == MODE_SPI) || (target_mode == MODE_SPI_STATEFUL)) begin
       uio_in = {4'hF, spi_miso_drv, 3'b111};
-    end else if (target_mode == MODE_I2C) begin
+    end else if ((target_mode == MODE_I2C) || (target_mode == MODE_I2C_STRETCH)) begin
       uio_in = {6'h3F, sda_bus, scl_bus};
     end else begin
       uio_in = 8'hFF;
     end
   end
 
-  // SPI mode-0 target (CS_N=uio[0], SCLK=uio[1], MOSI=uio[2], MISO=uio[3])
   wire spi_cs_n = uio_oe[0] ? uio_out[0] : 1'b1;
   wire spi_sclk = uio_oe[1] ? uio_out[1] : 1'b0;
 
+  // MODE_SPI: transport-delayed MISO SPI target
   always @(negedge spi_cs_n) begin
     if (target_mode == MODE_SPI) begin
       spi_bit_idx  = 4'd0;
@@ -98,30 +117,107 @@ module sim_explorer_tb;
     end
   end
 
-  // UART TX monitor on uio[0]
+  // MODE_SPI_STATEFUL: peripheral where `spi_delay_ns` sets required CS_N high cycles
+  // after WREN (0x06) for subsequent RDSR (0x05) to preserve WEL (`0x02`).
+  always @(posedge clk) begin
+    if (target_mode == MODE_SPI_STATEFUL) begin
+      if (spi_cs_n) begin
+        st_cs_high_cnt <= st_cs_high_cnt + 1;
+      end else begin
+        st_cs_high_cnt <= 0;
+      end
+    end
+  end
+
+  always @(negedge spi_cs_n) begin : stateful_spi_cs_blk
+    reg next_wren;
+    if (target_mode == MODE_SPI_STATEFUL) begin
+      next_wren = st_wren;
+      if ((st_prev_cmd == 8'h06) && (st_cs_high_cnt < spi_delay_ns)) begin
+        next_wren = 1'b0;
+      end
+      st_wren      = next_wren;
+      st_tx_byte   = next_wren ? 8'h02 : 8'h00;
+      spi_miso_drv <= st_tx_byte[7];
+      st_bit_idx   = 4'd0;
+      st_rx_byte   = 8'h00;
+    end
+  end
+
+  always @(posedge spi_sclk) begin : stateful_spi_rx_blk
+    reg [7:0] next_rx;
+    if ((target_mode == MODE_SPI_STATEFUL) && !spi_cs_n) begin
+      next_rx    = {st_rx_byte[6:0], uio_out[2]};
+      st_rx_byte = next_rx;
+      if (st_bit_idx == 4'd7) begin
+        spi_mosi_rx = next_rx;
+        st_prev_cmd = next_rx;
+        if (next_rx == 8'h06) begin
+          st_wren = 1'b1;
+        end else if (next_rx != 8'h05) begin
+          st_wren = 1'b0;
+        end
+      end
+    end
+  end
+
+  always @(negedge spi_sclk) begin
+    if ((target_mode == MODE_SPI_STATEFUL) && !spi_cs_n) begin
+      if (st_bit_idx < 4'd7) begin
+        st_bit_idx   = st_bit_idx + 4'd1;
+        spi_miso_drv <= st_tx_byte[7 - st_bit_idx];
+      end
+    end
+  end
+
+  // MODE_UART: framed 8N1 receiver at fixed 8 clks/bit on uio[0]
   wire uart_tx_line = uio_oe[0] ? uio_out[0] : 1'b1;
   always @(negedge uart_tx_line) begin : uart_mon_blk
     integer k;
     reg [7:0] captured;
     if ((target_mode == MODE_UART) && !uart_mon_busy && uio_oe[0]) begin
       uart_mon_busy = 1'b1;
-      repeat (CLKS_PER_BIT + (CLKS_PER_BIT / 2)) @(posedge clk);
-      for (k = 0; k < 8; k = k + 1) begin
-        captured[k] = uart_tx_line;
+      repeat (CLKS_PER_BIT / 2) @(posedge clk);
+      if (uart_tx_line === 1'b0) begin
+        for (k = 0; k < 8; k = k + 1) begin
+          repeat (CLKS_PER_BIT) @(posedge clk);
+          captured[k] = uart_tx_line;
+        end
         repeat (CLKS_PER_BIT) @(posedge clk);
+        if (uart_tx_line === 1'b1) begin
+          uart_mon_byte = captured;
+          uart_mon_seen = 1'b1;
+        end
       end
-      uart_mon_byte = captured;
-      uart_mon_seen = 1'b1;
       uart_mon_busy = 1'b0;
     end
   end
 
-  // I2C open-drain monitor & ACK responder
+  // MODE_I2C & MODE_I2C_STRETCH
   always @(posedge clk) begin
-    if (target_mode == MODE_I2C) begin
+    if ((target_mode == MODE_I2C) || (target_mode == MODE_I2C_STRETCH)) begin
       if ((uio_oe[0] && uio_out[0]) || (uio_oe[1] && uio_out[1])) begin
         i2c_od_fault <= 1'b1;
       end
+    end
+    if (target_mode == MODE_I2C_STRETCH) begin
+      if (scl_ctrl_low) begin
+        i2c_st_armed <= (spi_delay_ns > 0);
+        i2c_st_cnt   <= spi_delay_ns;
+        i2c_scl_low  <= (spi_delay_ns > 0);
+      end else if (i2c_st_armed) begin
+        if (i2c_st_cnt > 1) begin
+          i2c_scl_low <= 1'b1;
+          i2c_st_cnt  <= i2c_st_cnt - 1;
+        end else begin
+          i2c_scl_low  <= 1'b0;
+          i2c_st_armed <= 1'b0;
+          i2c_st_cnt   <= 0;
+        end
+      end
+    end else begin
+      i2c_scl_low  <= 1'b0;
+      i2c_st_armed <= 1'b0;
     end
   end
 
@@ -129,7 +225,6 @@ module sim_explorer_tb;
     integer b;
     reg [7:0] rx;
     if ((target_mode == MODE_I2C) && (scl_bus === 1'b1)) begin
-      // Wait for START falling SCL edge
       while (scl_bus === 1'b1) @(posedge clk);
       rx = 8'h00;
       for (b = 0; b < 8; b = b + 1) begin
@@ -153,13 +248,13 @@ module sim_explorer_tb;
     integer bit_i;
     begin
       ui_in[0] = 1'b0;
-      repeat (CLKS_PER_BIT) @(posedge clk);
+      repeat (tb_bit_clks) @(posedge clk);
       for (bit_i = 0; bit_i < 8; bit_i = bit_i + 1) begin
         ui_in[0] = b[bit_i];
-        repeat (CLKS_PER_BIT) @(posedge clk);
+        repeat (tb_bit_clks) @(posedge clk);
       end
       ui_in[0] = 1'b1;
-      repeat (CLKS_PER_BIT) @(posedge clk);
+      repeat (tb_bit_clks) @(posedge clk);
     end
   endtask
 
@@ -168,20 +263,22 @@ module sim_explorer_tb;
     output       ok;
     integer bit_i;
     integer timeout;
+    integer limit;
     begin
       ok = 1'b0;
       b  = 8'h00;
       timeout = 0;
-      while ((uo_out[0] !== 1'b0) && (timeout < 2000)) begin
+      limit = 256 * tb_bit_clks;
+      while ((uo_out[0] !== 1'b0) && (timeout < limit)) begin
         @(posedge clk);
         timeout = timeout + 1;
       end
       if (uo_out[0] === 1'b0) begin
         ok = 1'b1;
-        repeat (CLKS_PER_BIT + (CLKS_PER_BIT / 2)) @(posedge clk);
+        repeat (tb_bit_clks + (tb_bit_clks / 2)) @(posedge clk);
         for (bit_i = 0; bit_i < 8; bit_i = bit_i + 1) begin
           b[bit_i] = uo_out[0];
-          repeat (CLKS_PER_BIT) @(posedge clk);
+          repeat (tb_bit_clks) @(posedge clk);
         end
       end
     end
@@ -206,39 +303,61 @@ module sim_explorer_tb;
     cmd_ch = $fgetc(32'h8000_0000);
     while ((cmd_ch != -1) && (cmd_ch != "q")) begin
       if (cmd_ch == "r") begin
-        // Reset DUT with requested ena (hex 0/1)
         if ($fscanf(32'h8000_0000, "%x", arg_a) == 1) begin
           ena   = arg_a[0];
-          ui_in = 8'h01;
+          ui_in[0] = 1'b1;
           rst_n = 1'b0;
-          uart_mon_seen = 1'b0;
-          i2c_seen      = 1'b0;
-          i2c_od_fault  = 1'b0;
-          i2c_sda_low   = 1'b0;
-          spi_mosi_rx   = 8'h00;
-          spi_miso_drv  = spi_resp_byte[7];
+          uart_mon_seen  = 1'b0;
+          i2c_seen       = 1'b0;
+          i2c_od_fault   = 1'b0;
+          i2c_sda_low    = 1'b0;
+          i2c_scl_low    = 1'b0;
+          i2c_st_armed   = 1'b0;
+          st_wren        = 1'b0;
+          st_prev_cmd    = 8'h00;
+          st_cs_high_cnt = 100;
+          spi_mosi_rx    = 8'h00;
+          spi_miso_drv   = spi_resp_byte[7];
           repeat (6) @(posedge clk);
           rst_n = 1'b1;
           repeat (4) @(posedge clk);
           $display("OK");
           $fflush(32'h8000_0001);
         end
+      end else if (cmd_ch == "b") begin
+        // Set ui_in[2:1] baud selector (0..3) and matching host UART divider
+        if ($fscanf(32'h8000_0000, "%d", arg_a) == 1) begin
+          ui_in[2:1] = arg_a[1:0];
+          case (arg_a[1:0])
+            2'd1: tb_bit_clks = 104;
+            2'd2: tb_bit_clks = 217;
+            2'd3: tb_bit_clks = 434;
+            default: tb_bit_clks = CLKS_PER_BIT;
+          endcase
+          repeat (2) @(posedge clk);
+          $display("OK");
+          $fflush(32'h8000_0001);
+        end
       end else if (cmd_ch == "c") begin
-        // Configure target: c <mode_dec> <delay_ns_dec> <resp_hex> <ack_dec>
         if ($fscanf(32'h8000_0000, "%d %d %x %d", arg_a, arg_b, arg_c, arg_d) == 4) begin
-          target_mode   = arg_a;
-          spi_delay_ns  = arg_b;
-          spi_resp_byte = arg_c[7:0];
-          i2c_do_ack    = arg_d[0];
-          spi_miso_drv  = spi_resp_byte[7];
-          uart_mon_seen = 1'b0;
-          i2c_seen      = 1'b0;
-          i2c_od_fault  = 1'b0;
+          target_mode    = arg_a;
+          spi_delay_ns   = arg_b;
+          spi_resp_byte  = arg_c[7:0];
+          i2c_do_ack     = arg_d[0];
+          spi_miso_drv   = (target_mode == MODE_SPI) ? spi_resp_byte[7] : 1'b0;
+          uart_mon_seen  = 1'b0;
+          uart_mon_byte  = 8'h00;
+          i2c_seen       = 1'b0;
+          i2c_od_fault   = 1'b0;
+          i2c_scl_low    = 1'b0;
+          i2c_st_armed   = 1'b0;
+          st_wren        = 1'b0;
+          st_prev_cmd    = 8'h00;
+          st_cs_high_cnt = 100;
           $display("OK");
           $fflush(32'h8000_0001);
         end
       end else if (cmd_ch == "f") begin
-        // Send 8-byte UART frame and capture 8-byte response frame
         for (i = 0; i < 8; i = i + 1) begin
           if ($fscanf(32'h8000_0000, "%x", arg_a) == 1) begin
             tx_buf[i] = arg_a[7:0];
@@ -260,6 +379,9 @@ module sim_explorer_tb;
               uart_recv_byte_host(rx_buf[ri], rx_ok);
               if (!rx_ok) all_ok = 1'b0;
             end
+            if (all_ok) begin
+              repeat ((tb_bit_clks / 2) + 2) @(posedge clk);
+            end
           end
         join
         if (all_ok) begin
@@ -271,7 +393,6 @@ module sim_explorer_tb;
         end
         $fflush(32'h8000_0001);
       end else if (cmd_ch == "w") begin
-        // Wait N cycles (or until uo_out[4:3] halted/fault up to N cycles)
         if ($fscanf(32'h8000_0000, "%d", arg_a) == 1) begin
           arg_b = 0;
           while ((arg_b < arg_a) && (uo_out[4:3] != 2'd2) && (uo_out[4:3] != 2'd3)) begin

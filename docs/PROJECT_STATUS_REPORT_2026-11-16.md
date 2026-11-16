@@ -12,7 +12,9 @@ Phases A, C, D, and the host Timing Boundary Explorer pipeline of Phase E are no
 - **v1 programmable protocol engine (`feat/v1-engine` / `3194176`):** Replaced the fixed SPI block with a `64 × 16`-word deterministic microsequencer (`src/protocol_sequencer.v`), CRC-8-verified UART loader + `ena & rst_n` deselection reset (`src/project.v`), assembler (`tools/protocol_asm.py`), and live host Timing Boundary Explorer CLI + RTL bridge (`tools/timing_explorer.py`, `tools/sim_explorer_tb.v`).
 - **Physical hardening & gate-level (`3194176`):** Passed full **80/80** Tiny Tapeout CMOS5L hardening in `1:20:34` (`0` lint errors/warnings, Magic DRC/Netgen LVS/Antenna passed, `0` setup/hold/max-slew/max-cap violations, `+10.2228 ns` slow setup slack at `20 ns` period, `17.0308%` stdcell utilization per `metrics.json` / `14.747 %` via `tt_tool.py --print-stats`). Post-PnR gate-level Cocotb passed **`4/4`** under Icarus 12.0 functional verification (using a `/tmp`-stripped PDK stdcell copy without `specify`/`delayed_*`; not SDF timing simulation).
 
-What remains is hardware/metadata finalization and external validation: locking `clock_hz`, UART `CLKS_PER_BIT`, `author`, `top_module`, and `pinout` in `info.yaml`, adding any physical FPGA/board demo if available, running final `tt_tool.py --check-docs` + final hardening + SDF gate-level check, and merging `feat/v1-engine` → `master` before **2027-01-18**.
+- **v1.1 submission RTL & competition experiments (`feat/v1-engine` latest):** Added `tt_um_harjag_21_timing_explorer`, `Hardik Jagga` & `pinout` in `info.yaml`, `ui_in[2:1]` selectable `12/25/50 MHz @ 115200` baud dividers, `0xD WAIT_EDGE` instruction, `0x19 OP_PATCH_WORD`, multi-protocol sweeps, execution replay, and differential Ref-vs-DUT fuzzing + minimizer (`tools/diff_minimizer.py`). Host RTL verification (`tb_v1_sequencer.v`, `tools/test_timing_explorer.py` `4/4`, `experiments/` `15/15`, differential discovery `10/10` replay) passed; final container `--check-docs` + `80/80` hardening re-run on v1.1 remains.
+
+What remains is running final `tt_tool.py --check-docs`, Cocotb RTL + final `80/80` hardening + upstream `tt-gds-action` (`precheck` + SDF `gl_test`) on v1.1 (`tt_um_harjag_21_timing_explorer`), capturing an optional hardware `--port` demo if available, and merging `feat/v1-engine` → `master` before **2027-01-18**.
 
 ## 1. Completed and verified deliverables
 
@@ -31,9 +33,9 @@ What remains is hardware/metadata finalization and external validation: locking 
 
 ## 2. Remaining work before final submission
 
-1. **Resolve board clock, UART divider, and metadata (`info.yaml`):** Lock target `clock_hz`, verify `CLKS_PER_BIT` against the host UART baud (adjusting RTL parameter or runtime divider if moving from `CLKS_PER_BIT = 8`), and fill `author`, unique `top_module`, and `pinout` in `info.yaml`.
-2. **External/physical target demonstration (if hardware available):** Exercise `tools/timing_explorer.py --port <serial> --baud <rate>` against an FPGA/carrier-board target and record empirical traces alongside the simulation traces under `docs/evidence/`.
-3. **Final docs/precheck & timing-aware GL verification:** Confirm `./tt/tt_tool.py --pdk ihp-sg13cmos5l --check-docs` exits `0` (`docs/info.md` sections are now drafted), run final `--harden`, SDF timing-annotated gate-level simulation (or upstream Tiny Tapeout CI `tt-gds-action`), and precheck after any `info.yaml`/RTL constant updates, then merge `feat/v1-engine` into `master`.
+1. **Final v1.1 container harden & docs check (`tt_um_harjag_21_timing_explorer`):** Start Docker Desktop (`stoic_bhaskara`), confirm `./tt/tt_tool.py --pdk ihp-sg13cmos5l --check-docs` exits `0` on populated `info.yaml`/`docs/info.md`, re-run `test/test.py`, and run the final `80/80` CMOS5L `--harden` on the updated v1.1 RTL.
+2. **External/physical target demonstration (if hardware available):** Exercise `tools/timing_explorer.py sweep --port <serial> --baud <rate>` against an FPGA/carrier-board target and record traces under `docs/evidence/`.
+3. **GitHub push & upstream CI signoff:** Push to public GitHub (`harjag-21`) to run `.github/workflows/gds.yaml` (`tt-gds-action` precheck + upstream `gl_test`), then merge `feat/v1-engine` into `master`.
 
 ## 3. Claims that must still NOT be made
 

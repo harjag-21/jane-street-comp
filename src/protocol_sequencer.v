@@ -65,10 +65,14 @@ module protocol_sequencer #(
                    OP_MARK       = 4'h9,
                    OP_HALT       = 4'hA,
                    OP_OUT_SAMPLE = 4'hB,
-                   OP_WAIT_PARAM = 4'hC;
+                   OP_WAIT_PARAM = 4'hC,
+                   OP_WAIT_EDGE  = 4'hD;
 
   reg [15:0] imem [0:PROG_DEPTH-1];
   reg [11:0] wait_cnt;
+  reg        wait_edge_active;
+  reg        wait_edge_pol;
+  reg [2:0]  wait_edge_pin;
   reg [11:0] run_param;
   reg [7:0]  loop_cnt0, loop_cnt1;
 
@@ -86,8 +90,11 @@ module protocol_sequencer #(
   wire [7:0]  cur_cnt     = ctr_sel ? loop_cnt1 : loop_cnt0;
   wire        samp_bit_s  = uio_in[imm[2:0]];
   wire        samp_bit_os = uio_in[imm[10:8]];
-  wire [12:0] param_sum   = {1'b0, run_param} + {5'd0, imm[7:0]};
-  wire [11:0] param_sat   = param_sum[12] ? 12'hFFF : param_sum[11:0];
+  wire [12:0] param_sum     = {1'b0, run_param} + {5'd0, imm[7:0]};
+  wire [11:0] param_sat     = param_sum[12] ? 12'hFFF : param_sum[11:0];
+  wire [11:0] edge_wait_lim = (imm[7:0] == 8'd0) ? run_param : {4'd0, imm[7:0]};
+  wire        edge_now_hit  = (uio_in[imm[10:8]] == imm[11]);
+  wire        edge_wait_hit = (uio_in[wait_edge_pin] == wait_edge_pol);
 
   wire [EVENT_PTR_W:0] ev_depth_max = EVENT_DEPTH[EVENT_PTR_W:0];
   wire                 do_pop       = event_pop && (ev_count != 0);
@@ -115,6 +122,9 @@ module protocol_sequencer #(
       sample_reg_o     <= 8'h00;
       cycle_cnt_o      <= 16'h0000;
       wait_cnt         <= 12'd0;
+      wait_edge_active <= 1'b0;
+      wait_edge_pol    <= 1'b0;
+      wait_edge_pin    <= 3'd0;
       run_param        <= 12'd0;
       loop_cnt0        <= 8'd0;
       loop_cnt1        <= 8'd0;
@@ -151,9 +161,10 @@ module protocol_sequencer #(
 
       // Execution control & instruction step.
       if (cmd_halt) begin
-        eng_state_o <= ENG_HALTED;
-        wait_cnt    <= 12'd0;
-        uio_oe_o    <= 8'h00;
+        eng_state_o      <= ENG_HALTED;
+        wait_cnt         <= 12'd0;
+        wait_edge_active <= 1'b0;
+        uio_oe_o         <= 8'h00;
       end else if (eng_state_o != ENG_RUN) begin
         if (cmd_start && prog_valid) begin
           eng_state_o      <= ENG_RUN;
@@ -162,6 +173,7 @@ module protocol_sequencer #(
           sample_reg_o     <= 8'h00;
           cycle_cnt_o      <= 16'h0000;
           wait_cnt         <= 12'd0;
+          wait_edge_active <= 1'b0;
           run_param        <= cmd_param;
           loop_cnt0        <= 8'd0;
           loop_cnt1        <= 8'd0;
@@ -175,9 +187,25 @@ module protocol_sequencer #(
         cycle_cnt_o <= cycle_cnt_o + 16'd1;
 
         if (wait_cnt != 12'd0) begin
-          wait_cnt <= wait_cnt - 12'd1;
-          if (wait_cnt == 12'd1) begin
-            pc_o <= pc_o + {{(ADDR_W-1){1'b0}}, 1'b1};
+          if (wait_edge_active) begin
+            if (edge_wait_hit) begin
+              wait_edge_active <= 1'b0;
+              wait_cnt         <= 12'd0;
+              last_sample_o    <= 1'b1;
+              pc_o             <= pc_o + {{(ADDR_W-1){1'b0}}, 1'b1};
+            end else if (wait_cnt == 12'd1) begin
+              wait_edge_active <= 1'b0;
+              wait_cnt         <= 12'd0;
+              last_sample_o    <= 1'b0;
+              pc_o             <= pc_o + {{(ADDR_W-1){1'b0}}, 1'b1};
+            end else begin
+              wait_cnt <= wait_cnt - 12'd1;
+            end
+          end else begin
+            wait_cnt <= wait_cnt - 12'd1;
+            if (wait_cnt == 12'd1) begin
+              pc_o <= pc_o + {{(ADDR_W-1){1'b0}}, 1'b1};
+            end
           end
         end else begin
           case (op)
@@ -251,6 +279,20 @@ module protocol_sequencer #(
                 pc_o <= pc_o + {{(ADDR_W-1){1'b0}}, 1'b1};
               end else begin
                 wait_cnt <= param_sat;
+              end
+            end
+            OP_WAIT_EDGE: begin
+              if (edge_now_hit) begin
+                last_sample_o <= 1'b1;
+                pc_o          <= pc_o + {{(ADDR_W-1){1'b0}}, 1'b1};
+              end else if (edge_wait_lim == 12'd0) begin
+                last_sample_o <= 1'b0;
+                pc_o          <= pc_o + {{(ADDR_W-1){1'b0}}, 1'b1};
+              end else begin
+                wait_edge_active <= 1'b1;
+                wait_edge_pol    <= imm[11];
+                wait_edge_pin    <= imm[10:8];
+                wait_cnt         <= edge_wait_lim;
               end
             end
             default: begin

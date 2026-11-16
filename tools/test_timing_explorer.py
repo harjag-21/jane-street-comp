@@ -7,16 +7,26 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from tools.protocol_asm import assemble, build_i2c_write_byte_program, build_uart_tx_program
+from tools.diff_minimizer import eval_ref_vs_dut, minimize_divergence, replay_minimized_case
+from tools.protocol_asm import (
+    assemble,
+    build_i2c_write_byte_program,
+    build_spi_target_responder_program,
+    build_uart_tx_program,
+    insn,
+)
 from tools.timing_explorer import (
     IcarusSimTransport,
     ProtocolClient,
     ProtocolError,
     classify_boundary,
+    execute_replay,
     format_report_markdown,
     read_jsonl,
     replay_records,
+    run_i2c_stretch_sweep,
     run_spi_boundary_exploration,
+    run_uart_period_sweep,
     write_jsonl,
 )
 
@@ -133,6 +143,56 @@ class TimingExplorerTests(unittest.TestCase):
             loop_res = client.run_trial(3)
             self.assertEqual(loop_res["eng_state"], "ENG_HALTED")
             self.assertEqual([e["tag"] for e in loop_res["events"]], [0x42, 0x42, 0x42, 0x42])
+
+            # OP_PATCH_WORD changes MARK tag at addr 2 in 1 UART command instead of full reload
+            client.patch_word(2, insn("MARK", 0x99))
+            patched_res = client.run_trial(3)
+            self.assertEqual([e["tag"] for e in patched_res["events"]], [0x99, 0x99, 0x99, 0x99])
+
+    def test_v11_baud_sel_multiproto_sweeps_replay_and_diff_minimizer(self) -> None:
+        with IcarusSimTransport() as transport:
+            transport.reset(1)
+            client = ProtocolClient(transport)
+
+            # 1. Runtime baud selector ui_in[2:1]: sel=1 (12MHz/115200=104) & sel=3 (50MHz/115200=434)
+            transport.set_baud_sel(1)
+            self.assertEqual(client.ping()["prog_depth"], 64)
+            transport.set_baud_sel(3)
+            self.assertEqual(client.ping()["version"], 1)
+            transport.set_baud_sel(0)
+
+            # 2. Experiment 1 + 2: I2C stretch latency + execution replay + contract checks
+            stretch = run_i2c_stretch_sweep(client, stretch_cycles=7, max_wait_values=range(4, 11))
+            self.assertEqual(stretch["boundary"]["status"], "bracketed")
+            self.assertEqual(stretch["boundary"]["boundary_low_cycles"], 7)
+            passing_delta = [t["measured_release_delta_cycles"] for t in stretch["trials"] if t["passed"]][0]
+            self.assertEqual(passing_delta, 11)
+
+            uart_sw = run_uart_period_sweep(client, byte_val=0xA3, bit_cycles_list=(5, 6, 8, 10, 11))
+            self.assertIn(8, uart_sw["passing_bit_cycles"])
+            self.assertNotIn(5, uart_sw["passing_bit_cycles"])
+            self.assertNotIn(11, uart_sw["passing_bit_cycles"])
+
+            transport.configure_target(0, delay_ns=23, spi_resp=0xAA)
+            spi_trace = run_spi_boundary_exploration(client, min_low_cycles=2, max_low_cycles=4, method="sweep", delay_ns=23)
+            trials_only = [r for r in spi_trace if r.get("type") == "trial"]
+            self.assertTrue(all(t["contract_ok"] for t in trials_only))
+            exec_rep = execute_replay(spi_trace, client, repeats=4, only_failures=True)
+            self.assertTrue(exec_rep["all_deterministic"])
+            self.assertEqual(exec_rep["cases"][0]["exact_matches"], 4)
+
+            # 3. SPI Target Responder example compiles cleanly inside 64 words
+            self.assertLessEqual(len(build_spi_target_responder_program(0x5A)), 64)
+
+            # 4. Experiment 4 + 5: Differential divergence + sequence & timing minimization
+            div3 = eval_ref_vs_dut(transport, client, [0x9F, 0x06, 0x05], gap_wait=2, ref_thresh=1, dut_thresh=6)
+            self.assertTrue(div3["diverged"])
+            minimized = minimize_divergence(transport, client, [0x9F, 0x06, 0x05], failing_gap=2, max_gap=8)
+            self.assertEqual(minimized["minimized_commands"], [0x06, 0x05])
+            self.assertEqual(minimized["highest_failing_gap_wait"], 3)
+            self.assertEqual(minimized["lowest_passing_gap_wait"], 4)
+            rep_min = replay_minimized_case(transport, client, [0x06, 0x05], 3, repeats=3)
+            self.assertEqual(rep_min["deterministic_divergence_matches"], 3)
 
 
 if __name__ == "__main__":

@@ -77,7 +77,8 @@ module tb_v1_sequencer;
                    OP_MARK       = 4'h9,
                    OP_HALT       = 4'hA,
                    OP_OUT_SAMPLE = 4'hB,
-                   OP_WAIT_PARAM = 4'hC;
+                   OP_WAIT_PARAM = 4'hC,
+                   OP_WAIT_EDGE  = 4'hD;
 
   function [15:0] insn;
     input [3:0] op;
@@ -215,8 +216,8 @@ module tb_v1_sequencer;
       check(event_count == 4'd8 && event_overflow == 1'b1, "FIFO capped at 8 and set overflow");
       check(uio_oe == 8'hFF && uio_out == 8'hA5, "HALT keep_oe=1 preserved outputs");
 
-      // Illegal opcode 0xD clears OE and sets ENG_FAULT.
-      load_word(6'd5, insn(4'hD, 12'h000));
+      // Illegal opcode 0xF clears OE and sets ENG_FAULT.
+      load_word(6'd5, insn(4'hF, 12'h000));
       start_and_wait(12'd0);
       check(eng_state == 2'd3, "illegal opcode entered ENG_FAULT");
       check(uio_oe == 8'h00, "illegal opcode disabled uio_oe");
@@ -436,6 +437,52 @@ module tb_v1_sequencer;
     end
   endtask
 
+  task test_wait_edge_stretch;
+    reg [7:0] t;
+    reg [15:0] ts;
+    begin
+      clear_imem;
+      a = 0;
+      load_word(a[5:0], insn(OP_OUT, 12'h000));        a = a + 1; // 0
+      load_word(a[5:0], insn(OP_OE, 12'h001));         a = a + 1; // 1: hold pin0 low
+      load_word(a[5:0], insn(OP_MARK, 12'h050));       a = a + 1; // 2: release marker
+      load_word(a[5:0], insn(OP_OE, 12'h000));         a = a + 1; // 3: release pin0 (slave pulls low)
+      load_word(a[5:0], insn(OP_WAIT_EDGE, 12'h800));  a = a + 1; // 4: wait pol=1 on pin0 up to run_param
+      load_word(a[5:0], insn(OP_JZ, 12'h008));         a = a + 1; // 5: timeout -> 8
+      load_word(a[5:0], insn(OP_MARK, 12'h051));       a = a + 1; // 6: edge released
+      load_word(a[5:0], insn(OP_HALT, 12'h000));       a = a + 1; // 7
+      load_word(a[5:0], insn(OP_MARK, 12'h0EE));       a = a + 1; // 8: timeout marker
+      load_word(a[5:0], insn(OP_HALT, 12'h000));       a = a + 1; // 9
+      prog_valid = 1;
+
+      // Case A: slave holds pin0 low for 6 cycles after release; run_param=10 -> hits!
+      target_drive_en  = 8'h01;
+      target_drive_val = 8'h00;
+      fork
+        begin : stretch_slave_hit
+          repeat (9) @(posedge clk);
+          #1;
+          target_drive_en = 8'h00; // pull-up releases pin0 high
+        end
+        begin : stretch_run_hit
+          start_and_wait(12'd10);
+        end
+      join
+      check(event_count == 4'd2, "WAIT_EDGE hit produced 2 marks");
+      pop_event(t, ts); check(t == 8'h50, "first mark 0x50");
+      pop_event(t, ts); check(t == 8'h51 && last_sample == 1'b1, "WAIT_EDGE captured release before timeout");
+
+      // Case B: slave holds pin0 low across run_param=4 -> times out (0xEE, last_sample=0)
+      target_drive_en  = 8'h01;
+      target_drive_val = 8'h00;
+      start_and_wait(12'd4);
+      target_drive_en = 8'h00;
+      check(event_count == 4'd2, "WAIT_EDGE timeout produced 2 marks");
+      pop_event(t, ts);
+      pop_event(t, ts); check(t == 8'hEE && last_sample == 1'b0, "WAIT_EDGE timed out cleanly");
+    end
+  endtask
+
   task test_i2c_open_drain_program;
     reg [7:0] tag_ack, tag_nack;
     begin
@@ -466,8 +513,10 @@ module tb_v1_sequencer;
     test_spi_boundary_sweep;
     $display("Running test_i2c_open_drain_program");
     test_i2c_open_drain_program;
+    $display("Running test_wait_edge_stretch");
+    test_wait_edge_stretch;
 
-    if (errors == 0) $display("PASS: v1 protocol_sequencer ISA + UART + SPI sweep + I2C tests passed");
+    if (errors == 0) $display("PASS: v1 protocol_sequencer ISA + UART + SPI sweep + I2C + WAIT_EDGE tests passed");
     else $display("FAIL: %0d checks failed", errors);
     $finish_and_return(errors != 0);
   end

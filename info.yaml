@@ -1,17 +1,17 @@
 # Tiny Tapeout project information
 project:
-  title:        "Timing Boundary Explorer"      # Working title; confirm before submission
-  author:       "TBD"    # Replace with the entrant name before submission
-  discord:      ""      # Your discord username, for communication and automatically assigning you a Tapeout role (optional)
-  description:  "A reprogrammable protocol emulator for characterizing digital timing limits." # Working description
-  language:     "Verilog" # other examples include SystemVerilog, Amaranth, VHDL, etc
-  clock_hz:     0       # Clock frequency in Hz (or 0 if not applicable)
+  title:        "Timing Boundary Explorer"
+  author:       "Hardik Jagga"
+  discord:      ""
+  description:  "A reprogrammable protocol emulator and cycle-deterministic timing boundary explorer for digital protocols."
+  language:     "Verilog"
+  clock_hz:     50000000
 
   # How many tiles your design occupies? A single tile is about 202x155 uM.
   tiles: "8x4"          # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2, 6x2, 8x2, 3x4, 4x4, 5x4, 6x4 or 8x4
 
   # Your top module name must start with "tt_um_". Make it unique by including your github username:
-  top_module:  "tt_um_example"
+  top_module:  "tt_um_harjag_21_timing_explorer"
 
   # List your project's source files here.
   # Source files must be in ./src and you must list each source file separately, one per line.
@@ -24,9 +24,9 @@ project:
 # This section is for the datasheet/website. Use descriptive names (e.g., RX, TX, MOSI, SCL, SEG_A, etc.).
 pinout:
   # Inputs
-  ui[0]: ""
-  ui[1]: ""
-  ui[2]: ""
+  ui[0]: "UART_RX (loader host input, 8N1)"
+  ui[1]: "BAUD_SEL[0] (00=div8, 01=104@12MHz)"
+  ui[2]: "BAUD_SEL[1] (10=217@25MHz, 11=434@50MHz)"
   ui[3]: ""
   ui[4]: ""
   ui[5]: ""
@@ -34,24 +34,24 @@ pinout:
   ui[7]: ""
 
   # Outputs
-  uo[0]: ""
-  uo[1]: ""
-  uo[2]: ""
-  uo[3]: ""
-  uo[4]: ""
-  uo[5]: ""
+  uo[0]: "UART_TX (loader host response)"
+  uo[1]: "TRIAL_ACTIVE (engine running flag)"
+  uo[2]: "PROG_VALID (checksum committed)"
+  uo[3]: "ENG_STATE[0] (0=IDLE,1=RUN,2=HALT,3=FAULT)"
+  uo[4]: "ENG_STATE[1] (engine state MSB)"
+  uo[5]: "EVENT_OVERFLOW (MARK FIFO overflow)"
   uo[6]: ""
   uo[7]: ""
 
   # Bidirectional pins
-  uio[0]: ""
-  uio[1]: ""
-  uio[2]: ""
-  uio[3]: ""
-  uio[4]: ""
-  uio[5]: ""
-  uio[6]: ""
-  uio[7]: ""
+  uio[0]: "PIO[0] (UART_TX / SPI_CS_N / I2C_SCL)"
+  uio[1]: "PIO[1] (SPI_SCLK / I2C_SDA)"
+  uio[2]: "PIO[2] (SPI_MOSI)"
+  uio[3]: "PIO[3] (SPI_MISO)"
+  uio[4]: "PIO[4] (Programmable protocol I/O)"
+  uio[5]: "PIO[5] (Programmable protocol I/O)"
+  uio[6]: "PIO[6] (Programmable protocol I/O)"
+  uio[7]: "PIO[7] (Programmable protocol I/O)"
 
 # Do not change!
 yaml_version: 6
