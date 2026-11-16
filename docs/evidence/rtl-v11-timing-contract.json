@@ -1,0 +1,151 @@
+{
+  "all_checks_passed": true,
+  "cases": [
+    {
+      "category": "static_safety",
+      "contract_ok": true,
+      "details": "bounded=False, unbounded_pcs=[0]",
+      "expected_pass": false,
+      "name": "unbounded_jmp_loop_detection"
+    },
+    {
+      "bounds": [
+        106,
+        107
+      ],
+      "category": "jz_branch",
+      "contract_ok": true,
+      "errors": [],
+      "name": "i2c_jz_ack_path",
+      "observed_cycles": 106
+    },
+    {
+      "bounds": [
+        106,
+        107
+      ],
+      "category": "negative_check",
+      "contract_ok": true,
+      "errors": [
+        "Observed cycle_cnt=107 != predicted=106"
+      ],
+      "name": "negative_off_by_one_cycle_rejected",
+      "observed_cycles": 107
+    },
+    {
+      "bounds": [
+        106,
+        107
+      ],
+      "category": "jz_branch",
+      "contract_ok": true,
+      "errors": [],
+      "name": "i2c_jz_nack_path",
+      "observed_cycles": 107
+    },
+    {
+      "bounds": [
+        8,
+        8
+      ],
+      "category": "loop_counter",
+      "contract_ok": true,
+      "errors": [],
+      "name": "loop_setcount_n0",
+      "observed_cycles": 8
+    },
+    {
+      "bounds": [
+        8,
+        8
+      ],
+      "category": "loop_counter",
+      "contract_ok": true,
+      "errors": [],
+      "name": "loop_setcount_n1",
+      "observed_cycles": 8
+    },
+    {
+      "bounds": [
+        32,
+        32
+      ],
+      "category": "loop_counter",
+      "contract_ok": true,
+      "errors": [],
+      "name": "loop_setcount_n5",
+      "observed_cycles": 32
+    },
+    {
+      "bounds": [
+        12,
+        16
+      ],
+      "category": "wait_edge",
+      "contract_ok": true,
+      "errors": [],
+      "name": "wait_edge_delayed_and_timeout_mw4_timeout",
+      "observed_cycles": 15
+    },
+    {
+      "bounds": [
+        12,
+        19
+      ],
+      "category": "wait_edge",
+      "contract_ok": true,
+      "errors": [],
+      "name": "wait_edge_delayed_and_timeout_mw7_release@11",
+      "observed_cycles": 19
+    },
+    {
+      "bounds": [
+        12,
+        22
+      ],
+      "category": "wait_edge",
+      "contract_ok": true,
+      "errors": [],
+      "name": "wait_edge_delayed_and_timeout_mw10_release@11",
+      "observed_cycles": 19
+    },
+    {
+      "bounds": [
+        11,
+        12
+      ],
+      "category": "wait_edge",
+      "contract_ok": true,
+      "errors": [],
+      "name": "wait_edge_immediate_hit_mw0_release@4",
+      "observed_cycles": 12
+    },
+    {
+      "bounds": [
+        12,
+        15
+      ],
+      "category": "wait_edge",
+      "contract_ok": true,
+      "errors": [],
+      "name": "wait_edge_immediate_hit_mw3_release@4",
+      "observed_cycles": 12
+    },
+    {
+      "bounds": [
+        12,
+        17
+      ],
+      "category": "negative_check",
+      "contract_ok": true,
+      "errors": [
+        "Observed cycle_cnt=14 != predicted=16",
+        "Event 1 ts_cycles=11 != predicted=14"
+      ],
+      "name": "negative_wrong_wait_edge_timeout_rejected",
+      "observed_cycles": 14
+    }
+  ],
+  "evidence_class": "rtl_simulation_timing_contract_audit",
+  "timestamp_utc": "2026-11-16T16:37:48.416485+00:00"
+}

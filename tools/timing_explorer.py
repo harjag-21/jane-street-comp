@@ -37,6 +37,7 @@ from tools.protocol_asm import (  # noqa: E402
     build_i2c_write_byte_program,
     build_spi_mode0_program,
     build_uart_tx_program,
+    check_timing_contract,
     crc8_07,
     make_uart_request,
     predict_straight_line_cycles,
@@ -189,7 +190,7 @@ class IcarusSimTransport(ProtocolTransport):
     def configure_target(
         self, mode: int, delay_ns: int = 23, spi_resp: int = 0xAA, i2c_ack: int = 1
     ) -> None:
-        resp = self._send_line(f"c {mode} {int(delay_ns)} {spi_resp & 0xFF:02x} {i2c_ack & 1}")
+        resp = self._send_line(f"c {mode} {int(delay_ns)} {spi_resp & 0xFF:02x} {int(i2c_ack)}")
         if resp != "OK":
             raise ProtocolError(f"Unexpected configure response: {resp}")
 
@@ -197,6 +198,11 @@ class IcarusSimTransport(ProtocolTransport):
         resp = self._send_line(f"b {sel & 3}")
         if resp != "OK":
             raise ProtocolError(f"Unexpected baud-sel response: {resp}")
+
+    def set_seed(self, seed: int) -> None:
+        resp = self._send_line(f"s {seed & 0xFFFFFFFF:08x}")
+        if resp != "OK":
+            raise ProtocolError(f"Unexpected seed response: {resp}")
 
     def exchange(self, frame: Sequence[int]) -> List[int]:
         if len(frame) != 8:
@@ -247,6 +253,10 @@ class ProtocolClient:
     def __init__(self, transport: ProtocolTransport) -> None:
         self.transport = transport
         self._req_id = 1
+        self._cached_words: Optional[List[int]] = None
+
+    def invalidate_cache(self) -> None:
+        self._cached_words = None
 
     def _next_id(self) -> int:
         rid = self._req_id & 0xFF
@@ -300,10 +310,28 @@ class ProtocolClient:
         for addr, word in enumerate(words):
             self.require_ok(UART_OP_WRITE_WORD, addr, word & 0xFF, (word >> 8) & 0xFF)
         d = self.require_ok(UART_OP_COMMIT_LOAD)
+        self._cached_words = [int(w) & 0xFFFF for w in words]
         return {"words": d[0], "crc8": d[1], "sum8": d[2], "prog_valid": d[3]}
 
     def patch_word(self, addr: int, word: int) -> None:
-        self.require_ok(UART_OP_PATCH_WORD, addr, word & 0xFF, (word >> 8) & 0xFF)
+        w = int(word) & 0xFFFF
+        self.require_ok(UART_OP_PATCH_WORD, addr, w & 0xFF, (w >> 8) & 0xFF)
+        if self._cached_words is not None and 0 <= addr < len(self._cached_words):
+            self._cached_words[addr] = w
+
+    def sync_program(self, words: Sequence[int]) -> Dict[str, Any]:
+        """Update instruction memory using minimal OP_PATCH_WORD writes when possible."""
+        target = [int(w) & 0xFFFF for w in words]
+        if self._cached_words is None or len(self._cached_words) != len(target):
+            res = self.load_program(target)
+            return {"mode": "full_load", "writes": len(target) + 2, **res}
+        diffs = [(i, w) for i, (old, w) in enumerate(zip(self._cached_words, target)) if old != w]
+        if len(diffs) >= len(target) + 2:
+            res = self.load_program(target)
+            return {"mode": "full_load", "writes": len(target) + 2, **res}
+        for addr, w in diffs:
+            self.patch_word(addr, w)
+        return {"mode": "patch", "writes": len(diffs)}
 
     def start(self, run_param: int) -> None:
         if not (0 <= run_param <= 0xFFF):
@@ -691,6 +719,17 @@ def run_i2c_stretch_sweep(
         passed = (len(tags) >= 2) and (tags[1] == 0x51)
         obs[mw] = passed
         stretch_measured = (tss[1] - tss[0]) if len(tss) >= 2 else None
+        edge_waits: Sequence[Optional[int]] = (
+            [stretch_measured - 4] if (passed and stretch_measured is not None) else [None]
+        )
+        contract = check_timing_contract(
+            words,
+            mw,
+            observed_cycles=res["cycle_cnt"],
+            observed_events=res["events"],
+            eng_state=res["eng_state"],
+            edge_waits=edge_waits,
+        )
         trials.append(
             {
                 "max_wait": mw,
@@ -698,6 +737,13 @@ def run_i2c_stretch_sweep(
                 "tags": tags,
                 "timestamps": tss,
                 "measured_release_delta_cycles": stretch_measured,
+                "cycle_cnt": res["cycle_cnt"],
+                "contract_ok": contract["contract_ok"],
+                "contract_errors": contract["errors"],
+                "contract_bounds": [
+                    contract["bounds"]["min_cycles"],
+                    contract["bounds"]["max_cycles"],
+                ],
             }
         )
     return {

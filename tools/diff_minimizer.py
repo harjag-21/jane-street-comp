@@ -26,6 +26,7 @@ def build_spi_sequence_program(
     sclk_pin: int = 1,
     mosi_pin: int = 2,
     miso_pin: int = 3,
+    capture_per_cmd: bool = False,
 ) -> List[int]:
     """Assemble 1..3 SPI mode-0 transactions separated by `WAIT_PARAM` CS_N high gaps."""
     if not (1 <= len(commands) <= 3):
@@ -49,7 +50,10 @@ def build_spi_sequence_program(
             lines.append(f"OUT_SAMPLE 0x{(sclk_mask | m):02x}, {miso_pin}, 0")
         lines.append("OUT 0x00")
         lines.append(f"OUT 0x{cs_mask:02x}")  # deassert CS_N high
-    lines.append("MARK_SAMPLE")
+        if capture_per_cmd and idx < len(commands) - 1:
+            lines.append("MARK_SAMPLE")
+    if not capture_per_cmd:
+        lines.append("MARK_SAMPLE")
     lines.append("HALT 0")
     return assemble(lines)
 
@@ -62,25 +66,38 @@ def eval_ref_vs_dut(
     *,
     ref_thresh: int = 1,
     dut_thresh: int = 6,
+    target_mode: int = 3,
+    capture_per_cmd: bool = False,
+    use_sync: bool = True,
 ) -> Dict[str, Any]:
     """Execute exact stimulus sequence on Ref and DUT models via the ASIC RTL."""
-    words = build_spi_sequence_program(commands)
+    words = build_spi_sequence_program(commands, capture_per_cmd=capture_per_cmd)
 
-    transport.reset(1)
-    transport.configure_target(3, delay_ns=ref_thresh)
-    client.load_program(words)
+    if use_sync:
+        client.sync_program(words)
+    else:
+        transport.reset(1)
+        client.invalidate_cache()
+        client.load_program(words)
+
+    transport.configure_target(target_mode, delay_ns=ref_thresh)
     ref_res = client.run_trial(gap_wait)
 
-    transport.reset(1)
-    transport.configure_target(3, delay_ns=dut_thresh)
-    client.load_program(words)
+    if not use_sync:
+        transport.reset(1)
+        client.invalidate_cache()
+        client.load_program(words)
+    transport.configure_target(target_mode, delay_ns=dut_thresh)
     dut_res = client.run_trial(gap_wait)
 
     ref_tags = [e["tag"] for e in ref_res["events"]]
     dut_tags = [e["tag"] for e in dut_res["events"]]
+    ref_bytes = (ref_tags + [ref_res["sample_reg"]]) if capture_per_cmd else [ref_res["sample_reg"]]
+    dut_bytes = (dut_tags + [dut_res["sample_reg"]]) if capture_per_cmd else [dut_res["sample_reg"]]
     diverged = (
         ref_res["sample_reg"] != dut_res["sample_reg"]
         or ref_tags != dut_tags
+        or ref_res["cycle_cnt"] != dut_res["cycle_cnt"]
     )
     return {
         "commands": [int(c) for c in commands],
@@ -90,6 +107,10 @@ def eval_ref_vs_dut(
         "program_words": len(words),
         "ref_sample_reg": ref_res["sample_reg"],
         "dut_sample_reg": dut_res["sample_reg"],
+        "ref_bytes": ref_bytes,
+        "dut_bytes": dut_bytes,
+        "ref_cycles": ref_res["cycle_cnt"],
+        "dut_cycles": dut_res["cycle_cnt"],
         "ref_events": ref_res["events"],
         "dut_events": dut_res["events"],
         "diverged": diverged,
@@ -151,6 +172,8 @@ def minimize_divergence(
     max_gap: int = 12,
     ref_thresh: int = 1,
     dut_thresh: int = 6,
+    target_mode: int = 3,
+    capture_per_cmd: bool = False,
 ) -> Dict[str, Any]:
     """Experiment 5: Delta-reduce sequence length and pinpoint exact timing threshold."""
     cur_cmds = list(initial_cmds)
@@ -168,6 +191,8 @@ def minimize_divergence(
                 failing_gap,
                 ref_thresh=ref_thresh,
                 dut_thresh=dut_thresh,
+                target_mode=target_mode,
+                capture_per_cmd=capture_per_cmd,
             )
             reduction_steps.append(
                 {
@@ -192,6 +217,8 @@ def minimize_divergence(
             g,
             ref_thresh=ref_thresh,
             dut_thresh=dut_thresh,
+            target_mode=target_mode,
+            capture_per_cmd=capture_per_cmd,
         )
         window_scan.append(
             {
@@ -205,12 +232,25 @@ def minimize_divergence(
 
     failing_gaps = [w["gap_wait"] for w in window_scan if w["diverged"]]
     passing_gaps = [w["gap_wait"] for w in window_scan if not w["diverged"]]
+    # Find contiguous failing interval containing `failing_gap`
+    win_lo = failing_gap
+    while win_lo > 0 and (win_lo - 1) in failing_gaps:
+        win_lo -= 1
+    win_hi = failing_gap
+    while (win_hi + 1) in failing_gaps:
+        win_hi += 1
+
+    lowest_fail_gap = min(failing_gaps) if failing_gaps else None
     highest_fail_gap = max(failing_gaps) if failing_gaps else None
-    lowest_pass_gap = (
-        min(g for g in passing_gaps if highest_fail_gap is None or g > highest_fail_gap)
-        if passing_gaps
-        else None
+    lowest_pass_above = min(
+        (g for g in passing_gaps if g > win_hi),
+        default=None,
     )
+    highest_pass_below = max(
+        (g for g in passing_gaps if g < win_lo),
+        default=None,
+    )
+    lowest_pass_gap = lowest_pass_above if lowest_pass_above is not None else highest_pass_below
 
     return {
         "initial_commands_hex": [f"0x{c:02x}" for c in initial_cmds],
@@ -218,11 +258,14 @@ def minimize_divergence(
         "minimized_commands_hex": [f"0x{c:02x}" for c in cur_cmds],
         "sequence_reduction": f"{len(initial_cmds)} -> {len(cur_cmds)} transactions",
         "failing_gap_wait": failing_gap,
-        "highest_failing_gap_wait": highest_fail_gap,
-        "highest_failing_cs_high_cycles": (
-            highest_fail_gap + 2 if highest_fail_gap is not None else None
-        ),
+        "local_failing_window": [win_lo, win_hi],
+        "passing_gaps": passing_gaps,
+        "lowest_failing_gap_wait": win_lo,
+        "highest_failing_gap_wait": win_hi,
+        "highest_failing_cs_high_cycles": win_hi + 2,
         "lowest_passing_gap_wait": lowest_pass_gap,
+        "lowest_passing_above_fail": lowest_pass_above,
+        "highest_passing_below_fail": highest_pass_below,
         "lowest_passing_cs_high_cycles": (
             lowest_pass_gap + 2 if lowest_pass_gap is not None else None
         ),
@@ -240,10 +283,12 @@ def replay_minimized_case(
     repeats: int = 10,
     ref_thresh: int = 1,
     dut_thresh: int = 6,
+    target_mode: int = 3,
+    capture_per_cmd: bool = False,
 ) -> Dict[str, Any]:
     """Experiment 2 + 4: Re-run minimized counterexample N times and check determinism."""
     matches = 0
-    signatures: List[Tuple[int, int]] = []
+    signatures: List[Tuple[Tuple[int, ...], Tuple[int, ...]]] = []
     for _ in range(repeats):
         res = eval_ref_vs_dut(
             transport,
@@ -252,16 +297,20 @@ def replay_minimized_case(
             gap_wait,
             ref_thresh=ref_thresh,
             dut_thresh=dut_thresh,
+            target_mode=target_mode,
+            capture_per_cmd=capture_per_cmd,
         )
-        sig = (res["ref_sample_reg"], res["dut_sample_reg"])
+        sig = (tuple(res["ref_bytes"]), tuple(res["dut_bytes"]))
         signatures.append(sig)
         if res["diverged"] and sig == signatures[0]:
             matches += 1
     return {
         "repeats": repeats,
         "deterministic_divergence_matches": matches,
-        "ref_observed_hex": f"0x{signatures[0][0]:02x}" if signatures else None,
-        "dut_observed_hex": f"0x{signatures[0][1]:02x}" if signatures else None,
+        "ref_observed_hex": f"0x{signatures[0][0][-1]:02x}" if signatures else None,
+        "dut_observed_hex": f"0x{signatures[0][1][-1]:02x}" if signatures else None,
+        "ref_observed_bytes_hex": [f"0x{b:02x}" for b in signatures[0][0]] if signatures else None,
+        "dut_observed_bytes_hex": [f"0x{b:02x}" for b in signatures[0][1]] if signatures else None,
         "replay_rate": matches / repeats if repeats else 0.0,
     }
 

@@ -9,11 +9,15 @@ import unittest
 
 from tools.diff_minimizer import eval_ref_vs_dut, minimize_divergence, replay_minimized_case
 from tools.protocol_asm import (
+    analyze_timing_bounds,
     assemble,
+    build_i2c_stretch_probe_program,
     build_i2c_write_byte_program,
     build_spi_target_responder_program,
     build_uart_tx_program,
+    check_timing_contract,
     insn,
+    predict_dynamic_contract,
 )
 from tools.timing_explorer import (
     IcarusSimTransport,
@@ -193,6 +197,160 @@ class TimingExplorerTests(unittest.TestCase):
             self.assertEqual(minimized["lowest_passing_gap_wait"], 4)
             rep_min = replay_minimized_case(transport, client, [0x06, 0x05], 3, repeats=3)
             self.assertEqual(rep_min["deterministic_divergence_matches"], 3)
+
+    def test_dynamic_timing_contract_branches_loops_wait_edge_and_negative_cases(self) -> None:
+        # 1. Static bounds detect unbounded infinite loops
+        unbounded_prog = assemble(["loop_inf:", "NOP", "JMP loop_inf"])
+        ub_bounds = analyze_timing_bounds(unbounded_prog, 0)
+        self.assertFalse(ub_bounds["bounded"])
+        self.assertEqual(ub_bounds["unbounded_pcs"], [0])
+
+        with IcarusSimTransport() as transport:
+            transport.reset(1)
+            client = ProtocolClient(transport)
+
+            # 2. JZ branches: I2C ACK (1 cycle shorter) vs NACK (1 cycle longer via JMP)
+            i2c_words = build_i2c_write_byte_program(0xA0, half_cycles=4, ack_tag=0xAC, nack_tag=0xDE)
+            i2c_bounds = analyze_timing_bounds(i2c_words, 0)
+            self.assertTrue(i2c_bounds["bounded"])
+            self.assertEqual(i2c_bounds["max_cycles"] - i2c_bounds["min_cycles"], 1)
+
+            client.load_program(i2c_words)
+            transport.configure_target(2, i2c_ack=1)
+            ack_res = client.run_trial(0)
+            ack_chk = check_timing_contract(
+                i2c_words,
+                0,
+                observed_cycles=ack_res["cycle_cnt"],
+                observed_events=ack_res["events"],
+                eng_state=ack_res["eng_state"],
+                sample_bits=[0],  # SDA low -> ACK
+            )
+            self.assertTrue(ack_chk["contract_ok"], ack_chk["errors"])
+
+            transport.configure_target(2, i2c_ack=0)
+            nack_res = client.run_trial(0)
+            nack_chk = check_timing_contract(
+                i2c_words,
+                0,
+                observed_cycles=nack_res["cycle_cnt"],
+                observed_events=nack_res["events"],
+                eng_state=nack_res["eng_state"],
+                sample_bits=[1],  # SDA high -> NACK
+            )
+            self.assertTrue(nack_chk["contract_ok"], nack_chk["errors"])
+            self.assertEqual(nack_res["cycle_cnt"], ack_res["cycle_cnt"] + 1)
+
+            # Negative: wrong branch outcome or +/-1 expected cycle must FAIL
+            wrong_branch = check_timing_contract(
+                i2c_words,
+                0,
+                observed_cycles=ack_res["cycle_cnt"],
+                observed_events=ack_res["events"],
+                eng_state=ack_res["eng_state"],
+                sample_bits=[1],
+            )
+            self.assertFalse(wrong_branch["contract_ok"])
+            off_by_one = check_timing_contract(
+                i2c_words,
+                0,
+                observed_cycles=ack_res["cycle_cnt"] - 1,
+                observed_events=ack_res["events"],
+                eng_state=ack_res["eng_state"],
+                sample_bits=[0],
+            )
+            self.assertFalse(off_by_one["contract_ok"])
+
+            # 3. SETCOUNT / LOOP across counts including N=0 edge case and nested/multi-iteration
+            for count in (0, 1, 5):
+                loop_prog = assemble(
+                    [
+                        f"SETCOUNT 0, {count}",
+                        "top_lbl:",
+                        "WAIT_PARAM 1",
+                        "MARK 0x33, 0",
+                        "LOOP 0, top_lbl",
+                        "HALT 0",
+                    ]
+                )
+                client.load_program(loop_prog)
+                res = client.run_trial(2)
+                chk = check_timing_contract(
+                    loop_prog,
+                    2,
+                    observed_cycles=res["cycle_cnt"],
+                    observed_events=res["events"],
+                    eng_state=res["eng_state"],
+                    sample_bits=(),
+                    edge_waits=(),
+                )
+                self.assertTrue(chk["contract_ok"], f"count={count}: {chk['errors']}")
+                self.assertEqual(chk["bounds"]["min_cycles"], chk["bounds"]["max_cycles"])
+
+            # Negative: tampered MARK timestamp must FAIL
+            bad_mark = check_timing_contract(
+                loop_prog,
+                2,
+                observed_cycles=res["cycle_cnt"],
+                observed_events=[{"tag": e["tag"], "ts_cycles": e["ts_cycles"] + 1} for e in res["events"]],
+                eng_state=res["eng_state"],
+                sample_bits=(),
+                edge_waits=(),
+            )
+            self.assertFalse(bad_mark["contract_ok"])
+
+            # 4. WAIT_EDGE across immediate hit (stretch=0), delayed release (stretch=7), and timeout
+            stretch = run_i2c_stretch_sweep(client, stretch_cycles=7, max_wait_values=(4, 7, 10))
+            self.assertTrue(all(t["contract_ok"] for t in stretch["trials"]))
+
+            stretch_imm = run_i2c_stretch_sweep(client, stretch_cycles=0, max_wait_values=(0, 3))
+            self.assertTrue(all(t["contract_ok"] for t in stretch_imm["trials"]))
+            self.assertTrue(all(t["passed"] for t in stretch_imm["trials"]))
+
+            # Negative: claiming timeout outcome on a passed stretch run must FAIL
+            probe_prog = build_i2c_stretch_probe_program(scl_pin=0, sda_pin=1, half_cycles=4)
+            bad_wait_edge = check_timing_contract(
+                probe_prog,
+                10,
+                observed_cycles=stretch["trials"][2]["cycle_cnt"],
+                observed_events=[
+                    {"tag": t, "ts_cycles": ts}
+                    for t, ts in zip(stretch["trials"][2]["tags"], stretch["trials"][2]["timestamps"])
+                ],
+                edge_waits=[None],  # Wrong: target released at 7 cycles, did not time out
+            )
+            self.assertFalse(bad_wait_edge["contract_ok"])
+
+            # Cross-check standalone dynamic predictor on illegal opcode fault path
+            fault_prog = [insn("NOP", 0), 0xF000]
+            fault_pred = predict_dynamic_contract(fault_prog, 0)
+            self.assertEqual(fault_pred["final_state"], "ENG_FAULT")
+            self.assertEqual(fault_pred["total_cycles"], 2)
+
+            # Two-sided timing failure window on MODE_SPI_MULTISPEC D3 ([0x06, 0x02, 0x05])
+            m_d3 = minimize_divergence(
+                transport,
+                client,
+                [0x06, 0x02, 0x05],
+                11,
+                max_gap=15,
+                ref_thresh=0,
+                dut_thresh=1,
+                target_mode=5,
+                capture_per_cmd=True,
+            )
+            self.assertEqual(m_d3["local_failing_window"], [10, 15])
+            self.assertEqual(m_d3["highest_passing_below_fail"], 9)
+            self.assertEqual(m_d3["passing_gaps"], [3, 4, 5, 6, 7, 8, 9])
+
+            # Noisy target classification check (jitter=9 ns across L=3,4,5)
+            from tools.noisy_boundary_study import run_repeated_sweep
+            from tools.protocol_asm import build_spi_mode0_program
+            client.load_program(build_spi_mode0_program(0x55))
+            transport.set_seed(0xA11CE001)
+            transport.configure_target(6, delay_ns=37, spi_resp=0xAA, i2c_ack=9)
+            noisy_sw = run_repeated_sweep(client, low_range=(3, 4, 5), repeats_per_setting=15)
+            self.assertEqual(noisy_sw["summary"]["classification"], "probabilistic_transition_region")
 
 
 if __name__ == "__main__":

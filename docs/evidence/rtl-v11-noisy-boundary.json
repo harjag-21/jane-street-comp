@@ -1,0 +1,397 @@
+{
+  "elapsed_seconds": 106.18,
+  "evidence_class": "rtl_simulation_noisy_target",
+  "model": {
+    "analytic_pass_prob": {
+      "2": 0.0,
+      "3": 0.1579,
+      "4": 0.6842,
+      "5": 1.0,
+      "6": 1.0,
+      "7": 1.0
+    },
+    "clock_ns": 10,
+    "jitter_ns": 9,
+    "nominal_delay_ns": 37
+  },
+  "naive_binary_summary": {
+    "accuracy_to_true_p90": 0.4167,
+    "estimate_histogram": {
+      "4": 7,
+      "5": 5
+    },
+    "mean_trials": 4,
+    "runs": 12,
+    "true_p90_boundary": 5,
+    "unique_estimates": 2
+  },
+  "noisy_sweep_primary": {
+    "method": "repeated_fixed_sweep",
+    "points": [
+      {
+        "low_cycles": 2,
+        "low_window_ns": 20,
+        "pass_rate": 0.0,
+        "passes": 0,
+        "trials": 30,
+        "wilson_hi": 0.1135,
+        "wilson_lo": 0.0
+      },
+      {
+        "low_cycles": 3,
+        "low_window_ns": 30,
+        "pass_rate": 0.1,
+        "passes": 3,
+        "trials": 30,
+        "wilson_hi": 0.2562,
+        "wilson_lo": 0.0346
+      },
+      {
+        "low_cycles": 4,
+        "low_window_ns": 40,
+        "pass_rate": 0.6333,
+        "passes": 19,
+        "trials": 30,
+        "wilson_hi": 0.7813,
+        "wilson_lo": 0.4551
+      },
+      {
+        "low_cycles": 5,
+        "low_window_ns": 50,
+        "pass_rate": 1.0,
+        "passes": 30,
+        "trials": 30,
+        "wilson_hi": 1.0,
+        "wilson_lo": 0.8865
+      },
+      {
+        "low_cycles": 6,
+        "low_window_ns": 60,
+        "pass_rate": 1.0,
+        "passes": 30,
+        "trials": 30,
+        "wilson_hi": 1.0,
+        "wilson_lo": 0.8865
+      },
+      {
+        "low_cycles": 7,
+        "low_window_ns": 70,
+        "pass_rate": 1.0,
+        "passes": 30,
+        "trials": 30,
+        "wilson_hi": 1.0,
+        "wilson_lo": 0.8865
+      }
+    ],
+    "repeats_per_setting": 30,
+    "summary": {
+      "classification": "probabilistic_transition_region",
+      "first_p100_low_cycles": 5,
+      "first_p50_low_cycles": 4,
+      "first_p90_low_cycles": 5,
+      "mixed_low_cycles": [
+        3,
+        4
+      ],
+      "transition_width_cycles": 3
+    },
+    "total_trials": 180
+  },
+  "noisy_sweep_repeats": [
+    {
+      "method": "repeated_fixed_sweep",
+      "points": [
+        {
+          "low_cycles": 2,
+          "low_window_ns": 20,
+          "pass_rate": 0.0,
+          "passes": 0,
+          "trials": 20,
+          "wilson_hi": 0.1611,
+          "wilson_lo": 0.0
+        },
+        {
+          "low_cycles": 3,
+          "low_window_ns": 30,
+          "pass_rate": 0.15,
+          "passes": 3,
+          "trials": 20,
+          "wilson_hi": 0.3604,
+          "wilson_lo": 0.0524
+        },
+        {
+          "low_cycles": 4,
+          "low_window_ns": 40,
+          "pass_rate": 0.7,
+          "passes": 14,
+          "trials": 20,
+          "wilson_hi": 0.8545,
+          "wilson_lo": 0.481
+        },
+        {
+          "low_cycles": 5,
+          "low_window_ns": 50,
+          "pass_rate": 1.0,
+          "passes": 20,
+          "trials": 20,
+          "wilson_hi": 1.0,
+          "wilson_lo": 0.8389
+        },
+        {
+          "low_cycles": 6,
+          "low_window_ns": 60,
+          "pass_rate": 1.0,
+          "passes": 20,
+          "trials": 20,
+          "wilson_hi": 1.0,
+          "wilson_lo": 0.8389
+        },
+        {
+          "low_cycles": 7,
+          "low_window_ns": 70,
+          "pass_rate": 1.0,
+          "passes": 20,
+          "trials": 20,
+          "wilson_hi": 1.0,
+          "wilson_lo": 0.8389
+        }
+      ],
+      "repeats_per_setting": 20,
+      "summary": {
+        "classification": "probabilistic_transition_region",
+        "first_p100_low_cycles": 5,
+        "first_p50_low_cycles": 4,
+        "first_p90_low_cycles": 5,
+        "mixed_low_cycles": [
+          3,
+          4
+        ],
+        "transition_width_cycles": 3
+      },
+      "total_trials": 120
+    },
+    {
+      "method": "repeated_fixed_sweep",
+      "points": [
+        {
+          "low_cycles": 2,
+          "low_window_ns": 20,
+          "pass_rate": 0.0,
+          "passes": 0,
+          "trials": 20,
+          "wilson_hi": 0.1611,
+          "wilson_lo": 0.0
+        },
+        {
+          "low_cycles": 3,
+          "low_window_ns": 30,
+          "pass_rate": 0.0,
+          "passes": 0,
+          "trials": 20,
+          "wilson_hi": 0.1611,
+          "wilson_lo": 0.0
+        },
+        {
+          "low_cycles": 4,
+          "low_window_ns": 40,
+          "pass_rate": 0.5,
+          "passes": 10,
+          "trials": 20,
+          "wilson_hi": 0.7007,
+          "wilson_lo": 0.2993
+        },
+        {
+          "low_cycles": 5,
+          "low_window_ns": 50,
+          "pass_rate": 1.0,
+          "passes": 20,
+          "trials": 20,
+          "wilson_hi": 1.0,
+          "wilson_lo": 0.8389
+        },
+        {
+          "low_cycles": 6,
+          "low_window_ns": 60,
+          "pass_rate": 1.0,
+          "passes": 20,
+          "trials": 20,
+          "wilson_hi": 1.0,
+          "wilson_lo": 0.8389
+        },
+        {
+          "low_cycles": 7,
+          "low_window_ns": 70,
+          "pass_rate": 1.0,
+          "passes": 20,
+          "trials": 20,
+          "wilson_hi": 1.0,
+          "wilson_lo": 0.8389
+        }
+      ],
+      "repeats_per_setting": 20,
+      "summary": {
+        "classification": "probabilistic_transition_region",
+        "first_p100_low_cycles": 5,
+        "first_p50_low_cycles": 4,
+        "first_p90_low_cycles": 5,
+        "mixed_low_cycles": [
+          4
+        ],
+        "transition_width_cycles": 2
+      },
+      "total_trials": 120
+    },
+    {
+      "method": "repeated_fixed_sweep",
+      "points": [
+        {
+          "low_cycles": 2,
+          "low_window_ns": 20,
+          "pass_rate": 0.0,
+          "passes": 0,
+          "trials": 20,
+          "wilson_hi": 0.1611,
+          "wilson_lo": 0.0
+        },
+        {
+          "low_cycles": 3,
+          "low_window_ns": 30,
+          "pass_rate": 0.05,
+          "passes": 1,
+          "trials": 20,
+          "wilson_hi": 0.2361,
+          "wilson_lo": 0.0089
+        },
+        {
+          "low_cycles": 4,
+          "low_window_ns": 40,
+          "pass_rate": 0.55,
+          "passes": 11,
+          "trials": 20,
+          "wilson_hi": 0.7418,
+          "wilson_lo": 0.3421
+        },
+        {
+          "low_cycles": 5,
+          "low_window_ns": 50,
+          "pass_rate": 1.0,
+          "passes": 20,
+          "trials": 20,
+          "wilson_hi": 1.0,
+          "wilson_lo": 0.8389
+        },
+        {
+          "low_cycles": 6,
+          "low_window_ns": 60,
+          "pass_rate": 1.0,
+          "passes": 20,
+          "trials": 20,
+          "wilson_hi": 1.0,
+          "wilson_lo": 0.8389
+        },
+        {
+          "low_cycles": 7,
+          "low_window_ns": 70,
+          "pass_rate": 1.0,
+          "passes": 20,
+          "trials": 20,
+          "wilson_hi": 1.0,
+          "wilson_lo": 0.8389
+        }
+      ],
+      "repeats_per_setting": 20,
+      "summary": {
+        "classification": "probabilistic_transition_region",
+        "first_p100_low_cycles": 5,
+        "first_p50_low_cycles": 4,
+        "first_p90_low_cycles": 5,
+        "mixed_low_cycles": [
+          3,
+          4
+        ],
+        "transition_width_cycles": 3
+      },
+      "total_trials": 120
+    }
+  ],
+  "repeated_binary_p90_summary": {
+    "accuracy_to_true_p90": 1.0,
+    "estimate_histogram": {
+      "5": 12
+    },
+    "mean_trials": 80,
+    "runs": 12,
+    "true_p90_boundary": 5,
+    "unique_estimates": 1
+  },
+  "sharp_reference": {
+    "method": "repeated_fixed_sweep",
+    "points": [
+      {
+        "low_cycles": 2,
+        "low_window_ns": 20,
+        "pass_rate": 0.0,
+        "passes": 0,
+        "trials": 10,
+        "wilson_hi": 0.2775,
+        "wilson_lo": 0.0
+      },
+      {
+        "low_cycles": 3,
+        "low_window_ns": 30,
+        "pass_rate": 0.0,
+        "passes": 0,
+        "trials": 10,
+        "wilson_hi": 0.2775,
+        "wilson_lo": 0.0
+      },
+      {
+        "low_cycles": 4,
+        "low_window_ns": 40,
+        "pass_rate": 1.0,
+        "passes": 10,
+        "trials": 10,
+        "wilson_hi": 1.0,
+        "wilson_lo": 0.7225
+      },
+      {
+        "low_cycles": 5,
+        "low_window_ns": 50,
+        "pass_rate": 1.0,
+        "passes": 10,
+        "trials": 10,
+        "wilson_hi": 1.0,
+        "wilson_lo": 0.7225
+      },
+      {
+        "low_cycles": 6,
+        "low_window_ns": 60,
+        "pass_rate": 1.0,
+        "passes": 10,
+        "trials": 10,
+        "wilson_hi": 1.0,
+        "wilson_lo": 0.7225
+      },
+      {
+        "low_cycles": 7,
+        "low_window_ns": 70,
+        "pass_rate": 1.0,
+        "passes": 10,
+        "trials": 10,
+        "wilson_hi": 1.0,
+        "wilson_lo": 0.7225
+      }
+    ],
+    "repeats_per_setting": 10,
+    "summary": {
+      "classification": "sharp_threshold",
+      "first_p100_low_cycles": 4,
+      "first_p50_low_cycles": 4,
+      "first_p90_low_cycles": 4,
+      "mixed_low_cycles": [],
+      "transition_width_cycles": 1
+    },
+    "total_trials": 60
+  },
+  "timestamp_utc": "2026-11-16T16:22:48.779694+00:00"
+}

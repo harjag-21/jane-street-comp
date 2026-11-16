@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from typing import Any, Dict, Iterable, List, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 PROG_DEPTH = 64
 
@@ -425,6 +425,413 @@ def predict_straight_line_cycles(words: Sequence[int], run_param: int) -> Dict[s
         elif op == 0xA:  # HALT stops incrementing after its decode cycle
             break
     return {"total_cycles": cycles, "mark_cycles": marks}
+
+
+def _pad_program(words: Sequence[int]) -> List[int]:
+    if len(words) > PROG_DEPTH:
+        raise ValueError(f"Program length {len(words)} exceeds PROG_DEPTH={PROG_DEPTH}")
+    return list(words) + [0] * (PROG_DEPTH - len(words))
+
+
+def analyze_timing_bounds(
+    words: Sequence[int],
+    run_param: int,
+    *,
+    max_states: int = 20000,
+) -> Dict[str, Any]:
+    """Compute exact reachable cycle bounds across dynamic paths (JZ, JMP, LOOP, WAIT_EDGE)."""
+    mem = _pad_program(words)
+    start_state = (0, 0, 0, 0)  # (pc, loop_cnt0, loop_cnt1, last_sample)
+
+    def _transitions(state: Tuple[int, int, int, int]) -> Tuple[str, List[Tuple[Optional[Tuple[int, int, int, int]], int, int]]]:
+        pc, lc0, lc1, last_s = state
+        w = mem[pc]
+        op = (w >> 12) & 0xF
+        imm = w & 0xFFF
+        next_pc = (pc + 1) & (PROG_DEPTH - 1)
+
+        if op in (0x0, 0x1, 0x2, 0x9):  # NOP, OUT, OE, MARK
+            return ("step", [((next_pc, lc0, lc1, last_s), 1, 1)])
+        if op == 0x3:  # WAIT
+            c = 1 + imm
+            return ("step", [((next_pc, lc0, lc1, last_s), c, c)])
+        if op in (0x4, 0xB):  # SAMPLE, OUT_SAMPLE -> pin can read 0 or 1
+            return (
+                "step",
+                [
+                    ((next_pc, lc0, lc1, 0), 1, 1),
+                    ((next_pc, lc0, lc1, 1), 1, 1),
+                ],
+            )
+        if op == 0x5:  # JZ
+            tgt = imm & (PROG_DEPTH - 1)
+            dst = tgt if last_s == 0 else next_pc
+            return ("step", [((dst, lc0, lc1, last_s), 1, 1)])
+        if op == 0x6:  # JMP
+            tgt = imm & (PROG_DEPTH - 1)
+            return ("step", [((tgt, lc0, lc1, last_s), 1, 1)])
+        if op == 0x7:  # LOOP
+            ctr_sel = (imm >> 8) & 0x1
+            tgt = imm & (PROG_DEPTH - 1)
+            cur = lc1 if ctr_sel else lc0
+            if cur > 1:
+                nc = cur - 1
+                nl0, nl1 = (lc0, nc) if ctr_sel else (nc, lc1)
+                return ("step", [((tgt, nl0, nl1, last_s), 1, 1)])
+            nl0, nl1 = (lc0, 0) if ctr_sel else (0, lc1)
+            return ("step", [((next_pc, nl0, nl1, last_s), 1, 1)])
+        if op == 0x8:  # SETCOUNT
+            ctr_sel = (imm >> 8) & 0x1
+            val = imm & 0xFF
+            nl0, nl1 = (lc0, val) if ctr_sel else (val, lc1)
+            return ("step", [((next_pc, nl0, nl1, last_s), 1, 1)])
+        if op == 0xA:  # HALT
+            return ("halt", [(None, 1, 1)])
+        if op == 0xC:  # WAIT_PARAM
+            extra = min(0xFFF, run_param + (imm & 0xFF))
+            c = 1 + extra
+            return ("step", [((next_pc, lc0, lc1, last_s), c, c)])
+        if op == 0xD:  # WAIT_EDGE: hit in [0..lim] waits (1..1+lim, ls=1) or timeout (1+lim, ls=0)
+            lim = run_param if (imm & 0xFF) == 0 else (imm & 0xFF)
+            lim = min(0xFFF, max(0, lim))
+            if lim == 0:
+                return (
+                    "step",
+                    [
+                        ((next_pc, lc0, lc1, 1), 1, 1),
+                        ((next_pc, lc0, lc1, 0), 1, 1),
+                    ],
+                )
+            return (
+                "step",
+                [
+                    ((next_pc, lc0, lc1, 1), 1, 1 + lim),
+                    ((next_pc, lc0, lc1, 0), 1 + lim, 1 + lim),
+                ],
+            )
+        return ("fault", [(None, 1, 1)])
+
+    # Iterative DFS topological sort + cycle check
+    color: Dict[Tuple[int, int, int, int], int] = {}  # 1=gray, 2=black
+    topo_rev: List[Tuple[int, int, int, int]] = []
+    unbounded_pcs: List[int] = []
+    truncated = False
+
+    stack: List[Tuple[Tuple[int, int, int, int], int]] = [(start_state, 0)]
+    edges_cache: Dict[
+        Tuple[int, int, int, int],
+        Tuple[str, List[Tuple[Optional[Tuple[int, int, int, int]], int, int]]],
+    ] = {}
+    color[start_state] = 1
+
+    while stack:
+        st, idx = stack[-1]
+        if st not in edges_cache:
+            if len(edges_cache) >= max_states:
+                truncated = True
+                stack.pop()
+                color[st] = 2
+                continue
+            edges_cache[st] = _transitions(st)
+        kind, outs = edges_cache[st]
+        if idx < len(outs):
+            stack[-1] = (st, idx + 1)
+            nxt = outs[idx][0]
+            if nxt is not None:
+                c = color.get(nxt, 0)
+                if c == 1:
+                    unbounded_pcs.append(nxt[0])
+                elif c == 0:
+                    color[nxt] = 1
+                    stack.append((nxt, 0))
+        else:
+            stack.pop()
+            color[st] = 2
+            topo_rev.append(st)
+
+    if unbounded_pcs or truncated:
+        return {
+            "bounded": False,
+            "truncated": truncated,
+            "unbounded_pcs": sorted(set(unbounded_pcs)),
+            "states_explored": len(edges_cache),
+            "min_cycles": None,
+            "max_cycles": None,
+            "fault_reachable": False,
+            "mark_bounds": [],
+        }
+
+    topo = list(reversed(topo_rev))
+    state_bounds: Dict[Tuple[int, int, int, int], List[int]] = {start_state: [0, 0]}
+    halt_min: Optional[int] = None
+    halt_max: Optional[int] = None
+    fault_min: Optional[int] = None
+    fault_max: Optional[int] = None
+    mark_by_pc: Dict[int, Dict[str, Any]] = {}
+
+    for st in topo:
+        if st not in state_bounds:
+            continue
+        cur_min, cur_max = state_bounds[st]
+        pc = st[0]
+        w = mem[pc]
+        op = (w >> 12) & 0xF
+        imm = w & 0xFFF
+        if op == 0x9:
+            use_sample = bool((imm >> 8) & 0x1)
+            tag = None if use_sample else (imm & 0xFF)
+            entry = mark_by_pc.get(pc)
+            if entry is None:
+                mark_by_pc[pc] = {
+                    "pc": pc,
+                    "use_sample": use_sample,
+                    "tag": tag,
+                    "min_ts": cur_min,
+                    "max_ts": cur_max,
+                }
+            else:
+                entry["min_ts"] = min(entry["min_ts"], cur_min)
+                entry["max_ts"] = max(entry["max_ts"], cur_max)
+
+        kind, outs = edges_cache[st]
+        for nxt, dmin, dmax in outs:
+            nmin = cur_min + dmin
+            nmax = cur_max + dmax
+            if kind == "halt":
+                halt_min = nmin if halt_min is None else min(halt_min, nmin)
+                halt_max = nmax if halt_max is None else max(halt_max, nmax)
+            elif kind == "fault":
+                fault_min = nmin if fault_min is None else min(fault_min, nmin)
+                fault_max = nmax if fault_max is None else max(fault_max, nmax)
+            elif nxt is not None:
+                prev = state_bounds.get(nxt)
+                if prev is None:
+                    state_bounds[nxt] = [nmin, nmax]
+                else:
+                    prev[0] = min(prev[0], nmin)
+                    prev[1] = max(prev[1], nmax)
+
+    return {
+        "bounded": True,
+        "truncated": False,
+        "unbounded_pcs": [],
+        "states_explored": len(edges_cache),
+        "min_cycles": halt_min,
+        "max_cycles": halt_max,
+        "halt_reachable": halt_min is not None,
+        "fault_reachable": fault_min is not None,
+        "fault_min_cycles": fault_min,
+        "fault_max_cycles": fault_max,
+        "mark_bounds": [mark_by_pc[k] for k in sorted(mark_by_pc)],
+    }
+
+
+def predict_dynamic_contract(
+    words: Sequence[int],
+    run_param: int,
+    *,
+    sample_bits: Sequence[int] = (),
+    edge_waits: Sequence[Optional[int]] = (),
+    max_cycles: int = 100000,
+) -> Dict[str, Any]:
+    """Cycle-accurate concrete path predictor supporting JZ, JMP, LOOP, SETCOUNT, and WAIT_EDGE."""
+    mem = _pad_program(words)
+    pc = 0
+    lc0 = 0
+    lc1 = 0
+    last_sample = 0
+    sample_reg = 0
+    cycles = 0
+    s_idx = 0
+    e_idx = 0
+    marks: List[Dict[str, Any]] = []
+    final_state = "ENG_HALTED"
+
+    while True:
+        if cycles > max_cycles:
+            raise ValueError(f"Dynamic contract exceeded max_cycles={max_cycles}")
+        w = mem[pc]
+        op = (w >> 12) & 0xF
+        imm = w & 0xFFF
+        next_pc = (pc + 1) & (PROG_DEPTH - 1)
+
+        if op == 0x9:  # OP_MARK records pre-increment cycle_cnt_o
+            tag = sample_reg if ((imm >> 8) & 0x1) else (imm & 0xFF)
+            marks.append({"pc": pc, "tag": tag, "ts_cycles": cycles})
+            cycles += 1
+            pc = next_pc
+        elif op in (0x0, 0x1, 0x2):  # NOP, OUT, OE
+            cycles += 1
+            pc = next_pc
+        elif op == 0x3:  # OP_WAIT
+            cycles += 1 + imm
+            pc = next_pc
+        elif op in (0x4, 0xB):  # OP_SAMPLE, OP_OUT_SAMPLE
+            if s_idx >= len(sample_bits):
+                raise ValueError(f"Missing sample_bits entry #{s_idx} at PC {pc}")
+            bit = int(sample_bits[s_idx]) & 0x1
+            s_idx += 1
+            last_sample = bit
+            if not ((imm >> 11) & 0x1):
+                sample_reg = ((sample_reg << 1) | bit) & 0xFF
+            cycles += 1
+            pc = next_pc
+        elif op == 0x5:  # OP_JZ
+            cycles += 1
+            pc = (imm & (PROG_DEPTH - 1)) if last_sample == 0 else next_pc
+        elif op == 0x6:  # OP_JMP
+            cycles += 1
+            pc = imm & (PROG_DEPTH - 1)
+        elif op == 0x7:  # OP_LOOP
+            ctr_sel = (imm >> 8) & 0x1
+            cur = lc1 if ctr_sel else lc0
+            if cur > 1:
+                if ctr_sel:
+                    lc1 -= 1
+                else:
+                    lc0 -= 1
+                pc = imm & (PROG_DEPTH - 1)
+            else:
+                if ctr_sel:
+                    lc1 = 0
+                else:
+                    lc0 = 0
+                pc = next_pc
+            cycles += 1
+        elif op == 0x8:  # OP_SETCOUNT
+            ctr_sel = (imm >> 8) & 0x1
+            if ctr_sel:
+                lc1 = imm & 0xFF
+            else:
+                lc0 = imm & 0xFF
+            cycles += 1
+            pc = next_pc
+        elif op == 0xA:  # OP_HALT
+            cycles += 1
+            final_state = "ENG_HALTED"
+            break
+        elif op == 0xC:  # OP_WAIT_PARAM
+            cycles += 1 + min(0xFFF, run_param + (imm & 0xFF))
+            pc = next_pc
+        elif op == 0xD:  # OP_WAIT_EDGE
+            if e_idx >= len(edge_waits):
+                raise ValueError(f"Missing edge_waits entry #{e_idx} at PC {pc}")
+            wait_spec = edge_waits[e_idx]
+            e_idx += 1
+            lim = run_param if (imm & 0xFF) == 0 else (imm & 0xFF)
+            lim = min(0xFFF, max(0, lim))
+            if wait_spec is None or wait_spec > lim:
+                cycles += 1 + lim
+                last_sample = 0
+            else:
+                if wait_spec < 0:
+                    raise ValueError(f"Negative WAIT_EDGE delay at PC {pc}: {wait_spec}")
+                cycles += 1 + int(wait_spec)
+                last_sample = 1
+            pc = next_pc
+        else:
+            cycles += 1
+            final_state = "ENG_FAULT"
+            break
+
+    return {
+        "total_cycles": cycles,
+        "mark_cycles": [m["ts_cycles"] for m in marks],
+        "mark_events": marks,
+        "final_state": final_state,
+        "final_pc": pc,
+        "sample_reg": sample_reg,
+        "last_sample": last_sample,
+        "samples_consumed": s_idx,
+        "edge_waits_consumed": e_idx,
+    }
+
+
+def check_timing_contract(
+    words: Sequence[int],
+    run_param: int,
+    *,
+    observed_cycles: int,
+    observed_events: Sequence[Dict[str, Any]],
+    eng_state: str = "ENG_HALTED",
+    sample_bits: Optional[Sequence[int]] = None,
+    edge_waits: Optional[Sequence[Optional[int]]] = None,
+) -> Dict[str, Any]:
+    """Verify RTL-observed cycle counts and MARK timestamps against static bounds and exact trace."""
+    bounds = analyze_timing_bounds(words, run_param)
+    errors: List[str] = []
+
+    if not bounds["bounded"]:
+        errors.append(f"Program path timing is unbounded (cycles at PCs {bounds['unbounded_pcs']})")
+    else:
+        if eng_state == "ENG_HALTED":
+            if not bounds["halt_reachable"]:
+                errors.append("Observed ENG_HALTED but HALT is statically unreachable")
+            elif not (bounds["min_cycles"] <= observed_cycles <= bounds["max_cycles"]):
+                errors.append(
+                    f"Observed cycle_cnt={observed_cycles} outside static HALT bounds "
+                    f"[{bounds['min_cycles']}, {bounds['max_cycles']}]"
+                )
+        elif eng_state == "ENG_FAULT":
+            if not bounds["fault_reachable"]:
+                errors.append("Observed ENG_FAULT but fault is statically unreachable")
+            elif not (bounds["fault_min_cycles"] <= observed_cycles <= bounds["fault_max_cycles"]):
+                errors.append(
+                    f"Observed fault cycle_cnt={observed_cycles} outside bounds "
+                    f"[{bounds['fault_min_cycles']}, {bounds['fault_max_cycles']}]"
+                )
+        else:
+            errors.append(f"Non-terminal eng_state {eng_state!r}")
+
+        mark_bounds = bounds["mark_bounds"]
+        for ev in observed_events:
+            tag = int(ev["tag"])
+            ts = int(ev["ts_cycles"])
+            matching = [
+                mb
+                for mb in mark_bounds
+                if (mb["use_sample"] or mb["tag"] == tag) and (mb["min_ts"] <= ts <= mb["max_ts"])
+            ]
+            if not matching:
+                errors.append(f"Observed MARK (tag=0x{tag:02x}, ts={ts}) outside static MARK bounds")
+
+    exact_trace: Optional[Dict[str, Any]] = None
+    if sample_bits is not None or edge_waits is not None:
+        exact_trace = predict_dynamic_contract(
+            words,
+            run_param,
+            sample_bits=sample_bits or (),
+            edge_waits=edge_waits or (),
+        )
+        if observed_cycles != exact_trace["total_cycles"]:
+            errors.append(
+                f"Observed cycle_cnt={observed_cycles} != predicted={exact_trace['total_cycles']}"
+            )
+        if eng_state != exact_trace["final_state"]:
+            errors.append(
+                f"Observed eng_state={eng_state} != predicted={exact_trace['final_state']}"
+            )
+        obs_pairs = [(int(e["tag"]), int(e["ts_cycles"])) for e in observed_events]
+        exp_pairs = [(int(m["tag"]), int(m["ts_cycles"])) for m in exact_trace["mark_events"]]
+        if sample_bits is None:
+            # MARK_SAMPLE value depends on pin data if sample_bits wasn't supplied; still enforce exact timestamps + fixed tags.
+            if len(obs_pairs) != len(exp_pairs):
+                errors.append(
+                    f"Observed event count {len(obs_pairs)} != predicted {len(exp_pairs)}"
+                )
+            else:
+                for idx, ((ot, ots), (et, ets)) in enumerate(zip(obs_pairs, exp_pairs)):
+                    if ots != ets:
+                        errors.append(f"Event {idx} ts_cycles={ots} != predicted={ets}")
+        elif obs_pairs != exp_pairs:
+            errors.append(f"Observed MARK events {obs_pairs} != predicted {exp_pairs}")
+
+    return {
+        "contract_ok": len(errors) == 0,
+        "errors": errors,
+        "bounds": bounds,
+        "exact_trace": exact_trace,
+    }
 
 
 if __name__ == "__main__":
