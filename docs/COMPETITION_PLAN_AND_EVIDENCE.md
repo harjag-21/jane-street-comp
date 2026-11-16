@@ -2,7 +2,7 @@
 
 **Purpose:** working control document for the Jane Street Protocol Emulator ASIC competition project. Use it to track requirements, design decisions, evidence, risks, and claims made in the repository or submission.
 
-**Last reviewed:** 2026-11-15 (Asia/Kolkata)  
+**Last reviewed:** 2026-11-16 (Asia/Kolkata)  
 **Competition deadline:** 2027-01-18, per the current official competition page  
 **Working project identity:** a reprogrammable protocol emulator used as a timing-boundary explorer
 
@@ -188,6 +188,16 @@ For each final protocol claim, state protocol role, pin mapping, supported modes
 - Official competition facts above were checked against the organizer’s page on 2026-11-15.
 - Rechecked the [official competition brief and FAQ](https://blog.janestreet.com/protocol-emulator-asic-competition/#faq) on 2026-11-15: reprogrammability after fabrication, toolchain/examples, and UART/SPI/I2C starting support are explicit final expectations; flexibility is the principal judging criterion.
 
+### Completed hardening & v1 engine milestones (2026-11-16)
+
+- **v0.1 baseline (`master` commit `67f63ab`) — Full CMOS5L hardening (`80/80`):** Fixed multi-driver SPI registers and lint width issues in v0.1 `src/project.v`, verified with `iverilog -g2012 -Wall -s tb_v01` and Cocotb (`TESTS=2 PASS=2 FAIL=0 SKIP=0`), then ran full `./tt/tt_tool.py --pdk ihp-sg13cmos5l --harden` in `/workspaces/JaneStreetASIC-v01` (PDK `89d42ee6d2fd9b50b86a1aada6fee6673c3e6008`, LibreLane `3.1.0.dev4`). Passed `80/80` stages (`1:22:01`), Antenna/Netgen LVS/Magic DRC passed, `0` setup/hold/slew/cap violations, `2.440%` utilization, `56,278` um wirelength.
+- **v1 standalone sequencer (`feat/v1-engine`) — RTL + PnR/STA fit:** Implemented `src/protocol_sequencer.v` (`64×16` instruction store, `8`-entry timestamped `MARK` FIFO, `0x0..0xC` opcodes including `OUT_SAMPLE` and parameterized `WAIT_PARAM`, illegal-opcode `ENG_FAULT` clearing `uio_oe_o`). Passed `test/tb_v1_sequencer.v` on Icarus Verilog (`PASS: v1 protocol_sequencer ISA + UART + SPI sweep + I2C tests passed`). Standalone LibreLane `--to OpenROAD.STAPostPNR` (`runs/seq64` in `/workspaces/v1-seq-check`) exited `0` with `0` lint warnings/errors, `13.36%` core utilization, `+5.0014 ns` worst setup slack (`nom_slow`), `+0.1125 ns` worst hold slack (`nom_fast`) at `20 ns` clock period.
+- **v1 full top-level engine (`feat/v1-engine` commit `3194176`) — Assembler, RTL sim, Full CMOS5L Hardening (`80/80`), & Gate-Level Verification:**
+  - **RTL & assembler (`d7be5db` / `50e75a7`):** `tools/protocol_asm.py` compiles `--example uart` (24 words), `--example spi` (38 words), and `--example i2c` (62 words). `src/project.v` adds a 2-FF-synchronized UART RX/TX CRC-8/07 8-byte loader, `ena & rst_n` deselection reset, and timeout frame recovery. Cocotb RTL simulation (`test/test.py`) passes `4/4` (`test_loader_validation_recovery_and_deselect`, `test_uart_tx_loaded_program`, `test_spi_mode0_timing_sweep_over_uart`, `test_i2c_open_drain_ack_and_nack`).
+  - **Full CMOS5L hardening (`3194176`):** Setting `MAX_FANOUT_CONSTRAINT: 6` and `DESIGN_REPAIR_MAX_CAP_PCT: 35` in `src/config.json` cleared a `-0.001327` post-RCX max-capacitance violation seen on an 8-sink mux driver (`fanout587/X`). Full `./tt/tt_tool.py --pdk ihp-sg13cmos5l --harden` in `/workspaces/JaneStreetASIC-v1` completed `80/80` stages in `1:20:34`: `0` lint errors/warnings, `12,921` stdcells (`1,656` sequential), `205,762` um² stdcell area out of `1,208,170` um² core (`17.0308%` stdcell utilization per LibreLane `metrics.json`; `14.747 %` reported by `tt_tool.py --print-stats`), `525,267` um wirelength, `0` setup violations (`+10.2228 ns` worst slack in `nom_slow_1p08V_125C` at `20 ns` period), `0` hold violations (`+0.1166 ns` worst slack in `nom_fast_1p32V_m40C`), `0` max-slew/max-cap violations, `0` detailed-route DRC errors, `0` Magic DRC errors, `0` illegal overlaps, `0` Netgen LVS errors, `0` antenna violations, worst IR drop `0.00019` V. What this does **not** establish: KLayout DRC/XOR (disabled by default in Tiny Tapeout `src/config.json`), physical I/O pad timing at a finalized board clock, or measured silicon.
+  - **Post-PnR Gate-Level Simulation (`GATES=yes`):** Verified `runs/wokwi/final/nl/tt_um_example.nl.v` with Cocotb (`test/test.py`) in Icarus Verilog `12.0` (`-DGL_TEST -DFUNCTIONAL -DSIM`): **`TESTS=4 PASS=4 FAIL=0 SKIP=0`** (`2,922,630.00 ns` sim time, `193.17 s` wall time). Simulation note: Icarus Verilog `12.0` skips `specify` `$setuphold`/`$recrem` constructs and leaves `delayed_*` internal wires in `ihp-sg13` `sg13cmos5l_stdcell.v` (`89d42ee...`) undriven, so a temporary `/tmp` copy of `sg13cmos5l_stdcell.v` with `wire delayed_*`, `delayed_` prefixes, and `specify..endspecify` blocks stripped was used for functional GL execution (zero repository or PDK files were altered); this validates functional netlist equivalence in `12.0`, not SDF back-annotated timing delays.
+  - **Submission readiness check (`tt_tool.py --check-docs`):** Exits non-zero solely on intentional placeholder metadata: `info.yaml` (`pinout`, `clock_hz`, `author`, `top_module`) and `docs/info.md` (`How it works`, `How to test` sections).
+
 ## 9. Decision log
 
 | Date | Decision | Reason | Revisit condition |
@@ -197,13 +207,13 @@ For each final protocol claim, state protocol role, pin mapping, supported modes
 | 2026-11-15 | Freeze v0.1 as a host-driven, one-command/one-SPI-transaction bring-up slice; host owns sweep and analysis. | This validates the timing path before investing in program storage, a loader, and a multi-protocol engine. | Reassess after simulation and early synthesis; the final reprogrammable engine/toolchain remains a hard submission gate. |
 | 2026-11-15 | Treat search endpoints as censored outcomes unless an interior fail/pass pair exists. | Prevents reporting the configured range limit as a measured boundary. | Revisit only if the API reports the censoring status explicitly. |
 | 2026-11-15 | Treat v0.1 as a bring-up milestone only; require a post-fabrication programmable execution model and toolchain/examples before final submission. | The organizer's FAQ makes reprogrammability and software examples explicit, with UART/SPI/I2C as the starting set. | Hard gate; architecture may vary as long as programs can express new protocol behavior. |
+| 2026-11-16 | Implement `64×16` flop-backed store + 8-entry event FIFO (`protocol_sequencer.v`) with `MAX_FANOUT_CONSTRAINT=6` / `DESIGN_REPAIR_MAX_CAP_PCT=35`. | Fits cleanly at `17.03%` stdcell utilization (`+10.22 ns` slow setup slack, zero Magic DRC/LVS/cap errors) without SRAM macro integration risk. | Consider capacity expansion (`128` words / SRAM) only if competition programs outgrow `64` instructions and re-harden cleanly. |
 
 ## 10. Immediate next actions
 
-1. Repair the Tiny Tapeout development-container dependencies, then rerun the v0.1 simulation there and synthesize/harden the vertical slice for an area/timing baseline.
-2. Implement the proposed minimum program engine, loader, and toolchain in `docs/PROGRAMMABLE_ENGINE_ARCHITECTURE.md` needed for post-fabrication reprogrammability.
-3. Implement documented UART, SPI, and I2C example programs on that engine; verify each protocol and connect the host timing sweep to the program interface.
-4. Resolve the input clock frequency, UART baud/divider, and board electrical checks before updating `info.yaml` or making timing-in-nanoseconds claims.
-5. Run the final measurement gate and complete the Tiny Tapeout flow/precheck on the required reprogrammable design.
+1. Build the host-side timing-boundary explorer CLI driver (driving `tools/protocol_asm.py` programs over serial/UART against both the simulated RTL target and, if hardware/FPGA is available, a live target) and link recorded JSONL/report outputs to the evidence ledger.
+2. Expand protocol example coverage & documentation (`docs/info.md` `How it works` and `How to test`, AI-use disclosure, pinout rationale).
+3. Resolve the target input clock frequency, UART `CLKS_PER_BIT` divider (`clk / baud` choice for board operation vs `CLKS_PER_BIT=8` sim default), and board electrical wiring before populating `info.yaml` (`clock_hz`, `pinout`, `author`, final `top_module`).
+4. Run SDF/timing-aware gate-level checks (or upstream `iverilog >= 13` / Verilator GL check) and a final clean precheck (`tt_tool.py --check-docs` + final `--harden`) once metadata/parameters are locked.
 
 Update this document whenever a rule is rechecked, an architecture decision is made, a result is produced, or a risk changes. Keep raw logs and generated evidence in the repository; this ledger is an index, not a substitute for them.
