@@ -1,0 +1,596 @@
+{
+  "frozen_at_utc": "2026-11-16T19:08:27.324383+00:00",
+  "generator_seed": 20269999,
+  "instances": [
+    {
+      "instance_id": "T00",
+      "norm_ops": [
+        171,
+        53,
+        6,
+        5
+      ],
+      "slots": [
+        {
+          "bug_id": "P0_0xb1",
+          "cs_hi": 15,
+          "cs_lo": 12,
+          "err_byte": 177,
+          "gap_hi": 12,
+          "gap_lo": 9,
+          "op0": 2,
+          "op1": 4,
+          "shape": "interior_high",
+          "slot": 0
+        },
+        {
+          "bug_id": "P1_0xb2",
+          "cs_hi": 8,
+          "cs_lo": 5,
+          "err_byte": 178,
+          "gap_hi": 5,
+          "gap_lo": 2,
+          "op0": 6,
+          "op1": 5,
+          "shape": "interior_low",
+          "slot": 1
+        },
+        {
+          "bug_id": "P2_0xb3",
+          "cs_hi": 7,
+          "cs_lo": 3,
+          "err_byte": 179,
+          "gap_hi": 4,
+          "gap_lo": 0,
+          "op0": 5,
+          "op1": 171,
+          "shape": "fast_edge",
+          "slot": 2
+        },
+        {
+          "bug_id": "P3_0xb4",
+          "cs_hi": 18,
+          "cs_lo": 14,
+          "err_byte": 180,
+          "gap_hi": 15,
+          "gap_lo": 11,
+          "op0": 4,
+          "op1": 5,
+          "shape": "slow_edge",
+          "slot": 3
+        }
+      ]
+    },
+    {
+      "instance_id": "T01",
+      "norm_ops": [
+        171,
+        2,
+        4,
+        53
+      ],
+      "slots": [
+        {
+          "bug_id": "P0_0xb1",
+          "cs_hi": 13,
+          "cs_lo": 8,
+          "err_byte": 177,
+          "gap_hi": 10,
+          "gap_lo": 5,
+          "op0": 5,
+          "op1": 171,
+          "shape": "interior_low",
+          "slot": 0
+        },
+        {
+          "bug_id": "P1_0xb2",
+          "cs_hi": 17,
+          "cs_lo": 13,
+          "err_byte": 178,
+          "gap_hi": 14,
+          "gap_lo": 10,
+          "op0": 5,
+          "op1": 4,
+          "shape": "interior_high",
+          "slot": 1
+        },
+        {
+          "bug_id": "P2_0xb3",
+          "cs_hi": 18,
+          "cs_lo": 13,
+          "err_byte": 179,
+          "gap_hi": 15,
+          "gap_lo": 10,
+          "op0": 5,
+          "op1": 2,
+          "shape": "slow_edge",
+          "slot": 2
+        },
+        {
+          "bug_id": "P3_0xb4",
+          "cs_hi": 8,
+          "cs_lo": 3,
+          "err_byte": 180,
+          "gap_hi": 5,
+          "gap_lo": 0,
+          "op0": 2,
+          "op1": 185,
+          "shape": "fast_edge",
+          "slot": 3
+        }
+      ]
+    },
+    {
+      "instance_id": "T02",
+      "norm_ops": [
+        159,
+        171,
+        4,
+        6
+      ],
+      "slots": [
+        {
+          "bug_id": "P0_0xb1",
+          "cs_hi": 7,
+          "cs_lo": 3,
+          "err_byte": 177,
+          "gap_hi": 4,
+          "gap_lo": 0,
+          "op0": 5,
+          "op1": 171,
+          "shape": "fast_edge",
+          "slot": 0
+        },
+        {
+          "bug_id": "P1_0xb2",
+          "cs_hi": 11,
+          "cs_lo": 6,
+          "err_byte": 178,
+          "gap_hi": 8,
+          "gap_lo": 3,
+          "op0": 53,
+          "op1": 6,
+          "shape": "interior_low",
+          "slot": 1
+        },
+        {
+          "bug_id": "P2_0xb3",
+          "cs_hi": 18,
+          "cs_lo": 15,
+          "err_byte": 179,
+          "gap_hi": 15,
+          "gap_lo": 12,
+          "op0": 4,
+          "op1": 53,
+          "shape": "slow_edge",
+          "slot": 2
+        },
+        {
+          "bug_id": "P3_0xb4",
+          "cs_hi": 17,
+          "cs_lo": 14,
+          "err_byte": 180,
+          "gap_hi": 14,
+          "gap_lo": 11,
+          "op0": 171,
+          "op1": 4,
+          "shape": "interior_high",
+          "slot": 3
+        }
+      ]
+    },
+    {
+      "instance_id": "T03",
+      "norm_ops": [
+        159,
+        6,
+        171,
+        5
+      ],
+      "slots": [
+        {
+          "bug_id": "P0_0xb1",
+          "cs_hi": 18,
+          "cs_lo": 15,
+          "err_byte": 177,
+          "gap_hi": 15,
+          "gap_lo": 12,
+          "op0": 4,
+          "op1": 2,
+          "shape": "slow_edge",
+          "slot": 0
+        },
+        {
+          "bug_id": "P1_0xb2",
+          "cs_hi": 6,
+          "cs_lo": 3,
+          "err_byte": 178,
+          "gap_hi": 3,
+          "gap_lo": 0,
+          "op0": 2,
+          "op1": 171,
+          "shape": "fast_edge",
+          "slot": 1
+        },
+        {
+          "bug_id": "P2_0xb3",
+          "cs_hi": 14,
+          "cs_lo": 10,
+          "err_byte": 179,
+          "gap_hi": 11,
+          "gap_lo": 7,
+          "op0": 5,
+          "op1": 53,
+          "shape": "interior_high",
+          "slot": 2
+        },
+        {
+          "bug_id": "P3_0xb4",
+          "cs_hi": 13,
+          "cs_lo": 8,
+          "err_byte": 180,
+          "gap_hi": 10,
+          "gap_lo": 5,
+          "op0": 185,
+          "op1": 5,
+          "shape": "interior_low",
+          "slot": 3
+        }
+      ]
+    },
+    {
+      "instance_id": "T04",
+      "norm_ops": [
+        2,
+        4,
+        6,
+        171
+      ],
+      "slots": [
+        {
+          "bug_id": "P0_0xb1",
+          "cs_hi": 6,
+          "cs_lo": 3,
+          "err_byte": 177,
+          "gap_hi": 3,
+          "gap_lo": 0,
+          "op0": 5,
+          "op1": 159,
+          "shape": "fast_edge",
+          "slot": 0
+        },
+        {
+          "bug_id": "P1_0xb2",
+          "cs_hi": 17,
+          "cs_lo": 14,
+          "err_byte": 178,
+          "gap_hi": 14,
+          "gap_lo": 11,
+          "op0": 185,
+          "op1": 4,
+          "shape": "interior_high",
+          "slot": 1
+        },
+        {
+          "bug_id": "P2_0xb3",
+          "cs_hi": 18,
+          "cs_lo": 14,
+          "err_byte": 179,
+          "gap_hi": 15,
+          "gap_lo": 11,
+          "op0": 171,
+          "op1": 2,
+          "shape": "slow_edge",
+          "slot": 2
+        },
+        {
+          "bug_id": "P3_0xb4",
+          "cs_hi": 13,
+          "cs_lo": 9,
+          "err_byte": 180,
+          "gap_hi": 10,
+          "gap_lo": 6,
+          "op0": 171,
+          "op1": 185,
+          "shape": "interior_low",
+          "slot": 3
+        }
+      ]
+    },
+    {
+      "instance_id": "T05",
+      "norm_ops": [
+        2,
+        5,
+        4,
+        53
+      ],
+      "slots": [
+        {
+          "bug_id": "P0_0xb1",
+          "cs_hi": 14,
+          "cs_lo": 11,
+          "err_byte": 177,
+          "gap_hi": 11,
+          "gap_lo": 8,
+          "op0": 5,
+          "op1": 53,
+          "shape": "interior_high",
+          "slot": 0
+        },
+        {
+          "bug_id": "P1_0xb2",
+          "cs_hi": 18,
+          "cs_lo": 15,
+          "err_byte": 178,
+          "gap_hi": 15,
+          "gap_lo": 12,
+          "op0": 4,
+          "op1": 2,
+          "shape": "slow_edge",
+          "slot": 1
+        },
+        {
+          "bug_id": "P2_0xb3",
+          "cs_hi": 12,
+          "cs_lo": 7,
+          "err_byte": 179,
+          "gap_hi": 9,
+          "gap_lo": 4,
+          "op0": 53,
+          "op1": 2,
+          "shape": "interior_low",
+          "slot": 2
+        },
+        {
+          "bug_id": "P3_0xb4",
+          "cs_hi": 6,
+          "cs_lo": 3,
+          "err_byte": 180,
+          "gap_hi": 3,
+          "gap_lo": 0,
+          "op0": 2,
+          "op1": 159,
+          "shape": "fast_edge",
+          "slot": 3
+        }
+      ]
+    },
+    {
+      "instance_id": "T06",
+      "norm_ops": [
+        6,
+        5,
+        171,
+        4
+      ],
+      "slots": [
+        {
+          "bug_id": "P0_0xb1",
+          "cs_hi": 16,
+          "cs_lo": 11,
+          "err_byte": 177,
+          "gap_hi": 13,
+          "gap_lo": 8,
+          "op0": 6,
+          "op1": 2,
+          "shape": "interior_high",
+          "slot": 0
+        },
+        {
+          "bug_id": "P1_0xb2",
+          "cs_hi": 8,
+          "cs_lo": 5,
+          "err_byte": 178,
+          "gap_hi": 5,
+          "gap_lo": 2,
+          "op0": 185,
+          "op1": 6,
+          "shape": "interior_low",
+          "slot": 1
+        },
+        {
+          "bug_id": "P2_0xb3",
+          "cs_hi": 6,
+          "cs_lo": 3,
+          "err_byte": 179,
+          "gap_hi": 3,
+          "gap_lo": 0,
+          "op0": 6,
+          "op1": 4,
+          "shape": "fast_edge",
+          "slot": 2
+        },
+        {
+          "bug_id": "P3_0xb4",
+          "cs_hi": 18,
+          "cs_lo": 14,
+          "err_byte": 180,
+          "gap_hi": 15,
+          "gap_lo": 11,
+          "op0": 5,
+          "op1": 6,
+          "shape": "slow_edge",
+          "slot": 3
+        }
+      ]
+    },
+    {
+      "instance_id": "T07",
+      "norm_ops": [
+        171,
+        5,
+        185,
+        2
+      ],
+      "slots": [
+        {
+          "bug_id": "P0_0xb1",
+          "cs_hi": 17,
+          "cs_lo": 13,
+          "err_byte": 177,
+          "gap_hi": 14,
+          "gap_lo": 10,
+          "op0": 171,
+          "op1": 4,
+          "shape": "interior_high",
+          "slot": 0
+        },
+        {
+          "bug_id": "P1_0xb2",
+          "cs_hi": 18,
+          "cs_lo": 15,
+          "err_byte": 178,
+          "gap_hi": 15,
+          "gap_lo": 12,
+          "op0": 6,
+          "op1": 2,
+          "shape": "slow_edge",
+          "slot": 1
+        },
+        {
+          "bug_id": "P2_0xb3",
+          "cs_hi": 11,
+          "cs_lo": 6,
+          "err_byte": 179,
+          "gap_hi": 8,
+          "gap_lo": 3,
+          "op0": 159,
+          "op1": 171,
+          "shape": "interior_low",
+          "slot": 2
+        },
+        {
+          "bug_id": "P3_0xb4",
+          "cs_hi": 6,
+          "cs_lo": 3,
+          "err_byte": 180,
+          "gap_hi": 3,
+          "gap_lo": 0,
+          "op0": 2,
+          "op1": 5,
+          "shape": "fast_edge",
+          "slot": 3
+        }
+      ]
+    },
+    {
+      "instance_id": "T08",
+      "norm_ops": [
+        5,
+        159,
+        185,
+        4
+      ],
+      "slots": [
+        {
+          "bug_id": "P0_0xb1",
+          "cs_hi": 18,
+          "cs_lo": 13,
+          "err_byte": 177,
+          "gap_hi": 15,
+          "gap_lo": 10,
+          "op0": 53,
+          "op1": 5,
+          "shape": "slow_edge",
+          "slot": 0
+        },
+        {
+          "bug_id": "P1_0xb2",
+          "cs_hi": 16,
+          "cs_lo": 12,
+          "err_byte": 178,
+          "gap_hi": 13,
+          "gap_lo": 9,
+          "op0": 185,
+          "op1": 6,
+          "shape": "interior_high",
+          "slot": 1
+        },
+        {
+          "bug_id": "P2_0xb3",
+          "cs_hi": 8,
+          "cs_lo": 5,
+          "err_byte": 179,
+          "gap_hi": 5,
+          "gap_lo": 2,
+          "op0": 5,
+          "op1": 185,
+          "shape": "interior_low",
+          "slot": 2
+        },
+        {
+          "bug_id": "P3_0xb4",
+          "cs_hi": 8,
+          "cs_lo": 3,
+          "err_byte": 180,
+          "gap_hi": 5,
+          "gap_lo": 0,
+          "op0": 171,
+          "op1": 185,
+          "shape": "fast_edge",
+          "slot": 3
+        }
+      ]
+    },
+    {
+      "instance_id": "T09",
+      "norm_ops": [
+        4,
+        53,
+        171,
+        6
+      ],
+      "slots": [
+        {
+          "bug_id": "P0_0xb1",
+          "cs_hi": 17,
+          "cs_lo": 13,
+          "err_byte": 177,
+          "gap_hi": 14,
+          "gap_lo": 10,
+          "op0": 4,
+          "op1": 2,
+          "shape": "interior_high",
+          "slot": 0
+        },
+        {
+          "bug_id": "P1_0xb2",
+          "cs_hi": 8,
+          "cs_lo": 3,
+          "err_byte": 178,
+          "gap_hi": 5,
+          "gap_lo": 0,
+          "op0": 6,
+          "op1": 5,
+          "shape": "fast_edge",
+          "slot": 1
+        },
+        {
+          "bug_id": "P2_0xb3",
+          "cs_hi": 12,
+          "cs_lo": 7,
+          "err_byte": 179,
+          "gap_hi": 9,
+          "gap_lo": 4,
+          "op0": 171,
+          "op1": 5,
+          "shape": "interior_low",
+          "slot": 2
+        },
+        {
+          "bug_id": "P3_0xb4",
+          "cs_hi": 18,
+          "cs_lo": 13,
+          "err_byte": 180,
+          "gap_hi": 15,
+          "gap_lo": 10,
+          "op0": 185,
+          "op1": 171,
+          "shape": "slow_edge",
+          "slot": 3
+        }
+      ]
+    }
+  ]
+}

@@ -204,6 +204,22 @@ class IcarusSimTransport(ProtocolTransport):
         if resp != "OK":
             raise ProtocolError(f"Unexpected seed response: {resp}")
 
+    def configure_param_slot(
+        self, slot: int, op0: int, op1: int, cs_lo: int, cs_hi: int, err_byte: int
+    ) -> None:
+        resp = self._send_line(
+            f"p {slot & 3} {op0 & 0xFF:02x} {op1 & 0xFF:02x} {int(cs_lo)} {int(cs_hi)} {err_byte & 0xFF:02x}"
+        )
+        if resp != "OK":
+            raise ProtocolError(f"Unexpected param-slot response: {resp}")
+
+    def configure_param_normals(self, norm_ops: Sequence[int]) -> None:
+        padded = list(norm_ops[:4]) + [0] * max(0, 4 - len(norm_ops))
+        hx = " ".join(f"{b & 0xFF:02x}" for b in padded)
+        resp = self._send_line(f"n {hx}")
+        if resp != "OK":
+            raise ProtocolError(f"Unexpected param-normal response: {resp}")
+
     def exchange(self, frame: Sequence[int]) -> List[int]:
         if len(frame) != 8:
             raise ValueError("UART request frame must be 8 bytes")

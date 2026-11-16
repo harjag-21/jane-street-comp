@@ -13,6 +13,7 @@
 //   6 = Noisy SPI mode-0 responder (`delay_ns` +/- `arg_d` ns LFSR jitter per trial)
 //   7 = Held-out Multi-bug stateful SPI (`delay_ns`: 0=Ref, 1=DUT, D1..D4 + held-out D5)
 //   8 = Held-out Shape Suite (`delay_ns`: 0=Ref, 1=DUT, 4 distinct failure-shape bugs H1..H4)
+//   9 = Independently parameterized 4-slot SPI target configured via stdin `p`/`n`
 module sim_explorer_tb;
   localparam integer CLKS_PER_BIT       = 8;
   localparam integer MODE_SPI           = 0;
@@ -24,6 +25,7 @@ module sim_explorer_tb;
   localparam integer MODE_SPI_NOISY     = 6;
   localparam integer MODE_SPI_HELD      = 7;
   localparam integer MODE_SPI_SHAPES    = 8;
+  localparam integer MODE_SPI_PARAM     = 9;
 
   reg        clk = 1'b0;
   reg        rst_n = 1'b0;
@@ -100,6 +102,21 @@ module sim_explorer_tb;
   integer    hs_cs_high_cnt = 100;
   integer    hs_last_gap    = 100;
 
+  // Parameterized 4-slot SPI target state (MODE_SPI_PARAM)
+  reg  [7:0] pt_op0       [0:3];
+  reg  [7:0] pt_op1       [0:3];
+  integer    pt_lo        [0:3];
+  integer    pt_hi        [0:3];
+  reg  [7:0] pt_err       [0:3];
+  reg  [7:0] pt_norm_op   [0:3];
+  reg  [7:0] pt_latched_err = 8'h00;
+  reg  [7:0] pt_prev_cmd    = 8'h00;
+  reg  [7:0] pt_tx_byte     = 8'h00;
+  reg  [7:0] pt_rx_byte     = 8'h00;
+  reg  [3:0] pt_bit_idx     = 4'd0;
+  integer    pt_cs_high_cnt = 100;
+  integer    pt_last_gap    = 100;
+
   reg  [7:0] uart_mon_byte = 8'h00;
   reg        uart_mon_seen = 1'b0;
   reg        uart_mon_busy = 1'b0;
@@ -120,7 +137,8 @@ module sim_explorer_tb;
   always @(*) begin
     if ((target_mode == MODE_SPI) || (target_mode == MODE_SPI_STATEFUL) ||
         (target_mode == MODE_SPI_MULTISPEC) || (target_mode == MODE_SPI_NOISY) ||
-        (target_mode == MODE_SPI_HELD) || (target_mode == MODE_SPI_SHAPES)) begin
+        (target_mode == MODE_SPI_HELD) || (target_mode == MODE_SPI_SHAPES) ||
+        (target_mode == MODE_SPI_PARAM)) begin
       uio_in = {4'hF, spi_miso_drv, 3'b111};
     end else if ((target_mode == MODE_I2C) || (target_mode == MODE_I2C_STRETCH)) begin
       uio_in = {6'h3F, sda_bus, scl_bus};
@@ -423,6 +441,73 @@ module sim_explorer_tb;
     end
   end
 
+  // MODE_SPI_PARAM: independently parameterized 4-slot SPI target
+  always @(posedge clk) begin
+    if (target_mode == MODE_SPI_PARAM) begin
+      if (spi_cs_n) begin
+        pt_cs_high_cnt <= pt_cs_high_cnt + 1;
+      end else begin
+        pt_cs_high_cnt <= 0;
+      end
+    end
+  end
+
+  always @(negedge spi_cs_n) begin : param_cs_blk
+    reg is_dut;
+    if (target_mode == MODE_SPI_PARAM) begin
+      is_dut = (spi_delay_ns != 0);
+      pt_last_gap = pt_cs_high_cnt;
+      if (is_dut && (pt_latched_err != 8'h00)) begin
+        pt_tx_byte = pt_latched_err;
+      end else if ((pt_prev_cmd != 8'h00) && (pt_prev_cmd == pt_norm_op[0])) begin
+        pt_tx_byte = 8'h11;
+      end else if ((pt_prev_cmd != 8'h00) && (pt_prev_cmd == pt_norm_op[1])) begin
+        pt_tx_byte = 8'h22;
+      end else if ((pt_prev_cmd != 8'h00) && (pt_prev_cmd == pt_norm_op[2])) begin
+        pt_tx_byte = 8'h33;
+      end else if ((pt_prev_cmd != 8'h00) && (pt_prev_cmd == pt_norm_op[3])) begin
+        pt_tx_byte = 8'h44;
+      end else begin
+        pt_tx_byte = 8'h00;
+      end
+      spi_miso_drv <= pt_tx_byte[7];
+      pt_bit_idx   = 4'd0;
+      pt_rx_byte   = 8'h00;
+    end
+  end
+
+  always @(posedge spi_sclk) begin : param_rx_blk
+    reg [7:0] next_rx;
+    reg       is_dut;
+    integer   sk;
+    if ((target_mode == MODE_SPI_PARAM) && !spi_cs_n) begin
+      next_rx    = {pt_rx_byte[6:0], uio_out[2]};
+      pt_rx_byte = next_rx;
+      if (pt_bit_idx == 4'd7) begin
+        is_dut         = (spi_delay_ns != 0);
+        spi_mosi_rx    = next_rx;
+        pt_latched_err = 8'h00;
+        for (sk = 0; sk < 4; sk = sk + 1) begin
+          if (is_dut && (pt_err[sk] != 8'h00) &&
+              (pt_prev_cmd == pt_op0[sk]) && (next_rx == pt_op1[sk]) &&
+              (pt_last_gap >= pt_lo[sk]) && (pt_last_gap <= pt_hi[sk])) begin
+            pt_latched_err = pt_err[sk];
+          end
+        end
+        pt_prev_cmd = next_rx;
+      end
+    end
+  end
+
+  always @(negedge spi_sclk) begin
+    if ((target_mode == MODE_SPI_PARAM) && !spi_cs_n) begin
+      if (pt_bit_idx < 4'd7) begin
+        pt_bit_idx   = pt_bit_idx + 4'd1;
+        spi_miso_drv <= pt_tx_byte[7 - pt_bit_idx];
+      end
+    end
+  end
+
   // MODE_UART: framed 8N1 receiver at fixed 8 clks/bit on uio[0]
   wire uart_tx_line = uio_oe[0] ? uio_out[0] : 1'b1;
   always @(negedge uart_tx_line) begin : uart_mon_blk
@@ -538,7 +623,7 @@ module sim_explorer_tb;
   endtask
 
   integer cmd_ch;
-  integer arg_a, arg_b, arg_c, arg_d;
+  integer arg_a, arg_b, arg_c, arg_d, arg_e, arg_f;
   integer i;
   reg [7:0] tx_buf [0:7];
   reg [7:0] rx_buf [0:7];
@@ -546,6 +631,14 @@ module sim_explorer_tb;
   reg       all_ok;
 
   initial begin
+    for (i = 0; i < 4; i = i + 1) begin
+      pt_op0[i]     = 8'h00;
+      pt_op1[i]     = 8'h00;
+      pt_lo[i]      = 0;
+      pt_hi[i]      = 0;
+      pt_err[i]     = 8'h00;
+      pt_norm_op[i] = 8'h00;
+    end
     ena = 1'b1;
     ui_in = 8'h01;
     rst_n = 1'b0;
@@ -585,6 +678,10 @@ module sim_explorer_tb;
           hs_prev_cmd    = 8'h00;
           hs_cs_high_cnt = 100;
           hs_last_gap    = 100;
+          pt_latched_err = 8'h00;
+          pt_prev_cmd    = 8'h00;
+          pt_cs_high_cnt = 100;
+          pt_last_gap    = 100;
           cur_tx_delay_ns = spi_delay_ns;
           spi_mosi_rx    = 8'h00;
           spi_miso_drv   = spi_resp_byte[7];
@@ -648,6 +745,29 @@ module sim_explorer_tb;
           hs_prev_cmd    = 8'h00;
           hs_cs_high_cnt = 100;
           hs_last_gap    = 100;
+          pt_latched_err = 8'h00;
+          pt_prev_cmd    = 8'h00;
+          pt_cs_high_cnt = 100;
+          pt_last_gap    = 100;
+          $display("OK");
+          $fflush(32'h8000_0001);
+        end
+      end else if (cmd_ch == "p") begin
+        if ($fscanf(32'h8000_0000, "%d %x %x %d %d %x", arg_a, arg_b, arg_c, arg_d, arg_e, arg_f) == 6) begin
+          pt_op0[arg_a[1:0]] = arg_b[7:0];
+          pt_op1[arg_a[1:0]] = arg_c[7:0];
+          pt_lo[arg_a[1:0]]  = arg_d;
+          pt_hi[arg_a[1:0]]  = arg_e;
+          pt_err[arg_a[1:0]] = arg_f[7:0];
+          $display("OK");
+          $fflush(32'h8000_0001);
+        end
+      end else if (cmd_ch == "n") begin
+        if ($fscanf(32'h8000_0000, "%x %x %x %x", arg_a, arg_b, arg_c, arg_d) == 4) begin
+          pt_norm_op[0] = arg_a[7:0];
+          pt_norm_op[1] = arg_b[7:0];
+          pt_norm_op[2] = arg_c[7:0];
+          pt_norm_op[3] = arg_d[7:0];
           $display("OK");
           $fflush(32'h8000_0001);
         end

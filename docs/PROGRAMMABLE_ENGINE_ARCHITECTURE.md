@@ -8,7 +8,7 @@ The fixed UART-to-SPI path (`master` / `67f63ab`) established a clean Tiny Tapeo
 
 ## Implemented v1 architecture
 
-One deterministic, single-issue microsequencer (`protocol_sequencer` in `src/protocol_sequencer.v`) owns eight bidirectional protocol pins (`uio[7:0]`) and executes one instruction per core clock cycle except during `WAIT` / `WAIT_PARAM` holds. It intentionally omits instruction caches, pipelines, privilege levels, concurrent engines, and autonomous on-chip search loops in v1.
+One deterministic, single-issue microsequencer (`protocol_sequencer` in `src/protocol_sequencer.v`) owns eight bidirectional protocol pins (`uio[7:0]`) and executes one instruction per core clock cycle except during `WAIT` / `WAIT_PARAM` / `WAIT_EDGE` holds. It intentionally omits instruction caches, pipelines, privilege levels, concurrent engines, and autonomous on-chip search loops in v1.
 
 | Block | v1 implementation | Reason |
 |---|---|---|
