@@ -168,13 +168,21 @@ async def test_loader_validation_recovery_and_deselect(dut):
     assert ((int(dut.uo_out.value) >> 2) & 1) == 0
 
     # 6. Illegal opcode traps into ENG_FAULT and clears uio_oe
-    resp = await load_program(dut, [0x20FF, 0xD000])  # OE 0xFF, illegal 0xD
+    resp = await load_program(dut, [0x20FF, 0xF000])  # OE 0xFF, illegal 0xF
     assert resp[2] == 0
     resp = await send_cmd(dut, UART_OP_START, req_id=9)
     assert resp[2] == 0
     state = await wait_halted_or_fault(dut)
     assert state == 3
     assert int(dut.uio_oe.value) == 0
+
+    # 6b. OP_PATCH_WORD (0x19) mutates word 1 to HALT (0xA000) in 1 UART command
+    resp = await send_cmd(dut, 0x19, req_id=10, arg0=1, arg1=0x00, arg2=0xA0)
+    assert resp[2] == 0
+    resp = await send_cmd(dut, UART_OP_START, req_id=11)
+    assert resp[2] == 0
+    state = await wait_halted_or_fault(dut)
+    assert state == 2
 
     # 7. Deselection (ena=0) clears prog_valid and forces reload
     assert ((int(dut.uo_out.value) >> 2) & 1) == 1
