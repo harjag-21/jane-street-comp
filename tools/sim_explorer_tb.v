@@ -12,6 +12,7 @@
 //   5 = Multi-bug stateful SPI peripheral (`delay_ns`: 0=Ref, 1=DUT, 4 timing+state bugs)
 //   6 = Noisy SPI mode-0 responder (`delay_ns` +/- `arg_d` ns LFSR jitter per trial)
 //   7 = Held-out Multi-bug stateful SPI (`delay_ns`: 0=Ref, 1=DUT, D1..D4 + held-out D5)
+//   8 = Held-out Shape Suite (`delay_ns`: 0=Ref, 1=DUT, 4 distinct failure-shape bugs H1..H4)
 module sim_explorer_tb;
   localparam integer CLKS_PER_BIT       = 8;
   localparam integer MODE_SPI           = 0;
@@ -22,6 +23,7 @@ module sim_explorer_tb;
   localparam integer MODE_SPI_MULTISPEC = 5;
   localparam integer MODE_SPI_NOISY     = 6;
   localparam integer MODE_SPI_HELD      = 7;
+  localparam integer MODE_SPI_SHAPES    = 8;
 
   reg        clk = 1'b0;
   reg        rst_n = 1'b0;
@@ -87,6 +89,17 @@ module sim_explorer_tb;
   integer    ms_cs_high_cnt = 100;
   integer    ms_last_cs_gap = 100;
 
+  // Held-out failure-shape target state (MODE_SPI_SHAPES)
+  reg        hs_step1       = 1'b0;
+  reg        hs_step2       = 1'b0;
+  reg  [7:0] hs_latched_err = 8'h00;
+  reg  [7:0] hs_prev_cmd    = 8'h00;
+  reg  [7:0] hs_tx_byte     = 8'h00;
+  reg  [7:0] hs_rx_byte     = 8'h00;
+  reg  [3:0] hs_bit_idx     = 4'd0;
+  integer    hs_cs_high_cnt = 100;
+  integer    hs_last_gap    = 100;
+
   reg  [7:0] uart_mon_byte = 8'h00;
   reg        uart_mon_seen = 1'b0;
   reg        uart_mon_busy = 1'b0;
@@ -107,7 +120,7 @@ module sim_explorer_tb;
   always @(*) begin
     if ((target_mode == MODE_SPI) || (target_mode == MODE_SPI_STATEFUL) ||
         (target_mode == MODE_SPI_MULTISPEC) || (target_mode == MODE_SPI_NOISY) ||
-        (target_mode == MODE_SPI_HELD)) begin
+        (target_mode == MODE_SPI_HELD) || (target_mode == MODE_SPI_SHAPES)) begin
       uio_in = {4'hF, spi_miso_drv, 3'b111};
     end else if ((target_mode == MODE_I2C) || (target_mode == MODE_I2C_STRETCH)) begin
       uio_in = {6'h3F, sda_bus, scl_bus};
@@ -324,6 +337,92 @@ module sim_explorer_tb;
     end
   end
 
+  // MODE_SPI_SHAPES: held-out behavioral suite with distinct timing-failure shapes H1..H4
+  always @(posedge clk) begin
+    if (target_mode == MODE_SPI_SHAPES) begin
+      if (spi_cs_n) begin
+        hs_cs_high_cnt <= hs_cs_high_cnt + 1;
+      end else begin
+        hs_cs_high_cnt <= 0;
+      end
+    end
+  end
+
+  always @(negedge spi_cs_n) begin : shapes_cs_blk
+    reg is_dut;
+    if (target_mode == MODE_SPI_SHAPES) begin
+      is_dut = (spi_delay_ns != 0);
+      hs_last_gap = hs_cs_high_cnt;
+      if (is_dut && (hs_latched_err != 8'h00)) begin
+        hs_tx_byte = hs_latched_err;
+      end else if (hs_step2) begin
+        hs_tx_byte = 8'h5A;
+      end else if (hs_prev_cmd == 8'h9F) begin
+        hs_tx_byte = 8'hA5;
+      end else if (hs_prev_cmd == 8'h06) begin
+        hs_tx_byte = 8'h02;
+      end else begin
+        hs_tx_byte = 8'h00;
+      end
+      spi_miso_drv <= hs_tx_byte[7];
+      hs_bit_idx   = 4'd0;
+      hs_rx_byte   = 8'h00;
+    end
+  end
+
+  always @(posedge spi_sclk) begin : shapes_rx_blk
+    reg [7:0] next_rx;
+    reg       is_dut;
+    if ((target_mode == MODE_SPI_SHAPES) && !spi_cs_n) begin
+      next_rx    = {hs_rx_byte[6:0], uio_out[2]};
+      hs_rx_byte = next_rx;
+      if (hs_bit_idx == 4'd7) begin
+        is_dut         = (spi_delay_ns != 0);
+        spi_mosi_rx    = next_rx;
+        hs_latched_err = 8'h00;
+        hs_step2       = 1'b0;
+
+        // H1 (interior notch): 0xAB -> 0x02 at gap_wait in {8,9} (hs_last_gap in {11,12})
+        if (is_dut && (hs_prev_cmd == 8'hAB) && (next_rx == 8'h02) &&
+            (hs_last_gap >= 11) && (hs_last_gap <= 12)) begin
+          hs_latched_err = 8'h33;
+        end
+        // H2 (bimodal disconnected bands): 0x04 -> 0x9F at gap_wait in {2,3,12,13} (hs_last_gap 5..6 or 15..16)
+        if (is_dut && (hs_prev_cmd == 8'h04) && (next_rx == 8'h9F) &&
+            (((hs_last_gap >= 5) && (hs_last_gap <= 6)) || ((hs_last_gap >= 15) && (hs_last_gap <= 16)))) begin
+          hs_latched_err = 8'h77;
+        end
+        // H3 (3-cmd cascade): 0xB9 (quiet) -> 0x35; DUT faults when gap_wait in {4,5,6} (hs_last_gap 7..9)
+        if (hs_step1 && (next_rx == 8'h35)) begin
+          hs_step2 = 1'b1;
+          if (is_dut && (hs_last_gap >= 7) && (hs_last_gap <= 9)) begin
+            hs_latched_err = 8'hE1;
+          end
+        end
+        // H4 (upper watchdog tail): 0x05 -> 0x02 at gap_wait in {14,15} (hs_last_gap >= 17)
+        if (is_dut && (hs_prev_cmd == 8'h05) && (next_rx == 8'h02) && (hs_last_gap >= 17)) begin
+          hs_latched_err = 8'hC4;
+        end
+
+        if (next_rx == 8'hB9) begin
+          hs_step1 = 1'b1;
+        end else if (next_rx != 8'h35) begin
+          hs_step1 = 1'b0;
+        end
+        hs_prev_cmd = next_rx;
+      end
+    end
+  end
+
+  always @(negedge spi_sclk) begin
+    if ((target_mode == MODE_SPI_SHAPES) && !spi_cs_n) begin
+      if (hs_bit_idx < 4'd7) begin
+        hs_bit_idx   = hs_bit_idx + 4'd1;
+        spi_miso_drv <= hs_tx_byte[7 - hs_bit_idx];
+      end
+    end
+  end
+
   // MODE_UART: framed 8N1 receiver at fixed 8 clks/bit on uio[0]
   wire uart_tx_line = uio_oe[0] ? uio_out[0] : 1'b1;
   always @(negedge uart_tx_line) begin : uart_mon_blk
@@ -480,6 +579,12 @@ module sim_explorer_tb;
           ms_prev_cmd    = 8'h00;
           ms_cs_high_cnt = 100;
           ms_last_cs_gap = 100;
+          hs_step1       = 1'b0;
+          hs_step2       = 1'b0;
+          hs_latched_err = 8'h00;
+          hs_prev_cmd    = 8'h00;
+          hs_cs_high_cnt = 100;
+          hs_last_gap    = 100;
           cur_tx_delay_ns = spi_delay_ns;
           spi_mosi_rx    = 8'h00;
           spi_miso_drv   = spi_resp_byte[7];
@@ -537,6 +642,12 @@ module sim_explorer_tb;
           ms_prev_cmd    = 8'h00;
           ms_cs_high_cnt = 100;
           ms_last_cs_gap = 100;
+          hs_step1       = 1'b0;
+          hs_step2       = 1'b0;
+          hs_latched_err = 8'h00;
+          hs_prev_cmd    = 8'h00;
+          hs_cs_high_cnt = 100;
+          hs_last_gap    = 100;
           $display("OK");
           $fflush(32'h8000_0001);
         end
