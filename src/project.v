@@ -115,6 +115,12 @@ module tt_um_example #(
     end
   endfunction
 
+  wire [7:0] rx_crc_init = crc8_byte(8'h00, 8'hA5);
+  wire [7:0] rx_crc_next = crc8_byte(crc_work, rx_byte);
+  wire [7:0] prog_crc_s1 = crc8_byte(calc_crc, req_arg1);
+  wire [7:0] prog_crc_s2 = crc8_byte(prog_crc_s1, req_arg2);
+  wire [7:0] tx_crc_next = crc8_byte(tx_crc, response[resp_idx]);
+
   protocol_sequencer #(
       .PROG_DEPTH(PROG_DEPTH),
       .ADDR_W(6),
@@ -317,7 +323,7 @@ module tt_um_example #(
         CMD_SYNC: begin
           frame_timer <= 16'd0;
           if (rx_byte_valid && (rx_byte == 8'hA5)) begin
-            crc_work  <= crc8_byte(8'h00, 8'hA5);
+            crc_work  <= rx_crc_init;
             body_idx  <= 3'd0;
             cmd_state <= CMD_BODY;
           end
@@ -326,7 +332,7 @@ module tt_um_example #(
         CMD_BODY: begin
           if (rx_byte_valid) begin
             frame_timer <= 16'd0;
-            crc_work    <= crc8_byte(crc_work, rx_byte);
+            crc_work    <= rx_crc_next;
             case (body_idx)
               3'd0: req_op   <= rx_byte;
               3'd1: req_id   <= rx_byte;
@@ -415,7 +421,7 @@ module tt_um_example #(
                 prog_we    <= 1'b1;
                 prog_addr  <= req_arg0[5:0];
                 prog_wdata <= {req_arg2, req_arg1};
-                calc_crc   <= crc8_byte(crc8_byte(calc_crc, req_arg1), req_arg2);
+                calc_crc   <= prog_crc_s2;
                 calc_sum   <= calc_sum + req_arg1 + req_arg2;
                 load_idx   <= load_idx + 7'd1;
                 resp_d0    <= req_arg0;
@@ -517,7 +523,7 @@ module tt_um_example #(
               tx_data <= tx_crc;
             end else begin
               tx_data <= response[resp_idx];
-              tx_crc  <= crc8_byte(tx_crc, response[resp_idx]);
+              tx_crc  <= tx_crc_next;
             end
             tx_start  <= 1'b1;
             cmd_state <= CMD_TX_BUSY;
@@ -553,7 +559,7 @@ module tt_um_example #(
   assign uo_out[5]   = event_overflow;
   assign uo_out[7:6] = 2'b00;
 
-  wire _unused = &{ui_in[7:1], 1'b0};
+  wire _unused = &{ui_in[7:1], req_arg3, 1'b0};
 
 endmodule
 `default_nettype wire
