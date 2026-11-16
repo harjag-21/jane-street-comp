@@ -11,6 +11,7 @@
 //   4 = I2C clock-stretching responder (`stretch_cycles` on SCL after release)
 //   5 = Multi-bug stateful SPI peripheral (`delay_ns`: 0=Ref, 1=DUT, 4 timing+state bugs)
 //   6 = Noisy SPI mode-0 responder (`delay_ns` +/- `arg_d` ns LFSR jitter per trial)
+//   7 = Held-out Multi-bug stateful SPI (`delay_ns`: 0=Ref, 1=DUT, D1..D4 + held-out D5)
 module sim_explorer_tb;
   localparam integer CLKS_PER_BIT       = 8;
   localparam integer MODE_SPI           = 0;
@@ -20,6 +21,7 @@ module sim_explorer_tb;
   localparam integer MODE_I2C_STRETCH   = 4;
   localparam integer MODE_SPI_MULTISPEC = 5;
   localparam integer MODE_SPI_NOISY     = 6;
+  localparam integer MODE_SPI_HELD      = 7;
 
   reg        clk = 1'b0;
   reg        rst_n = 1'b0;
@@ -77,6 +79,7 @@ module sim_explorer_tb;
   reg        ms_prog_done   = 1'b0;
   reg        ms_err         = 1'b0;
   reg        ms_read_glitch = 1'b0;
+  reg        ms_cfg_glitch  = 1'b0;
   reg  [7:0] ms_prev_cmd    = 8'h00;
   reg  [7:0] ms_tx_byte     = 8'h00;
   reg  [7:0] ms_rx_byte     = 8'h00;
@@ -103,7 +106,8 @@ module sim_explorer_tb;
 
   always @(*) begin
     if ((target_mode == MODE_SPI) || (target_mode == MODE_SPI_STATEFUL) ||
-        (target_mode == MODE_SPI_MULTISPEC) || (target_mode == MODE_SPI_NOISY)) begin
+        (target_mode == MODE_SPI_MULTISPEC) || (target_mode == MODE_SPI_NOISY) ||
+        (target_mode == MODE_SPI_HELD)) begin
       uio_in = {4'hF, spi_miso_drv, 3'b111};
     end else if ((target_mode == MODE_I2C) || (target_mode == MODE_I2C_STRETCH)) begin
       uio_in = {6'h3F, sda_bus, scl_bus};
@@ -207,9 +211,11 @@ module sim_explorer_tb;
     end
   end
 
-  // MODE_SPI_MULTISPEC (`spi_delay_ns`: 0=Reference, !=0=Buggy DUT with 4 timing bugs D1..D4)
+  // MODE_SPI_MULTISPEC & MODE_SPI_HELD (`spi_delay_ns`: 0=Reference, !=0=Buggy DUT)
+  wire is_multispec_mode = (target_mode == MODE_SPI_MULTISPEC) || (target_mode == MODE_SPI_HELD);
+
   always @(posedge clk) begin
-    if (target_mode == MODE_SPI_MULTISPEC) begin
+    if (is_multispec_mode) begin
       if (spi_cs_n) begin
         ms_cs_high_cnt <= ms_cs_high_cnt + 1;
       end else begin
@@ -220,7 +226,7 @@ module sim_explorer_tb;
 
   always @(negedge spi_cs_n) begin : multispec_cs_blk
     reg is_dut;
-    if (target_mode == MODE_SPI_MULTISPEC) begin
+    if (is_multispec_mode) begin
       is_dut = (spi_delay_ns != 0);
       ms_last_cs_gap = ms_cs_high_cnt;
 
@@ -238,6 +244,8 @@ module sim_explorer_tb;
 
       if (ms_sleep) begin
         ms_tx_byte = 8'hFF;
+      end else if (ms_cfg_glitch) begin
+        ms_tx_byte = 8'h66;
       end else if (ms_read_glitch) begin
         ms_tx_byte = 8'h99;
       end else if (ms_err) begin
@@ -259,7 +267,7 @@ module sim_explorer_tb;
   always @(posedge spi_sclk) begin : multispec_rx_blk
     reg [7:0] next_rx;
     reg       is_dut;
-    if ((target_mode == MODE_SPI_MULTISPEC) && !spi_cs_n) begin
+    if (is_multispec_mode && !spi_cs_n) begin
       next_rx    = {ms_rx_byte[6:0], uio_out[2]};
       ms_rx_byte = next_rx;
       if (ms_bit_idx == 4'd7) begin
@@ -267,10 +275,17 @@ module sim_explorer_tb;
         spi_mosi_rx = next_rx;
         ms_woke_flag   = 1'b0;
         ms_read_glitch = 1'b0;
+        ms_cfg_glitch  = 1'b0;
 
         // D4 (fast_read_corrupt): 0x9F followed quickly (cs_high <= 4 / gap_wait<=1) by 0x35 corrupts read
         if (!ms_sleep && is_dut && (ms_prev_cmd == 8'h9F) && (next_rx == 8'h35) && (ms_last_cs_gap <= 4)) begin
           ms_read_glitch = 1'b1;
+        end
+        // Held-out D5 (cfg_rd_wrdi_race): 0x35 followed by 0x04 in interior window (6<=cs_high<=8 / gap_wait 3..5) latches glitch
+        if ((target_mode == MODE_SPI_HELD) && !ms_sleep && is_dut &&
+            (ms_prev_cmd == 8'h35) && (next_rx == 8'h04) &&
+            (ms_last_cs_gap >= 6) && (ms_last_cs_gap <= 8)) begin
+          ms_cfg_glitch = 1'b1;
         end
 
         if (!ms_sleep) begin
@@ -301,7 +316,7 @@ module sim_explorer_tb;
   end
 
   always @(negedge spi_sclk) begin
-    if ((target_mode == MODE_SPI_MULTISPEC) && !spi_cs_n) begin
+    if (is_multispec_mode && !spi_cs_n) begin
       if (ms_bit_idx < 4'd7) begin
         ms_bit_idx   = ms_bit_idx + 4'd1;
         spi_miso_drv <= ms_tx_byte[7 - ms_bit_idx];
@@ -461,6 +476,7 @@ module sim_explorer_tb;
           ms_prog_done   = 1'b0;
           ms_err         = 1'b0;
           ms_read_glitch = 1'b0;
+          ms_cfg_glitch  = 1'b0;
           ms_prev_cmd    = 8'h00;
           ms_cs_high_cnt = 100;
           ms_last_cs_gap = 100;
@@ -517,6 +533,7 @@ module sim_explorer_tb;
           ms_prog_done   = 1'b0;
           ms_err         = 1'b0;
           ms_read_glitch = 1'b0;
+          ms_cfg_glitch  = 1'b0;
           ms_prev_cmd    = 8'h00;
           ms_cs_high_cnt = 100;
           ms_last_cs_gap = 100;

@@ -1,0 +1,5813 @@
+{
+  "budget_per_seed": 100,
+  "bug_classes": [
+    "D1_wren_fast_drop",
+    "D2_wakeup_slow_recovery",
+    "D3_prog_wren_timeout",
+    "D4_fast_read_corrupt",
+    "D5_cfg_rd_wrdi_race"
+  ],
+  "elapsed_seconds": 597.38,
+  "evidence_class": "rtl_simulation_feedback_fuzz_benchmark",
+  "minimized_and_replayed_examples": {
+    "D1_wren_fast_drop": {
+      "discovered_example": {
+        "commands": [
+          4,
+          6,
+          159
+        ],
+        "commands_hex": [
+          "0x04",
+          "0x06",
+          "0x9f"
+        ],
+        "dut_bytes_hex": [
+          "0x00",
+          "0x00",
+          "0x00"
+        ],
+        "gap_wait": 1,
+        "ref_bytes_hex": [
+          "0x00",
+          "0x00",
+          "0x02"
+        ],
+        "trial_index": 32
+      },
+      "minimized": {
+        "failing_gap_wait": 1,
+        "highest_failing_cs_high_cycles": 4,
+        "highest_failing_gap_wait": 2,
+        "highest_passing_below_fail": null,
+        "initial_commands_hex": [
+          "0x04",
+          "0x06",
+          "0x9f"
+        ],
+        "local_failing_window": [
+          0,
+          2
+        ],
+        "lowest_failing_gap_wait": 0,
+        "lowest_passing_above_fail": 3,
+        "lowest_passing_cs_high_cycles": 5,
+        "lowest_passing_gap_wait": 3,
+        "minimized_commands": [
+          6,
+          159
+        ],
+        "minimized_commands_hex": [
+          "0x06",
+          "0x9f"
+        ],
+        "passing_gaps": [
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "reduction_steps": [
+          {
+            "candidate_hex": [
+              "0x06",
+              "0x9f"
+            ],
+            "diverged": true,
+            "dropped_index": 0,
+            "gap_wait": 1
+          },
+          {
+            "candidate_hex": [
+              "0x9f"
+            ],
+            "diverged": false,
+            "dropped_index": 0,
+            "gap_wait": 1
+          },
+          {
+            "candidate_hex": [
+              "0x06"
+            ],
+            "diverged": false,
+            "dropped_index": 1,
+            "gap_wait": 1
+          }
+        ],
+        "sequence_reduction": "3 -> 2 transactions",
+        "window_scan": [
+          {
+            "cs_high_cycles": 2,
+            "diverged": true,
+            "dut_sample_reg": 0,
+            "gap_wait": 0,
+            "ref_sample_reg": 2
+          },
+          {
+            "cs_high_cycles": 3,
+            "diverged": true,
+            "dut_sample_reg": 0,
+            "gap_wait": 1,
+            "ref_sample_reg": 2
+          },
+          {
+            "cs_high_cycles": 4,
+            "diverged": true,
+            "dut_sample_reg": 0,
+            "gap_wait": 2,
+            "ref_sample_reg": 2
+          },
+          {
+            "cs_high_cycles": 5,
+            "diverged": false,
+            "dut_sample_reg": 2,
+            "gap_wait": 3,
+            "ref_sample_reg": 2
+          },
+          {
+            "cs_high_cycles": 6,
+            "diverged": false,
+            "dut_sample_reg": 2,
+            "gap_wait": 4,
+            "ref_sample_reg": 2
+          },
+          {
+            "cs_high_cycles": 7,
+            "diverged": false,
+            "dut_sample_reg": 2,
+            "gap_wait": 5,
+            "ref_sample_reg": 2
+          },
+          {
+            "cs_high_cycles": 8,
+            "diverged": false,
+            "dut_sample_reg": 2,
+            "gap_wait": 6,
+            "ref_sample_reg": 2
+          },
+          {
+            "cs_high_cycles": 9,
+            "diverged": false,
+            "dut_sample_reg": 2,
+            "gap_wait": 7,
+            "ref_sample_reg": 2
+          },
+          {
+            "cs_high_cycles": 10,
+            "diverged": false,
+            "dut_sample_reg": 2,
+            "gap_wait": 8,
+            "ref_sample_reg": 2
+          },
+          {
+            "cs_high_cycles": 11,
+            "diverged": false,
+            "dut_sample_reg": 2,
+            "gap_wait": 9,
+            "ref_sample_reg": 2
+          },
+          {
+            "cs_high_cycles": 12,
+            "diverged": false,
+            "dut_sample_reg": 2,
+            "gap_wait": 10,
+            "ref_sample_reg": 2
+          },
+          {
+            "cs_high_cycles": 13,
+            "diverged": false,
+            "dut_sample_reg": 2,
+            "gap_wait": 11,
+            "ref_sample_reg": 2
+          },
+          {
+            "cs_high_cycles": 14,
+            "diverged": false,
+            "dut_sample_reg": 2,
+            "gap_wait": 12,
+            "ref_sample_reg": 2
+          },
+          {
+            "cs_high_cycles": 15,
+            "diverged": false,
+            "dut_sample_reg": 2,
+            "gap_wait": 13,
+            "ref_sample_reg": 2
+          },
+          {
+            "cs_high_cycles": 16,
+            "diverged": false,
+            "dut_sample_reg": 2,
+            "gap_wait": 14,
+            "ref_sample_reg": 2
+          },
+          {
+            "cs_high_cycles": 17,
+            "diverged": false,
+            "dut_sample_reg": 2,
+            "gap_wait": 15,
+            "ref_sample_reg": 2
+          }
+        ]
+      },
+      "replay_at_discovered_gap": {
+        "deterministic_divergence_matches": 5,
+        "dut_observed_bytes_hex": [
+          "0x00",
+          "0x00"
+        ],
+        "dut_observed_hex": "0x00",
+        "ref_observed_bytes_hex": [
+          "0x00",
+          "0x02"
+        ],
+        "ref_observed_hex": "0x02",
+        "repeats": 5,
+        "replay_rate": 1.0
+      }
+    },
+    "D2_wakeup_slow_recovery": {
+      "discovered_example": {
+        "commands": [
+          185,
+          171,
+          159
+        ],
+        "commands_hex": [
+          "0xb9",
+          "0xab",
+          "0x9f"
+        ],
+        "dut_bytes_hex": [
+          "0x00",
+          "0xff",
+          "0xff"
+        ],
+        "gap_wait": 0,
+        "ref_bytes_hex": [
+          "0x00",
+          "0xff",
+          "0x08"
+        ],
+        "trial_index": 63
+      },
+      "minimized": {
+        "failing_gap_wait": 0,
+        "highest_failing_cs_high_cycles": 8,
+        "highest_failing_gap_wait": 6,
+        "highest_passing_below_fail": null,
+        "initial_commands_hex": [
+          "0xb9",
+          "0xab",
+          "0x9f"
+        ],
+        "local_failing_window": [
+          0,
+          6
+        ],
+        "lowest_failing_gap_wait": 0,
+        "lowest_passing_above_fail": 7,
+        "lowest_passing_cs_high_cycles": 9,
+        "lowest_passing_gap_wait": 7,
+        "minimized_commands": [
+          185,
+          171,
+          159
+        ],
+        "minimized_commands_hex": [
+          "0xb9",
+          "0xab",
+          "0x9f"
+        ],
+        "passing_gaps": [
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "reduction_steps": [
+          {
+            "candidate_hex": [
+              "0xab",
+              "0x9f"
+            ],
+            "diverged": false,
+            "dropped_index": 0,
+            "gap_wait": 0
+          },
+          {
+            "candidate_hex": [
+              "0xb9",
+              "0x9f"
+            ],
+            "diverged": false,
+            "dropped_index": 1,
+            "gap_wait": 0
+          },
+          {
+            "candidate_hex": [
+              "0xb9",
+              "0xab"
+            ],
+            "diverged": false,
+            "dropped_index": 2,
+            "gap_wait": 0
+          }
+        ],
+        "sequence_reduction": "3 -> 3 transactions",
+        "window_scan": [
+          {
+            "cs_high_cycles": 2,
+            "diverged": true,
+            "dut_sample_reg": 255,
+            "gap_wait": 0,
+            "ref_sample_reg": 8
+          },
+          {
+            "cs_high_cycles": 3,
+            "diverged": true,
+            "dut_sample_reg": 255,
+            "gap_wait": 1,
+            "ref_sample_reg": 8
+          },
+          {
+            "cs_high_cycles": 4,
+            "diverged": true,
+            "dut_sample_reg": 255,
+            "gap_wait": 2,
+            "ref_sample_reg": 8
+          },
+          {
+            "cs_high_cycles": 5,
+            "diverged": true,
+            "dut_sample_reg": 255,
+            "gap_wait": 3,
+            "ref_sample_reg": 8
+          },
+          {
+            "cs_high_cycles": 6,
+            "diverged": true,
+            "dut_sample_reg": 255,
+            "gap_wait": 4,
+            "ref_sample_reg": 8
+          },
+          {
+            "cs_high_cycles": 7,
+            "diverged": true,
+            "dut_sample_reg": 255,
+            "gap_wait": 5,
+            "ref_sample_reg": 8
+          },
+          {
+            "cs_high_cycles": 8,
+            "diverged": true,
+            "dut_sample_reg": 255,
+            "gap_wait": 6,
+            "ref_sample_reg": 8
+          },
+          {
+            "cs_high_cycles": 9,
+            "diverged": false,
+            "dut_sample_reg": 8,
+            "gap_wait": 7,
+            "ref_sample_reg": 8
+          },
+          {
+            "cs_high_cycles": 10,
+            "diverged": false,
+            "dut_sample_reg": 8,
+            "gap_wait": 8,
+            "ref_sample_reg": 8
+          },
+          {
+            "cs_high_cycles": 11,
+            "diverged": false,
+            "dut_sample_reg": 8,
+            "gap_wait": 9,
+            "ref_sample_reg": 8
+          },
+          {
+            "cs_high_cycles": 12,
+            "diverged": false,
+            "dut_sample_reg": 8,
+            "gap_wait": 10,
+            "ref_sample_reg": 8
+          },
+          {
+            "cs_high_cycles": 13,
+            "diverged": false,
+            "dut_sample_reg": 8,
+            "gap_wait": 11,
+            "ref_sample_reg": 8
+          },
+          {
+            "cs_high_cycles": 14,
+            "diverged": false,
+            "dut_sample_reg": 8,
+            "gap_wait": 12,
+            "ref_sample_reg": 8
+          },
+          {
+            "cs_high_cycles": 15,
+            "diverged": false,
+            "dut_sample_reg": 8,
+            "gap_wait": 13,
+            "ref_sample_reg": 8
+          },
+          {
+            "cs_high_cycles": 16,
+            "diverged": false,
+            "dut_sample_reg": 8,
+            "gap_wait": 14,
+            "ref_sample_reg": 8
+          },
+          {
+            "cs_high_cycles": 17,
+            "diverged": false,
+            "dut_sample_reg": 8,
+            "gap_wait": 15,
+            "ref_sample_reg": 8
+          }
+        ]
+      },
+      "replay_at_discovered_gap": {
+        "deterministic_divergence_matches": 5,
+        "dut_observed_bytes_hex": [
+          "0x00",
+          "0xff",
+          "0xff"
+        ],
+        "dut_observed_hex": "0xff",
+        "ref_observed_bytes_hex": [
+          "0x00",
+          "0xff",
+          "0x08"
+        ],
+        "ref_observed_hex": "0x08",
+        "repeats": 5,
+        "replay_rate": 1.0
+      }
+    },
+    "D3_prog_wren_timeout": {
+      "discovered_example": {
+        "commands": [
+          6,
+          2,
+          5
+        ],
+        "commands_hex": [
+          "0x06",
+          "0x02",
+          "0x05"
+        ],
+        "dut_bytes_hex": [
+          "0x00",
+          "0x02",
+          "0x80"
+        ],
+        "gap_wait": 10,
+        "ref_bytes_hex": [
+          "0x00",
+          "0x02",
+          "0x10"
+        ],
+        "trial_index": 73
+      },
+      "minimized": {
+        "failing_gap_wait": 10,
+        "highest_failing_cs_high_cycles": 17,
+        "highest_failing_gap_wait": 15,
+        "highest_passing_below_fail": 9,
+        "initial_commands_hex": [
+          "0x06",
+          "0x02",
+          "0x05"
+        ],
+        "local_failing_window": [
+          10,
+          15
+        ],
+        "lowest_failing_gap_wait": 10,
+        "lowest_passing_above_fail": null,
+        "lowest_passing_cs_high_cycles": 11,
+        "lowest_passing_gap_wait": 9,
+        "minimized_commands": [
+          6,
+          2,
+          5
+        ],
+        "minimized_commands_hex": [
+          "0x06",
+          "0x02",
+          "0x05"
+        ],
+        "passing_gaps": [
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "reduction_steps": [
+          {
+            "candidate_hex": [
+              "0x02",
+              "0x05"
+            ],
+            "diverged": false,
+            "dropped_index": 0,
+            "gap_wait": 10
+          },
+          {
+            "candidate_hex": [
+              "0x06",
+              "0x05"
+            ],
+            "diverged": false,
+            "dropped_index": 1,
+            "gap_wait": 10
+          },
+          {
+            "candidate_hex": [
+              "0x06",
+              "0x02"
+            ],
+            "diverged": false,
+            "dropped_index": 2,
+            "gap_wait": 10
+          }
+        ],
+        "sequence_reduction": "3 -> 3 transactions",
+        "window_scan": [
+          {
+            "cs_high_cycles": 2,
+            "diverged": true,
+            "dut_sample_reg": 128,
+            "gap_wait": 0,
+            "ref_sample_reg": 16
+          },
+          {
+            "cs_high_cycles": 3,
+            "diverged": true,
+            "dut_sample_reg": 128,
+            "gap_wait": 1,
+            "ref_sample_reg": 16
+          },
+          {
+            "cs_high_cycles": 4,
+            "diverged": true,
+            "dut_sample_reg": 128,
+            "gap_wait": 2,
+            "ref_sample_reg": 16
+          },
+          {
+            "cs_high_cycles": 5,
+            "diverged": false,
+            "dut_sample_reg": 16,
+            "gap_wait": 3,
+            "ref_sample_reg": 16
+          },
+          {
+            "cs_high_cycles": 6,
+            "diverged": false,
+            "dut_sample_reg": 16,
+            "gap_wait": 4,
+            "ref_sample_reg": 16
+          },
+          {
+            "cs_high_cycles": 7,
+            "diverged": false,
+            "dut_sample_reg": 16,
+            "gap_wait": 5,
+            "ref_sample_reg": 16
+          },
+          {
+            "cs_high_cycles": 8,
+            "diverged": false,
+            "dut_sample_reg": 16,
+            "gap_wait": 6,
+            "ref_sample_reg": 16
+          },
+          {
+            "cs_high_cycles": 9,
+            "diverged": false,
+            "dut_sample_reg": 16,
+            "gap_wait": 7,
+            "ref_sample_reg": 16
+          },
+          {
+            "cs_high_cycles": 10,
+            "diverged": false,
+            "dut_sample_reg": 16,
+            "gap_wait": 8,
+            "ref_sample_reg": 16
+          },
+          {
+            "cs_high_cycles": 11,
+            "diverged": false,
+            "dut_sample_reg": 16,
+            "gap_wait": 9,
+            "ref_sample_reg": 16
+          },
+          {
+            "cs_high_cycles": 12,
+            "diverged": true,
+            "dut_sample_reg": 128,
+            "gap_wait": 10,
+            "ref_sample_reg": 16
+          },
+          {
+            "cs_high_cycles": 13,
+            "diverged": true,
+            "dut_sample_reg": 128,
+            "gap_wait": 11,
+            "ref_sample_reg": 16
+          },
+          {
+            "cs_high_cycles": 14,
+            "diverged": true,
+            "dut_sample_reg": 128,
+            "gap_wait": 12,
+            "ref_sample_reg": 16
+          },
+          {
+            "cs_high_cycles": 15,
+            "diverged": true,
+            "dut_sample_reg": 128,
+            "gap_wait": 13,
+            "ref_sample_reg": 16
+          },
+          {
+            "cs_high_cycles": 16,
+            "diverged": true,
+            "dut_sample_reg": 128,
+            "gap_wait": 14,
+            "ref_sample_reg": 16
+          },
+          {
+            "cs_high_cycles": 17,
+            "diverged": true,
+            "dut_sample_reg": 128,
+            "gap_wait": 15,
+            "ref_sample_reg": 16
+          }
+        ]
+      },
+      "replay_at_discovered_gap": {
+        "deterministic_divergence_matches": 5,
+        "dut_observed_bytes_hex": [
+          "0x00",
+          "0x02",
+          "0x80"
+        ],
+        "dut_observed_hex": "0x80",
+        "ref_observed_bytes_hex": [
+          "0x00",
+          "0x02",
+          "0x10"
+        ],
+        "ref_observed_hex": "0x10",
+        "repeats": 5,
+        "replay_rate": 1.0
+      }
+    },
+    "D4_fast_read_corrupt": {
+      "discovered_example": {
+        "commands": [
+          159,
+          53,
+          185
+        ],
+        "commands_hex": [
+          "0x9f",
+          "0x35",
+          "0xb9"
+        ],
+        "dut_bytes_hex": [
+          "0x00",
+          "0xa5",
+          "0x99"
+        ],
+        "gap_wait": 1,
+        "ref_bytes_hex": [
+          "0x00",
+          "0xa5",
+          "0x50"
+        ],
+        "trial_index": 23
+      },
+      "minimized": {
+        "failing_gap_wait": 1,
+        "highest_failing_cs_high_cycles": 3,
+        "highest_failing_gap_wait": 1,
+        "highest_passing_below_fail": null,
+        "initial_commands_hex": [
+          "0x9f",
+          "0x35",
+          "0xb9"
+        ],
+        "local_failing_window": [
+          0,
+          1
+        ],
+        "lowest_failing_gap_wait": 0,
+        "lowest_passing_above_fail": 2,
+        "lowest_passing_cs_high_cycles": 4,
+        "lowest_passing_gap_wait": 2,
+        "minimized_commands": [
+          159,
+          53,
+          185
+        ],
+        "minimized_commands_hex": [
+          "0x9f",
+          "0x35",
+          "0xb9"
+        ],
+        "passing_gaps": [
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "reduction_steps": [
+          {
+            "candidate_hex": [
+              "0x35",
+              "0xb9"
+            ],
+            "diverged": false,
+            "dropped_index": 0,
+            "gap_wait": 1
+          },
+          {
+            "candidate_hex": [
+              "0x9f",
+              "0xb9"
+            ],
+            "diverged": false,
+            "dropped_index": 1,
+            "gap_wait": 1
+          },
+          {
+            "candidate_hex": [
+              "0x9f",
+              "0x35"
+            ],
+            "diverged": false,
+            "dropped_index": 2,
+            "gap_wait": 1
+          }
+        ],
+        "sequence_reduction": "3 -> 3 transactions",
+        "window_scan": [
+          {
+            "cs_high_cycles": 2,
+            "diverged": true,
+            "dut_sample_reg": 153,
+            "gap_wait": 0,
+            "ref_sample_reg": 80
+          },
+          {
+            "cs_high_cycles": 3,
+            "diverged": true,
+            "dut_sample_reg": 153,
+            "gap_wait": 1,
+            "ref_sample_reg": 80
+          },
+          {
+            "cs_high_cycles": 4,
+            "diverged": false,
+            "dut_sample_reg": 80,
+            "gap_wait": 2,
+            "ref_sample_reg": 80
+          },
+          {
+            "cs_high_cycles": 5,
+            "diverged": false,
+            "dut_sample_reg": 80,
+            "gap_wait": 3,
+            "ref_sample_reg": 80
+          },
+          {
+            "cs_high_cycles": 6,
+            "diverged": false,
+            "dut_sample_reg": 80,
+            "gap_wait": 4,
+            "ref_sample_reg": 80
+          },
+          {
+            "cs_high_cycles": 7,
+            "diverged": false,
+            "dut_sample_reg": 80,
+            "gap_wait": 5,
+            "ref_sample_reg": 80
+          },
+          {
+            "cs_high_cycles": 8,
+            "diverged": false,
+            "dut_sample_reg": 80,
+            "gap_wait": 6,
+            "ref_sample_reg": 80
+          },
+          {
+            "cs_high_cycles": 9,
+            "diverged": false,
+            "dut_sample_reg": 80,
+            "gap_wait": 7,
+            "ref_sample_reg": 80
+          },
+          {
+            "cs_high_cycles": 10,
+            "diverged": false,
+            "dut_sample_reg": 80,
+            "gap_wait": 8,
+            "ref_sample_reg": 80
+          },
+          {
+            "cs_high_cycles": 11,
+            "diverged": false,
+            "dut_sample_reg": 80,
+            "gap_wait": 9,
+            "ref_sample_reg": 80
+          },
+          {
+            "cs_high_cycles": 12,
+            "diverged": false,
+            "dut_sample_reg": 80,
+            "gap_wait": 10,
+            "ref_sample_reg": 80
+          },
+          {
+            "cs_high_cycles": 13,
+            "diverged": false,
+            "dut_sample_reg": 80,
+            "gap_wait": 11,
+            "ref_sample_reg": 80
+          },
+          {
+            "cs_high_cycles": 14,
+            "diverged": false,
+            "dut_sample_reg": 80,
+            "gap_wait": 12,
+            "ref_sample_reg": 80
+          },
+          {
+            "cs_high_cycles": 15,
+            "diverged": false,
+            "dut_sample_reg": 80,
+            "gap_wait": 13,
+            "ref_sample_reg": 80
+          },
+          {
+            "cs_high_cycles": 16,
+            "diverged": false,
+            "dut_sample_reg": 80,
+            "gap_wait": 14,
+            "ref_sample_reg": 80
+          },
+          {
+            "cs_high_cycles": 17,
+            "diverged": false,
+            "dut_sample_reg": 80,
+            "gap_wait": 15,
+            "ref_sample_reg": 80
+          }
+        ]
+      },
+      "replay_at_discovered_gap": {
+        "deterministic_divergence_matches": 5,
+        "dut_observed_bytes_hex": [
+          "0x00",
+          "0xa5",
+          "0x99"
+        ],
+        "dut_observed_hex": "0x99",
+        "ref_observed_bytes_hex": [
+          "0x00",
+          "0xa5",
+          "0x50"
+        ],
+        "ref_observed_hex": "0x50",
+        "repeats": 5,
+        "replay_rate": 1.0
+      }
+    },
+    "D5_cfg_rd_wrdi_race": {
+      "discovered_example": {
+        "commands": [
+          53,
+          4,
+          53
+        ],
+        "commands_hex": [
+          "0x35",
+          "0x04",
+          "0x35"
+        ],
+        "dut_bytes_hex": [
+          "0x00",
+          "0x50",
+          "0x66"
+        ],
+        "gap_wait": 5,
+        "ref_bytes_hex": [
+          "0x00",
+          "0x50",
+          "0x00"
+        ],
+        "trial_index": 50
+      },
+      "minimized": {
+        "failing_gap_wait": 5,
+        "highest_failing_cs_high_cycles": 7,
+        "highest_failing_gap_wait": 5,
+        "highest_passing_below_fail": 2,
+        "initial_commands_hex": [
+          "0x35",
+          "0x04",
+          "0x35"
+        ],
+        "local_failing_window": [
+          3,
+          5
+        ],
+        "lowest_failing_gap_wait": 3,
+        "lowest_passing_above_fail": 6,
+        "lowest_passing_cs_high_cycles": 8,
+        "lowest_passing_gap_wait": 6,
+        "minimized_commands": [
+          53,
+          4,
+          53
+        ],
+        "minimized_commands_hex": [
+          "0x35",
+          "0x04",
+          "0x35"
+        ],
+        "passing_gaps": [
+          0,
+          1,
+          2,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "reduction_steps": [
+          {
+            "candidate_hex": [
+              "0x04",
+              "0x35"
+            ],
+            "diverged": false,
+            "dropped_index": 0,
+            "gap_wait": 5
+          },
+          {
+            "candidate_hex": [
+              "0x35",
+              "0x35"
+            ],
+            "diverged": false,
+            "dropped_index": 1,
+            "gap_wait": 5
+          },
+          {
+            "candidate_hex": [
+              "0x35",
+              "0x04"
+            ],
+            "diverged": false,
+            "dropped_index": 2,
+            "gap_wait": 5
+          }
+        ],
+        "sequence_reduction": "3 -> 3 transactions",
+        "window_scan": [
+          {
+            "cs_high_cycles": 2,
+            "diverged": false,
+            "dut_sample_reg": 0,
+            "gap_wait": 0,
+            "ref_sample_reg": 0
+          },
+          {
+            "cs_high_cycles": 3,
+            "diverged": false,
+            "dut_sample_reg": 0,
+            "gap_wait": 1,
+            "ref_sample_reg": 0
+          },
+          {
+            "cs_high_cycles": 4,
+            "diverged": false,
+            "dut_sample_reg": 0,
+            "gap_wait": 2,
+            "ref_sample_reg": 0
+          },
+          {
+            "cs_high_cycles": 5,
+            "diverged": true,
+            "dut_sample_reg": 102,
+            "gap_wait": 3,
+            "ref_sample_reg": 0
+          },
+          {
+            "cs_high_cycles": 6,
+            "diverged": true,
+            "dut_sample_reg": 102,
+            "gap_wait": 4,
+            "ref_sample_reg": 0
+          },
+          {
+            "cs_high_cycles": 7,
+            "diverged": true,
+            "dut_sample_reg": 102,
+            "gap_wait": 5,
+            "ref_sample_reg": 0
+          },
+          {
+            "cs_high_cycles": 8,
+            "diverged": false,
+            "dut_sample_reg": 0,
+            "gap_wait": 6,
+            "ref_sample_reg": 0
+          },
+          {
+            "cs_high_cycles": 9,
+            "diverged": false,
+            "dut_sample_reg": 0,
+            "gap_wait": 7,
+            "ref_sample_reg": 0
+          },
+          {
+            "cs_high_cycles": 10,
+            "diverged": false,
+            "dut_sample_reg": 0,
+            "gap_wait": 8,
+            "ref_sample_reg": 0
+          },
+          {
+            "cs_high_cycles": 11,
+            "diverged": false,
+            "dut_sample_reg": 0,
+            "gap_wait": 9,
+            "ref_sample_reg": 0
+          },
+          {
+            "cs_high_cycles": 12,
+            "diverged": false,
+            "dut_sample_reg": 0,
+            "gap_wait": 10,
+            "ref_sample_reg": 0
+          },
+          {
+            "cs_high_cycles": 13,
+            "diverged": false,
+            "dut_sample_reg": 0,
+            "gap_wait": 11,
+            "ref_sample_reg": 0
+          },
+          {
+            "cs_high_cycles": 14,
+            "diverged": false,
+            "dut_sample_reg": 0,
+            "gap_wait": 12,
+            "ref_sample_reg": 0
+          },
+          {
+            "cs_high_cycles": 15,
+            "diverged": false,
+            "dut_sample_reg": 0,
+            "gap_wait": 13,
+            "ref_sample_reg": 0
+          },
+          {
+            "cs_high_cycles": 16,
+            "diverged": false,
+            "dut_sample_reg": 0,
+            "gap_wait": 14,
+            "ref_sample_reg": 0
+          },
+          {
+            "cs_high_cycles": 17,
+            "diverged": false,
+            "dut_sample_reg": 0,
+            "gap_wait": 15,
+            "ref_sample_reg": 0
+          }
+        ]
+      },
+      "replay_at_discovered_gap": {
+        "deterministic_divergence_matches": 5,
+        "dut_observed_bytes_hex": [
+          "0x00",
+          "0x50",
+          "0x66"
+        ],
+        "dut_observed_hex": "0x66",
+        "ref_observed_bytes_hex": [
+          "0x00",
+          "0x50",
+          "0x00"
+        ],
+        "ref_observed_hex": "0x00",
+        "repeats": 5,
+        "replay_rate": 1.0
+      }
+    }
+  },
+  "paired_comparisons": {
+    "guided_diverse_vs_guided_feedback": {
+      "bugs_delta": {
+        "ci95_hi": 0.05,
+        "ci95_lo": -0.85,
+        "mean_delta": -0.4
+      },
+      "losses": 8,
+      "sigs_delta": {
+        "ci95_hi": 5.1,
+        "ci95_lo": -1.65,
+        "mean_delta": 1.6
+      },
+      "ties": 8,
+      "wins": 4
+    },
+    "guided_diverse_vs_joint_random": {
+      "bugs_delta": {
+        "ci95_hi": 0.75,
+        "ci95_lo": -0.3,
+        "mean_delta": 0.2
+      },
+      "losses": 6,
+      "sigs_delta": {
+        "ci95_hi": 0.8,
+        "ci95_lo": -4.65,
+        "mean_delta": -1.9
+      },
+      "ties": 7,
+      "wins": 7
+    },
+    "guided_feedback_vs_joint_random": {
+      "bugs_delta": {
+        "ci95_hi": 1.0,
+        "ci95_lo": 0.2,
+        "mean_delta": 0.6
+      },
+      "losses": 1,
+      "sigs_delta": {
+        "ci95_hi": -0.95,
+        "ci95_lo": -6.1,
+        "mean_delta": -3.5
+      },
+      "ties": 8,
+      "wins": 11
+    }
+  },
+  "per_seed_runs": {
+    "guided_diverse": [
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D4_fast_read_corrupt"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              53
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 7
+          },
+          "D4_fast_read_corrupt": {
+            "commands": [
+              159,
+              53,
+              185
+            ],
+            "commands_hex": [
+              "0x9f",
+              "0x35",
+              "0xb9"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x99"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x50"
+            ],
+            "trial_index": 23
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 7,
+          "D4_fast_read_corrupt": 23
+        },
+        "raw_divergences": 9,
+        "seed": 20261101,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 4,
+        "unique_obs_signatures": 47,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery",
+          "D5_cfg_rd_wrdi_race"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              5,
+              185
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x05",
+              "0xb9"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x02"
+            ],
+            "trial_index": 18
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              53
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 36
+          },
+          "D5_cfg_rd_wrdi_race": {
+            "commands": [
+              53,
+              4,
+              5
+            ],
+            "commands_hex": [
+              "0x35",
+              "0x04",
+              "0x05"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x50",
+              "0x66"
+            ],
+            "gap_wait": 3,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x50",
+              "0x00"
+            ],
+            "trial_index": 4
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 18,
+          "D2_wakeup_slow_recovery": 36,
+          "D5_cfg_rd_wrdi_race": 4
+        },
+        "raw_divergences": 12,
+        "seed": 20261102,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 3,
+        "unique_div_symptoms": 4,
+        "unique_obs_signatures": 49,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              5,
+              2
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x05",
+              "0x02"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x02"
+            ],
+            "trial_index": 80
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 80
+        },
+        "raw_divergences": 3,
+        "seed": 20261103,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 1,
+        "unique_div_symptoms": 1,
+        "unique_obs_signatures": 48,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              185
+            ],
+            "commands_hex": [
+              "0x06",
+              "0xb9"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 1
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 1
+        },
+        "raw_divergences": 4,
+        "seed": 20261104,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 1,
+        "unique_div_symptoms": 2,
+        "unique_obs_signatures": 47,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              2,
+              6,
+              171
+            ],
+            "commands_hex": [
+              "0x02",
+              "0x06",
+              "0xab"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x80",
+              "0x00"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x80",
+              "0x02"
+            ],
+            "trial_index": 84
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              5
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x05"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 5,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 31
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 84,
+          "D2_wakeup_slow_recovery": 31
+        },
+        "raw_divergences": 13,
+        "seed": 20261105,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 3,
+        "unique_obs_signatures": 44,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              171,
+              6,
+              171
+            ],
+            "commands_hex": [
+              "0xab",
+              "0x06",
+              "0xab"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 7
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              4
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x04"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 12,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 16
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 7,
+          "D3_prog_wren_timeout": 16
+        },
+        "raw_divergences": 11,
+        "seed": 20261106,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 5,
+        "unique_obs_signatures": 55,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              159,
+              6,
+              2
+            ],
+            "commands_hex": [
+              "0x9f",
+              "0x06",
+              "0x02"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x00"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x02"
+            ],
+            "trial_index": 86
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 86
+        },
+        "raw_divergences": 1,
+        "seed": 20261107,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 1,
+        "unique_div_symptoms": 1,
+        "unique_obs_signatures": 52,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              6,
+              5
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x06",
+              "0x05"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x02"
+            ],
+            "trial_index": 19
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 19
+        },
+        "raw_divergences": 9,
+        "seed": 20261108,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 1,
+        "unique_div_symptoms": 4,
+        "unique_obs_signatures": 56,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery",
+          "D3_prog_wren_timeout",
+          "D4_fast_read_corrupt"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              159,
+              6,
+              185
+            ],
+            "commands_hex": [
+              "0x9f",
+              "0x06",
+              "0xb9"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x00"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x02"
+            ],
+            "trial_index": 39
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              4
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x04"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 6,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 46
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              6
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x06"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 14,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 10
+          },
+          "D4_fast_read_corrupt": {
+            "commands": [
+              159,
+              53,
+              185
+            ],
+            "commands_hex": [
+              "0x9f",
+              "0x35",
+              "0xb9"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x99"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x50"
+            ],
+            "trial_index": 49
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 39,
+          "D2_wakeup_slow_recovery": 46,
+          "D3_prog_wren_timeout": 10,
+          "D4_fast_read_corrupt": 49
+        },
+        "raw_divergences": 13,
+        "seed": 20261109,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 4,
+        "unique_div_symptoms": 5,
+        "unique_obs_signatures": 58,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D4_fast_read_corrupt",
+          "D5_cfg_rd_wrdi_race"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              159,
+              6,
+              4
+            ],
+            "commands_hex": [
+              "0x9f",
+              "0x06",
+              "0x04"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x00"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x02"
+            ],
+            "trial_index": 9
+          },
+          "D4_fast_read_corrupt": {
+            "commands": [
+              159,
+              53,
+              4
+            ],
+            "commands_hex": [
+              "0x9f",
+              "0x35",
+              "0x04"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x99"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x50"
+            ],
+            "trial_index": 16
+          },
+          "D5_cfg_rd_wrdi_race": {
+            "commands": [
+              53,
+              4,
+              185
+            ],
+            "commands_hex": [
+              "0x35",
+              "0x04",
+              "0xb9"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x50",
+              "0x66"
+            ],
+            "gap_wait": 3,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x50",
+              "0x00"
+            ],
+            "trial_index": 50
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 9,
+          "D4_fast_read_corrupt": 16,
+          "D5_cfg_rd_wrdi_race": 50
+        },
+        "raw_divergences": 11,
+        "seed": 20261110,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 3,
+        "unique_div_symptoms": 7,
+        "unique_obs_signatures": 56,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery",
+          "D3_prog_wren_timeout"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              5,
+              6
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x05",
+              "0x06"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x02"
+            ],
+            "trial_index": 2
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              6
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x06"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 4,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 67
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              53
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 12,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 51
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 2,
+          "D2_wakeup_slow_recovery": 67,
+          "D3_prog_wren_timeout": 51
+        },
+        "raw_divergences": 12,
+        "seed": 20261111,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 3,
+        "unique_div_symptoms": 6,
+        "unique_obs_signatures": 53,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              6,
+              159
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x06",
+              "0x9f"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x02"
+            ],
+            "trial_index": 36
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 36
+        },
+        "raw_divergences": 6,
+        "seed": 20261112,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 1,
+        "unique_div_symptoms": 4,
+        "unique_obs_signatures": 53,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery",
+          "D3_prog_wren_timeout",
+          "D4_fast_read_corrupt"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              185
+            ],
+            "commands_hex": [
+              "0x06",
+              "0xb9"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 4
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              53
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 5,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 41
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              5
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x05"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 11,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 33
+          },
+          "D4_fast_read_corrupt": {
+            "commands": [
+              159,
+              53,
+              159
+            ],
+            "commands_hex": [
+              "0x9f",
+              "0x35",
+              "0x9f"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x99"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x50"
+            ],
+            "trial_index": 54
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 4,
+          "D2_wakeup_slow_recovery": 41,
+          "D3_prog_wren_timeout": 33,
+          "D4_fast_read_corrupt": 54
+        },
+        "raw_divergences": 9,
+        "seed": 20261113,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 4,
+        "unique_div_symptoms": 4,
+        "unique_obs_signatures": 48,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              185,
+              2
+            ],
+            "commands_hex": [
+              "0x06",
+              "0xb9",
+              "0x02"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0xff"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0xff"
+            ],
+            "trial_index": 21
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              159
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x9f"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 5,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 83
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 21,
+          "D2_wakeup_slow_recovery": 83
+        },
+        "raw_divergences": 7,
+        "seed": 20261114,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 3,
+        "unique_obs_signatures": 51,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              4,
+              6,
+              53
+            ],
+            "commands_hex": [
+              "0x04",
+              "0x06",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 21
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 21
+        },
+        "raw_divergences": 11,
+        "seed": 20261115,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 1,
+        "unique_div_symptoms": 4,
+        "unique_obs_signatures": 47,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              5,
+              185
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x05",
+              "0xb9"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x02"
+            ],
+            "trial_index": 18
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              53
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 11,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 37
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 18,
+          "D3_prog_wren_timeout": 37
+        },
+        "raw_divergences": 10,
+        "seed": 20261116,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 6,
+        "unique_obs_signatures": 52,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              185,
+              185
+            ],
+            "commands_hex": [
+              "0x06",
+              "0xb9",
+              "0xb9"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0xff"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0xff"
+            ],
+            "trial_index": 19
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              2
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x02"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 10,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 30
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 19,
+          "D3_prog_wren_timeout": 30
+        },
+        "raw_divergences": 10,
+        "seed": 20261117,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 4,
+        "unique_obs_signatures": 50,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              4
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x04"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 1
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              5
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x05"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 6,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 14
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 1,
+          "D2_wakeup_slow_recovery": 14
+        },
+        "raw_divergences": 15,
+        "seed": 20261118,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 3,
+        "unique_obs_signatures": 46,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              4,
+              2
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x04",
+              "0x02"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x00"
+            ],
+            "trial_index": 2
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              5
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x05"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 11,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 83
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 2,
+          "D3_prog_wren_timeout": 83
+        },
+        "raw_divergences": 6,
+        "seed": 20261119,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 3,
+        "unique_obs_signatures": 51,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D4_fast_read_corrupt"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              159
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x9f"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 70
+          },
+          "D4_fast_read_corrupt": {
+            "commands": [
+              159,
+              53,
+              53
+            ],
+            "commands_hex": [
+              "0x9f",
+              "0x35",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x99"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x50"
+            ],
+            "trial_index": 6
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 70,
+          "D4_fast_read_corrupt": 6
+        },
+        "raw_divergences": 8,
+        "seed": 20261120,
+        "strategy": "guided_diverse",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 3,
+        "unique_obs_signatures": 41,
+        "unique_pairs_tested": 100
+      }
+    ],
+    "guided_feedback": [
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              185,
+              159
+            ],
+            "commands_hex": [
+              "0x06",
+              "0xb9",
+              "0x9f"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0xff"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0xff"
+            ],
+            "trial_index": 14
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              5
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x05"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 10,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 73
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 14,
+          "D3_prog_wren_timeout": 73
+        },
+        "raw_divergences": 16,
+        "seed": 20261101,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 5,
+        "unique_obs_signatures": 52,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout",
+          "D5_cfg_rd_wrdi_race"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              171,
+              6,
+              171
+            ],
+            "commands_hex": [
+              "0xab",
+              "0x06",
+              "0xab"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 10
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              5
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x05"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 15,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 14
+          },
+          "D5_cfg_rd_wrdi_race": {
+            "commands": [
+              53,
+              4,
+              53
+            ],
+            "commands_hex": [
+              "0x35",
+              "0x04",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x50",
+              "0x66"
+            ],
+            "gap_wait": 5,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x50",
+              "0x00"
+            ],
+            "trial_index": 50
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 10,
+          "D3_prog_wren_timeout": 14,
+          "D5_cfg_rd_wrdi_race": 50
+        },
+        "raw_divergences": 18,
+        "seed": 20261102,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 3,
+        "unique_div_symptoms": 5,
+        "unique_obs_signatures": 46,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout",
+          "D4_fast_read_corrupt"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              6
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x06"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 13
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              4
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x04"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 14,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 27
+          },
+          "D4_fast_read_corrupt": {
+            "commands": [
+              159,
+              53,
+              171
+            ],
+            "commands_hex": [
+              "0x9f",
+              "0x35",
+              "0xab"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x99"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x50"
+            ],
+            "trial_index": 86
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 13,
+          "D3_prog_wren_timeout": 27,
+          "D4_fast_read_corrupt": 86
+        },
+        "raw_divergences": 21,
+        "seed": 20261103,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 3,
+        "unique_div_symptoms": 6,
+        "unique_obs_signatures": 50,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery",
+          "D3_prog_wren_timeout"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              185,
+              159
+            ],
+            "commands_hex": [
+              "0x06",
+              "0xb9",
+              "0x9f"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0xff"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0xff"
+            ],
+            "trial_index": 33
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              53
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 28
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              159
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x9f"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 11,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 50
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 33,
+          "D2_wakeup_slow_recovery": 28,
+          "D3_prog_wren_timeout": 50
+        },
+        "raw_divergences": 25,
+        "seed": 20261104,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 3,
+        "unique_div_symptoms": 8,
+        "unique_obs_signatures": 51,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              53,
+              6,
+              6
+            ],
+            "commands_hex": [
+              "0x35",
+              "0x06",
+              "0x06"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x50",
+              "0x00"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x50",
+              "0x02"
+            ],
+            "trial_index": 3
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              53
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 4,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 8
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 3,
+          "D2_wakeup_slow_recovery": 8
+        },
+        "raw_divergences": 25,
+        "seed": 20261105,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 4,
+        "unique_obs_signatures": 43,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout",
+          "D4_fast_read_corrupt"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              6,
+              2
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x06",
+              "0x02"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x02"
+            ],
+            "trial_index": 13
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              4
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x04"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 10,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 26
+          },
+          "D4_fast_read_corrupt": {
+            "commands": [
+              159,
+              53,
+              5
+            ],
+            "commands_hex": [
+              "0x9f",
+              "0x35",
+              "0x05"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x99"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x50"
+            ],
+            "trial_index": 19
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 13,
+          "D3_prog_wren_timeout": 26,
+          "D4_fast_read_corrupt": 19
+        },
+        "raw_divergences": 23,
+        "seed": 20261106,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 3,
+        "unique_div_symptoms": 6,
+        "unique_obs_signatures": 53,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout",
+          "D5_cfg_rd_wrdi_race"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              6
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x06"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 8
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              53
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 10,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 95
+          },
+          "D5_cfg_rd_wrdi_race": {
+            "commands": [
+              53,
+              4,
+              53
+            ],
+            "commands_hex": [
+              "0x35",
+              "0x04",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x50",
+              "0x66"
+            ],
+            "gap_wait": 5,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x50",
+              "0x00"
+            ],
+            "trial_index": 47
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 8,
+          "D3_prog_wren_timeout": 95,
+          "D5_cfg_rd_wrdi_race": 47
+        },
+        "raw_divergences": 12,
+        "seed": 20261107,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 3,
+        "unique_div_symptoms": 7,
+        "unique_obs_signatures": 50,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D4_fast_read_corrupt"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              5,
+              6,
+              2
+            ],
+            "commands_hex": [
+              "0x05",
+              "0x06",
+              "0x02"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 20
+          },
+          "D4_fast_read_corrupt": {
+            "commands": [
+              159,
+              53,
+              159
+            ],
+            "commands_hex": [
+              "0x9f",
+              "0x35",
+              "0x9f"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x99"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x50"
+            ],
+            "trial_index": 76
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 20,
+          "D4_fast_read_corrupt": 76
+        },
+        "raw_divergences": 6,
+        "seed": 20261108,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 2,
+        "unique_obs_signatures": 33,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout",
+          "D4_fast_read_corrupt"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              53,
+              4
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x35",
+              "0x04"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x50"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x51"
+            ],
+            "trial_index": 24
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              2
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x02"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 11,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 66
+          },
+          "D4_fast_read_corrupt": {
+            "commands": [
+              159,
+              53,
+              6
+            ],
+            "commands_hex": [
+              "0x9f",
+              "0x35",
+              "0x06"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x99"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x50"
+            ],
+            "trial_index": 46
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 24,
+          "D3_prog_wren_timeout": 66,
+          "D4_fast_read_corrupt": 46
+        },
+        "raw_divergences": 19,
+        "seed": 20261109,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 3,
+        "unique_div_symptoms": 8,
+        "unique_obs_signatures": 55,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              159,
+              159
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x9f",
+              "0x9f"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0xa5"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0xa5"
+            ],
+            "trial_index": 19
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              5
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x05"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 12,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 34
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 19,
+          "D3_prog_wren_timeout": 34
+        },
+        "raw_divergences": 28,
+        "seed": 20261110,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 7,
+        "unique_obs_signatures": 48,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery",
+          "D3_prog_wren_timeout"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              5,
+              6,
+              5
+            ],
+            "commands_hex": [
+              "0x05",
+              "0x06",
+              "0x05"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 2
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              2
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x02"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 62
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              6
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x06"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 15,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 98
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 2,
+          "D2_wakeup_slow_recovery": 62,
+          "D3_prog_wren_timeout": 98
+        },
+        "raw_divergences": 19,
+        "seed": 20261111,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 3,
+        "unique_div_symptoms": 7,
+        "unique_obs_signatures": 53,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              2,
+              6,
+              171
+            ],
+            "commands_hex": [
+              "0x02",
+              "0x06",
+              "0xab"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x80",
+              "0x00"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x80",
+              "0x02"
+            ],
+            "trial_index": 8
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              6
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x06"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 4,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 42
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 8,
+          "D2_wakeup_slow_recovery": 42
+        },
+        "raw_divergences": 18,
+        "seed": 20261112,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 2,
+        "unique_obs_signatures": 38,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout",
+          "D5_cfg_rd_wrdi_race"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              5,
+              5
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x05",
+              "0x05"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x02"
+            ],
+            "trial_index": 20
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              53
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 11,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 94
+          },
+          "D5_cfg_rd_wrdi_race": {
+            "commands": [
+              53,
+              4,
+              4
+            ],
+            "commands_hex": [
+              "0x35",
+              "0x04",
+              "0x04"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x50",
+              "0x66"
+            ],
+            "gap_wait": 5,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x50",
+              "0x00"
+            ],
+            "trial_index": 49
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 20,
+          "D3_prog_wren_timeout": 94,
+          "D5_cfg_rd_wrdi_race": 49
+        },
+        "raw_divergences": 12,
+        "seed": 20261113,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 3,
+        "unique_div_symptoms": 6,
+        "unique_obs_signatures": 49,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              53,
+              53
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x35",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x50"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x51"
+            ],
+            "trial_index": 13
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              53
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 15,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 26
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 13,
+          "D3_prog_wren_timeout": 26
+        },
+        "raw_divergences": 18,
+        "seed": 20261114,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 7,
+        "unique_obs_signatures": 51,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              2,
+              2
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x02"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x80"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 17
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              2
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x02"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 10,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 18
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 17,
+          "D3_prog_wren_timeout": 18
+        },
+        "raw_divergences": 20,
+        "seed": 20261115,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 5,
+        "unique_obs_signatures": 49,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              171
+            ],
+            "commands_hex": [
+              "0x06",
+              "0xab"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 29
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 29
+        },
+        "raw_divergences": 18,
+        "seed": 20261116,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 1,
+        "unique_div_symptoms": 6,
+        "unique_obs_signatures": 43,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              2,
+              53
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x80"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 9
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              53
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 14,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 72
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 9,
+          "D3_prog_wren_timeout": 72
+        },
+        "raw_divergences": 19,
+        "seed": 20261117,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 8,
+        "unique_obs_signatures": 52,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              171,
+              6,
+              159
+            ],
+            "commands_hex": [
+              "0xab",
+              "0x06",
+              "0x9f"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 3
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              185
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0xb9"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 15,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 47
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 3,
+          "D3_prog_wren_timeout": 47
+        },
+        "raw_divergences": 26,
+        "seed": 20261118,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 5,
+        "unique_obs_signatures": 45,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              185,
+              2
+            ],
+            "commands_hex": [
+              "0x06",
+              "0xb9",
+              "0x02"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0xff"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0xff"
+            ],
+            "trial_index": 16
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              4
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x04"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 10,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 46
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 16,
+          "D3_prog_wren_timeout": 46
+        },
+        "raw_divergences": 25,
+        "seed": 20261119,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 7,
+        "unique_obs_signatures": 54,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout",
+          "D4_fast_read_corrupt",
+          "D5_cfg_rd_wrdi_race"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              171,
+              5
+            ],
+            "commands_hex": [
+              "0x06",
+              "0xab",
+              "0x05"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x02"
+            ],
+            "trial_index": 32
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              53
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 10,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 55
+          },
+          "D4_fast_read_corrupt": {
+            "commands": [
+              159,
+              53,
+              6
+            ],
+            "commands_hex": [
+              "0x9f",
+              "0x35",
+              "0x06"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x99"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x50"
+            ],
+            "trial_index": 20
+          },
+          "D5_cfg_rd_wrdi_race": {
+            "commands": [
+              53,
+              4,
+              53
+            ],
+            "commands_hex": [
+              "0x35",
+              "0x04",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x50",
+              "0x66"
+            ],
+            "gap_wait": 3,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x50",
+              "0x00"
+            ],
+            "trial_index": 56
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 32,
+          "D3_prog_wren_timeout": 55,
+          "D4_fast_read_corrupt": 20,
+          "D5_cfg_rd_wrdi_race": 56
+        },
+        "raw_divergences": 19,
+        "seed": 20261120,
+        "strategy": "guided_feedback",
+        "unique_bug_classes_found": 4,
+        "unique_div_symptoms": 6,
+        "unique_obs_signatures": 57,
+        "unique_pairs_tested": 100
+      }
+    ],
+    "joint_random": [
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              4,
+              6,
+              159
+            ],
+            "commands_hex": [
+              "0x04",
+              "0x06",
+              "0x9f"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 32
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              159
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x9f"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 63
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 32,
+          "D2_wakeup_slow_recovery": 63
+        },
+        "raw_divergences": 6,
+        "seed": 20261101,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 4,
+        "unique_obs_signatures": 49,
+        "unique_pairs_tested": 99
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              171,
+              6,
+              171
+            ],
+            "commands_hex": [
+              "0xab",
+              "0x06",
+              "0xab"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 10
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 10
+        },
+        "raw_divergences": 1,
+        "seed": 20261102,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 1,
+        "unique_div_symptoms": 1,
+        "unique_obs_signatures": 52,
+        "unique_pairs_tested": 98
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D4_fast_read_corrupt"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              171
+            ],
+            "commands_hex": [
+              "0x06",
+              "0xab"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 15
+          },
+          "D4_fast_read_corrupt": {
+            "commands": [
+              159,
+              53,
+              4
+            ],
+            "commands_hex": [
+              "0x9f",
+              "0x35",
+              "0x04"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x99"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x50"
+            ],
+            "trial_index": 58
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 15,
+          "D4_fast_read_corrupt": 58
+        },
+        "raw_divergences": 5,
+        "seed": 20261103,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 4,
+        "unique_obs_signatures": 49,
+        "unique_pairs_tested": 99
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery",
+          "D3_prog_wren_timeout"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              2,
+              171
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0xab"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x80"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 26
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              5
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x05"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 80
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              171
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0xab"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 11,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 89
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 26,
+          "D2_wakeup_slow_recovery": 80,
+          "D3_prog_wren_timeout": 89
+        },
+        "raw_divergences": 5,
+        "seed": 20261104,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 3,
+        "unique_div_symptoms": 4,
+        "unique_obs_signatures": 46,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              53,
+              6,
+              6
+            ],
+            "commands_hex": [
+              "0x35",
+              "0x06",
+              "0x06"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x50",
+              "0x00"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x50",
+              "0x02"
+            ],
+            "trial_index": 3
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              53
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 4,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 8
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 3,
+          "D2_wakeup_slow_recovery": 8
+        },
+        "raw_divergences": 6,
+        "seed": 20261105,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 3,
+        "unique_obs_signatures": 52,
+        "unique_pairs_tested": 99
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              159,
+              185
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x9f",
+              "0xb9"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0xa5"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0xa5"
+            ],
+            "trial_index": 73
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              2
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x02"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 11,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 33
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 73,
+          "D3_prog_wren_timeout": 33
+        },
+        "raw_divergences": 5,
+        "seed": 20261106,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 3,
+        "unique_obs_signatures": 56,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              6
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x06"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 8
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              53
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 44
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 8,
+          "D2_wakeup_slow_recovery": 44
+        },
+        "raw_divergences": 4,
+        "seed": 20261107,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 2,
+        "unique_obs_signatures": 52,
+        "unique_pairs_tested": 99
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              5,
+              4
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x05",
+              "0x04"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x02"
+            ],
+            "trial_index": 27
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 27
+        },
+        "raw_divergences": 3,
+        "seed": 20261108,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 1,
+        "unique_div_symptoms": 2,
+        "unique_obs_signatures": 49,
+        "unique_pairs_tested": 98
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              6
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x06"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 74
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              2
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x02"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 66
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 74,
+          "D2_wakeup_slow_recovery": 66
+        },
+        "raw_divergences": 2,
+        "seed": 20261109,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 2,
+        "unique_obs_signatures": 55,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              171,
+              6,
+              53
+            ],
+            "commands_hex": [
+              "0xab",
+              "0x06",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 17
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              171
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0xab"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 4,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 30
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 17,
+          "D2_wakeup_slow_recovery": 30
+        },
+        "raw_divergences": 8,
+        "seed": 20261110,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 5,
+        "unique_obs_signatures": 47,
+        "unique_pairs_tested": 98
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D4_fast_read_corrupt"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              5,
+              6,
+              5
+            ],
+            "commands_hex": [
+              "0x05",
+              "0x06",
+              "0x05"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 2
+          },
+          "D4_fast_read_corrupt": {
+            "commands": [
+              159,
+              53,
+              6
+            ],
+            "commands_hex": [
+              "0x9f",
+              "0x35",
+              "0x06"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x99"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xa5",
+              "0x50"
+            ],
+            "trial_index": 98
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 2,
+          "D4_fast_read_corrupt": 98
+        },
+        "raw_divergences": 4,
+        "seed": 20261111,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 4,
+        "unique_obs_signatures": 46,
+        "unique_pairs_tested": 98
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              2,
+              6,
+              171
+            ],
+            "commands_hex": [
+              "0x02",
+              "0x06",
+              "0xab"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x80",
+              "0x00"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x80",
+              "0x02"
+            ],
+            "trial_index": 8
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              6
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x06"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 4,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 52
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 8,
+          "D2_wakeup_slow_recovery": 52
+        },
+        "raw_divergences": 3,
+        "seed": 20261112,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 3,
+        "unique_obs_signatures": 53,
+        "unique_pairs_tested": 99
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              4
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x04"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 16
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 16
+        },
+        "raw_divergences": 7,
+        "seed": 20261113,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 1,
+        "unique_div_symptoms": 6,
+        "unique_obs_signatures": 57,
+        "unique_pairs_tested": 99
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              159,
+              185
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x9f",
+              "0xb9"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0xa5"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0xa5"
+            ],
+            "trial_index": 92
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 92
+        },
+        "raw_divergences": 1,
+        "seed": 20261114,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 1,
+        "unique_div_symptoms": 1,
+        "unique_obs_signatures": 50,
+        "unique_pairs_tested": 97
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D3_prog_wren_timeout"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              2,
+              6,
+              6
+            ],
+            "commands_hex": [
+              "0x02",
+              "0x06",
+              "0x06"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x80",
+              "0x00"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x80",
+              "0x02"
+            ],
+            "trial_index": 29
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              5
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x05"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 15,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 30
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 29,
+          "D3_prog_wren_timeout": 30
+        },
+        "raw_divergences": 5,
+        "seed": 20261115,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 4,
+        "unique_obs_signatures": 57,
+        "unique_pairs_tested": 97
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery",
+          "D3_prog_wren_timeout"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              171,
+              6,
+              53
+            ],
+            "commands_hex": [
+              "0xab",
+              "0x06",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 45
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              159
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x9f"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 5,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 56
+          },
+          "D3_prog_wren_timeout": {
+            "commands": [
+              6,
+              2,
+              2
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x02"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x80"
+            ],
+            "gap_wait": 10,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 51
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 45,
+          "D2_wakeup_slow_recovery": 56,
+          "D3_prog_wren_timeout": 51
+        },
+        "raw_divergences": 9,
+        "seed": 20261116,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 3,
+        "unique_div_symptoms": 4,
+        "unique_obs_signatures": 50,
+        "unique_pairs_tested": 98
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              2,
+              53
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x02",
+              "0x35"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x80"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02",
+              "0x10"
+            ],
+            "trial_index": 9
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              6
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x06"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 6,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 90
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 9,
+          "D2_wakeup_slow_recovery": 90
+        },
+        "raw_divergences": 3,
+        "seed": 20261117,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 3,
+        "unique_obs_signatures": 54,
+        "unique_pairs_tested": 100
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              171,
+              6,
+              159
+            ],
+            "commands_hex": [
+              "0xab",
+              "0x06",
+              "0x9f"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 0,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 3
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              159
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x9f"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 36
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 3,
+          "D2_wakeup_slow_recovery": 36
+        },
+        "raw_divergences": 7,
+        "seed": 20261118,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 4,
+        "unique_obs_signatures": 54,
+        "unique_pairs_tested": 98
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              159
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x9f"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 2,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 73
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 73
+        },
+        "raw_divergences": 2,
+        "seed": 20261119,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 1,
+        "unique_div_symptoms": 2,
+        "unique_obs_signatures": 56,
+        "unique_pairs_tested": 98
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [
+          "D1_wren_fast_drop",
+          "D2_wakeup_slow_recovery"
+        ],
+        "bug_examples": {
+          "D1_wren_fast_drop": {
+            "commands": [
+              6,
+              5
+            ],
+            "commands_hex": [
+              "0x06",
+              "0x05"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0x00"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0x02"
+            ],
+            "trial_index": 18
+          },
+          "D2_wakeup_slow_recovery": {
+            "commands": [
+              185,
+              171,
+              4
+            ],
+            "commands_hex": [
+              "0xb9",
+              "0xab",
+              "0x04"
+            ],
+            "dut_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0xff"
+            ],
+            "gap_wait": 1,
+            "ref_bytes_hex": [
+              "0x00",
+              "0xff",
+              "0x08"
+            ],
+            "trial_index": 44
+          }
+        },
+        "first_bug_trial": {
+          "D1_wren_fast_drop": 18,
+          "D2_wakeup_slow_recovery": 44
+        },
+        "raw_divergences": 3,
+        "seed": 20261120,
+        "strategy": "joint_random",
+        "unique_bug_classes_found": 2,
+        "unique_div_symptoms": 3,
+        "unique_obs_signatures": 58,
+        "unique_pairs_tested": 99
+      }
+    ],
+    "payload_only": [
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261101,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 25,
+        "unique_pairs_tested": 82
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261102,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 29,
+        "unique_pairs_tested": 83
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261103,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 26,
+        "unique_pairs_tested": 90
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261104,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 27,
+        "unique_pairs_tested": 82
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261105,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 29,
+        "unique_pairs_tested": 87
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261106,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 27,
+        "unique_pairs_tested": 85
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261107,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 26,
+        "unique_pairs_tested": 85
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261108,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 25,
+        "unique_pairs_tested": 84
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261109,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 29,
+        "unique_pairs_tested": 85
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261110,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 26,
+        "unique_pairs_tested": 86
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261111,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 29,
+        "unique_pairs_tested": 83
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261112,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 27,
+        "unique_pairs_tested": 80
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261113,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 27,
+        "unique_pairs_tested": 85
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261114,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 32,
+        "unique_pairs_tested": 89
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261115,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 25,
+        "unique_pairs_tested": 81
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261116,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 27,
+        "unique_pairs_tested": 86
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261117,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 26,
+        "unique_pairs_tested": 83
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261118,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 25,
+        "unique_pairs_tested": 78
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261119,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 25,
+        "unique_pairs_tested": 88
+      },
+      {
+        "budget": 100,
+        "bug_classes_found": [],
+        "bug_examples": {},
+        "first_bug_trial": {},
+        "raw_divergences": 0,
+        "seed": 20261120,
+        "strategy": "payload_only",
+        "unique_bug_classes_found": 0,
+        "unique_div_symptoms": 0,
+        "unique_obs_signatures": 31,
+        "unique_pairs_tested": 90
+      }
+    ]
+  },
+  "seeds": [
+    20261101,
+    20261102,
+    20261103,
+    20261104,
+    20261105,
+    20261106,
+    20261107,
+    20261108,
+    20261109,
+    20261110,
+    20261111,
+    20261112,
+    20261113,
+    20261114,
+    20261115,
+    20261116,
+    20261117,
+    20261118,
+    20261119,
+    20261120
+  ],
+  "strategies": [
+    "payload_only",
+    "joint_random",
+    "guided_feedback",
+    "guided_diverse"
+  ],
+  "summary_by_strategy": {
+    "guided_diverse": {
+      "budget": 100,
+      "bug_hit_rate": {
+        "D1_wren_fast_drop": 1.0,
+        "D2_wakeup_slow_recovery": 0.35,
+        "D3_prog_wren_timeout": 0.35,
+        "D4_fast_read_corrupt": 0.25,
+        "D5_cfg_rd_wrdi_race": 0.1
+      },
+      "max_unique_bugs": 4,
+      "mean_obs_signatures": 50.2,
+      "mean_raw_divergences": 9,
+      "mean_trials_to_discover": {
+        "D1_wren_fast_drop": 27.2,
+        "D2_wakeup_slow_recovery": 45.4,
+        "D3_prog_wren_timeout": 37.1,
+        "D4_fast_read_corrupt": 29.6,
+        "D5_cfg_rd_wrdi_race": 27
+      },
+      "mean_unique_bugs": 2.05,
+      "median_unique_bugs": 2.0,
+      "min_unique_bugs": 1,
+      "seeds": 20,
+      "seeds_finding_all": 0,
+      "std_unique_bugs": 0.945
+    },
+    "guided_feedback": {
+      "budget": 100,
+      "bug_hit_rate": {
+        "D1_wren_fast_drop": 1.0,
+        "D2_wakeup_slow_recovery": 0.2,
+        "D3_prog_wren_timeout": 0.8,
+        "D4_fast_read_corrupt": 0.25,
+        "D5_cfg_rd_wrdi_race": 0.2
+      },
+      "max_unique_bugs": 4,
+      "mean_obs_signatures": 48.6,
+      "mean_raw_divergences": 19.35,
+      "mean_trials_to_discover": {
+        "D1_wren_fast_drop": 15.3,
+        "D2_wakeup_slow_recovery": 35,
+        "D3_prog_wren_timeout": 52.6,
+        "D4_fast_read_corrupt": 49.4,
+        "D5_cfg_rd_wrdi_race": 50.5
+      },
+      "mean_unique_bugs": 2.45,
+      "median_unique_bugs": 2.0,
+      "min_unique_bugs": 1,
+      "seeds": 20,
+      "seeds_finding_all": 0,
+      "std_unique_bugs": 0.686
+    },
+    "joint_random": {
+      "budget": 100,
+      "bug_hit_rate": {
+        "D1_wren_fast_drop": 1.0,
+        "D2_wakeup_slow_recovery": 0.55,
+        "D3_prog_wren_timeout": 0.2,
+        "D4_fast_read_corrupt": 0.1,
+        "D5_cfg_rd_wrdi_race": 0.0
+      },
+      "max_unique_bugs": 3,
+      "mean_obs_signatures": 52.1,
+      "mean_raw_divergences": 4.45,
+      "mean_trials_to_discover": {
+        "D1_wren_fast_drop": 29,
+        "D2_wakeup_slow_recovery": 51.7,
+        "D3_prog_wren_timeout": 50.8,
+        "D4_fast_read_corrupt": 78,
+        "D5_cfg_rd_wrdi_race": null
+      },
+      "mean_unique_bugs": 1.85,
+      "median_unique_bugs": 2.0,
+      "min_unique_bugs": 1,
+      "seeds": 20,
+      "seeds_finding_all": 0,
+      "std_unique_bugs": 0.587
+    },
+    "payload_only": {
+      "budget": 100,
+      "bug_hit_rate": {
+        "D1_wren_fast_drop": 0.0,
+        "D2_wakeup_slow_recovery": 0.0,
+        "D3_prog_wren_timeout": 0.0,
+        "D4_fast_read_corrupt": 0.0,
+        "D5_cfg_rd_wrdi_race": 0.0
+      },
+      "max_unique_bugs": 0,
+      "mean_obs_signatures": 27.15,
+      "mean_raw_divergences": 0,
+      "mean_trials_to_discover": {
+        "D1_wren_fast_drop": null,
+        "D2_wakeup_slow_recovery": null,
+        "D3_prog_wren_timeout": null,
+        "D4_fast_read_corrupt": null,
+        "D5_cfg_rd_wrdi_race": null
+      },
+      "mean_unique_bugs": 0,
+      "median_unique_bugs": 0.0,
+      "min_unique_bugs": 0,
+      "seeds": 20,
+      "seeds_finding_all": 0,
+      "std_unique_bugs": 0.0
+    }
+  },
+  "target_mode": 7,
+  "timestamp_utc": "2026-11-16T17:39:20.867502+00:00"
+}
