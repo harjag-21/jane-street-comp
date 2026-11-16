@@ -352,12 +352,14 @@ class TimingExplorerTests(unittest.TestCase):
             noisy_sw = run_repeated_sweep(client, low_range=(3, 4, 5), repeats_per_setting=15)
             self.assertEqual(noisy_sw["summary"]["classification"], "probabilistic_transition_region")
 
-            # Stage 1 2D surface wire measurement check across S0 regions (PASS/SETUP/NOTCH/WATCHDOG)
+            # Stage 1 2D surface wire measurement check across S0 & S7 regions (PASS/SETUP/NOTCH/WATCHDOG/ODD_PINHOLE)
             from tools.cartographer import probe_rtl_surface_point
             self.assertEqual(probe_rtl_surface_point(transport, client, 0, 2, 5)["sample_reg"], 0x55)
             self.assertEqual(probe_rtl_surface_point(transport, client, 0, 7, 6)["sample_reg"], 0xEE)
             self.assertEqual(probe_rtl_surface_point(transport, client, 0, 10, 14)["sample_reg"], 0xC4)
             self.assertEqual(probe_rtl_surface_point(transport, client, 0, 10, 5)["sample_reg"], 0xAA)
+            self.assertEqual(probe_rtl_surface_point(transport, client, 7, 5, 3)["sample_reg"], 0x33)
+            self.assertEqual(probe_rtl_surface_point(transport, client, 8, 8, 8)["sample_reg"], 0xEE)
 
 
 if __name__ == "__main__":

@@ -594,6 +594,35 @@ module sim_explorer_tb;
                      (((yy >= 1) && (yy <= 2)) || ((yy >= 6) && (yy <= 7)) || ((yy >= 11) && (yy <= 12))))
               sf_tx_byte = 8'h66;
           end
+          7: begin // S7_new_odd_pinholes
+            if (yy == 0) sf_tx_byte = 8'h00;
+            else if ((xx >= 5) && (xx <= 6) && (yy >= 3) && (yy <= 4)) sf_tx_byte = 8'h33;
+            else if ((xx >= 9) && (xx <= 10) && (yy >= 9) && (yy <= 10)) sf_tx_byte = 8'h44;
+          end
+          8: begin // S8_new_curved_circle
+            if (xx <= 3) sf_tx_byte = 8'h55;
+            else if (((xx - 8) * (xx - 8) + (yy - 8) * (yy - 8)) <= 9) sf_tx_byte = 8'hEE;
+          end
+          9: begin // S9_new_lshape_and_core
+            if ((xx <= 5) && (yy >= 9)) sf_tx_byte = 8'h77;
+            else if ((xx >= 9) && (yy <= 5)) sf_tx_byte = 8'h88;
+            else if ((xx >= 6) && (xx <= 7) && (yy >= 6) && (yy <= 7)) sf_tx_byte = 8'hEE;
+          end
+          10: begin // S10_new_antidiag_ridge
+            if (xx <= 2) sf_tx_byte = 8'h55;
+            else if ((xx >= 4) && (xx <= 11) && ((xx + yy) >= 14) && ((xx + yy) <= 16)) sf_tx_byte = 8'hC4;
+          end
+          11: begin // S11_new_3band_step
+            if ((xx <= 4) && (yy <= 4)) sf_tx_byte = 8'h11;
+            else if ((xx >= 7) && (yy >= 5) && (yy <= 7)) sf_tx_byte = 8'h33;
+            else if (yy >= 13) sf_tx_byte = 8'h22;
+          end
+          12: begin // S12_new_tri_islands
+            if (yy == 15) sf_tx_byte = 8'hC4;
+            else if ((xx >= 3) && (xx <= 4) && (yy >= 11) && (yy <= 13)) sf_tx_byte = 8'h33;
+            else if ((xx >= 10) && (xx <= 12) && (yy >= 10) && (yy <= 11)) sf_tx_byte = 8'h44;
+            else if ((xx >= 6) && (xx <= 7) && (yy >= 2) && (yy <= 4)) sf_tx_byte = 8'h66;
+          end
           default: sf_tx_byte = 8'hAA;
         endcase
       end

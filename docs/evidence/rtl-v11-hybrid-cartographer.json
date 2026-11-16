@@ -1,0 +1,411 @@
+{
+  "budget": 64,
+  "elapsed_seconds": 20.75,
+  "evidence_class": "rtl_simulation_2d_hybrid_cartographer_heldout",
+  "grid_size": 192,
+  "per_surface": [
+    {
+      "adaptive_cartographer": {
+        "boundary_acc": 0.5571,
+        "fail_hit": 3,
+        "small_hit": 3,
+        "unseen_acc": 0.9094
+      },
+      "blind_random": {
+        "boundary_acc": 0.5614,
+        "fail_hit": 2.8,
+        "small_hit": 2.8,
+        "unseen_acc": 0.8906
+      },
+      "failure_regions": 3,
+      "hybrid_mapper": {
+        "boundary_acc": 0.3892,
+        "fail_hit": 3,
+        "small_hit": 3,
+        "unseen_acc": 0.8968
+      },
+      "name": "S7_new_odd_pinholes",
+      "small_islands": 3,
+      "surface_id": 7,
+      "uniform_grid": {
+        "boundary_acc": 0.4375,
+        "fail_hit": 3,
+        "small_hit": 3,
+        "unseen_acc": 0.8594
+      }
+    },
+    {
+      "adaptive_cartographer": {
+        "boundary_acc": 0.8192,
+        "fail_hit": 2,
+        "small_hit": 0,
+        "unseen_acc": 0.9437
+      },
+      "blind_random": {
+        "boundary_acc": 0.726,
+        "fail_hit": 2,
+        "small_hit": 0,
+        "unseen_acc": 0.9016
+      },
+      "failure_regions": 2,
+      "hybrid_mapper": {
+        "boundary_acc": 0.8852,
+        "fail_hit": 2,
+        "small_hit": 0,
+        "unseen_acc": 0.9656
+      },
+      "name": "S8_new_curved_circle",
+      "small_islands": 0,
+      "surface_id": 8,
+      "uniform_grid": {
+        "boundary_acc": 0.617,
+        "fail_hit": 2,
+        "small_hit": 0,
+        "unseen_acc": 0.8594
+      }
+    },
+    {
+      "adaptive_cartographer": {
+        "boundary_acc": 0.7022,
+        "fail_hit": 3,
+        "small_hit": 1,
+        "unseen_acc": 0.9359
+      },
+      "blind_random": {
+        "boundary_acc": 0.771,
+        "fail_hit": 2.8,
+        "small_hit": 0.8,
+        "unseen_acc": 0.9359
+      },
+      "failure_regions": 3,
+      "hybrid_mapper": {
+        "boundary_acc": 0.92,
+        "fail_hit": 3,
+        "small_hit": 1,
+        "unseen_acc": 0.9844
+      },
+      "name": "S9_new_lshape_and_core",
+      "small_islands": 1,
+      "surface_id": 9,
+      "uniform_grid": {
+        "boundary_acc": 0.8857,
+        "fail_hit": 3,
+        "small_hit": 1,
+        "unseen_acc": 0.9688
+      }
+    },
+    {
+      "adaptive_cartographer": {
+        "boundary_acc": 0.8639,
+        "fail_hit": 2,
+        "small_hit": 0,
+        "unseen_acc": 0.9547
+      },
+      "blind_random": {
+        "boundary_acc": 0.5885,
+        "fail_hit": 2,
+        "small_hit": 0,
+        "unseen_acc": 0.8531
+      },
+      "failure_regions": 2,
+      "hybrid_mapper": {
+        "boundary_acc": 0.8333,
+        "fail_hit": 2,
+        "small_hit": 0,
+        "unseen_acc": 0.9531
+      },
+      "name": "S10_new_antidiag_ridge",
+      "small_islands": 0,
+      "surface_id": 10,
+      "uniform_grid": {
+        "boundary_acc": 0.8333,
+        "fail_hit": 2,
+        "small_hit": 0,
+        "unseen_acc": 0.9453
+      }
+    },
+    {
+      "adaptive_cartographer": {
+        "boundary_acc": 0.5507,
+        "fail_hit": 3,
+        "small_hit": 0,
+        "unseen_acc": 0.8547
+      },
+      "blind_random": {
+        "boundary_acc": 0.6822,
+        "fail_hit": 3,
+        "small_hit": 0,
+        "unseen_acc": 0.8688
+      },
+      "failure_regions": 3,
+      "hybrid_mapper": {
+        "boundary_acc": 0.6923,
+        "fail_hit": 3,
+        "small_hit": 0,
+        "unseen_acc": 0.9062
+      },
+      "name": "S11_new_3band_step",
+      "small_islands": 0,
+      "surface_id": 11,
+      "uniform_grid": {
+        "boundary_acc": 0.9184,
+        "fail_hit": 3,
+        "small_hit": 0,
+        "unseen_acc": 0.9688
+      }
+    },
+    {
+      "adaptive_cartographer": {
+        "boundary_acc": 0.6542,
+        "fail_hit": 4,
+        "small_hit": 4,
+        "unseen_acc": 0.889
+      },
+      "blind_random": {
+        "boundary_acc": 0.6068,
+        "fail_hit": 4,
+        "small_hit": 4,
+        "unseen_acc": 0.85
+      },
+      "failure_regions": 4,
+      "hybrid_mapper": {
+        "boundary_acc": 0.5189,
+        "fail_hit": 3,
+        "small_hit": 3,
+        "unseen_acc": 0.8532
+      },
+      "name": "S12_new_tri_islands",
+      "small_islands": 4,
+      "surface_id": 12,
+      "uniform_grid": {
+        "boundary_acc": 0.5745,
+        "fail_hit": 3,
+        "small_hit": 3,
+        "unseen_acc": 0.8438
+      }
+    }
+  ],
+  "poc_gate": {
+    "all_regions_replay_ok": true,
+    "boundary_gain_vs_grid_pp": -0.46,
+    "meets_5pp_boundary_gain_and_beats_adaptive": false,
+    "passed": false,
+    "retains_region_discovery": true
+  },
+  "replay_verification": [
+    {
+      "component_label": "0x00",
+      "matches": 5,
+      "repeats": 5,
+      "size": 12,
+      "surface_id": 7,
+      "surface_name": "S7_new_odd_pinholes",
+      "x_sclk_low": 2,
+      "y_gap_wait": 0
+    },
+    {
+      "component_label": "0x33",
+      "matches": 5,
+      "repeats": 5,
+      "size": 4,
+      "surface_id": 7,
+      "surface_name": "S7_new_odd_pinholes",
+      "x_sclk_low": 5,
+      "y_gap_wait": 3
+    },
+    {
+      "component_label": "0x44",
+      "matches": 5,
+      "repeats": 5,
+      "size": 4,
+      "surface_id": 7,
+      "surface_name": "S7_new_odd_pinholes",
+      "x_sclk_low": 9,
+      "y_gap_wait": 9
+    },
+    {
+      "component_label": "0x55",
+      "matches": 5,
+      "repeats": 5,
+      "size": 32,
+      "surface_id": 8,
+      "surface_name": "S8_new_curved_circle",
+      "x_sclk_low": 2,
+      "y_gap_wait": 0
+    },
+    {
+      "component_label": "0xee",
+      "matches": 5,
+      "repeats": 5,
+      "size": 29,
+      "surface_id": 8,
+      "surface_name": "S8_new_curved_circle",
+      "x_sclk_low": 5,
+      "y_gap_wait": 8
+    },
+    {
+      "component_label": "0x77",
+      "matches": 5,
+      "repeats": 5,
+      "size": 28,
+      "surface_id": 9,
+      "surface_name": "S9_new_lshape_and_core",
+      "x_sclk_low": 2,
+      "y_gap_wait": 9
+    },
+    {
+      "component_label": "0xee",
+      "matches": 5,
+      "repeats": 5,
+      "size": 4,
+      "surface_id": 9,
+      "surface_name": "S9_new_lshape_and_core",
+      "x_sclk_low": 6,
+      "y_gap_wait": 6
+    },
+    {
+      "component_label": "0x88",
+      "matches": 5,
+      "repeats": 5,
+      "size": 30,
+      "surface_id": 9,
+      "surface_name": "S9_new_lshape_and_core",
+      "x_sclk_low": 9,
+      "y_gap_wait": 0
+    },
+    {
+      "component_label": "0x55",
+      "matches": 5,
+      "repeats": 5,
+      "size": 16,
+      "surface_id": 10,
+      "surface_name": "S10_new_antidiag_ridge",
+      "x_sclk_low": 2,
+      "y_gap_wait": 0
+    },
+    {
+      "component_label": "0xc4",
+      "matches": 5,
+      "repeats": 5,
+      "size": 24,
+      "surface_id": 10,
+      "surface_name": "S10_new_antidiag_ridge",
+      "x_sclk_low": 4,
+      "y_gap_wait": 10
+    },
+    {
+      "component_label": "0x11",
+      "matches": 5,
+      "repeats": 5,
+      "size": 15,
+      "surface_id": 11,
+      "surface_name": "S11_new_3band_step",
+      "x_sclk_low": 2,
+      "y_gap_wait": 0
+    },
+    {
+      "component_label": "0x22",
+      "matches": 5,
+      "repeats": 5,
+      "size": 36,
+      "surface_id": 11,
+      "surface_name": "S11_new_3band_step",
+      "x_sclk_low": 2,
+      "y_gap_wait": 13
+    },
+    {
+      "component_label": "0x33",
+      "matches": 5,
+      "repeats": 5,
+      "size": 21,
+      "surface_id": 11,
+      "surface_name": "S11_new_3band_step",
+      "x_sclk_low": 7,
+      "y_gap_wait": 5
+    },
+    {
+      "component_label": "0xc4",
+      "matches": 5,
+      "repeats": 5,
+      "size": 12,
+      "surface_id": 12,
+      "surface_name": "S12_new_tri_islands",
+      "x_sclk_low": 2,
+      "y_gap_wait": 15
+    },
+    {
+      "component_label": "0x33",
+      "matches": 5,
+      "repeats": 5,
+      "size": 6,
+      "surface_id": 12,
+      "surface_name": "S12_new_tri_islands",
+      "x_sclk_low": 3,
+      "y_gap_wait": 11
+    },
+    {
+      "component_label": "0x66",
+      "matches": 5,
+      "repeats": 5,
+      "size": 6,
+      "surface_id": 12,
+      "surface_name": "S12_new_tri_islands",
+      "x_sclk_low": 6,
+      "y_gap_wait": 2
+    },
+    {
+      "component_label": "0x44",
+      "matches": 5,
+      "repeats": 5,
+      "size": 6,
+      "surface_id": 12,
+      "surface_name": "S12_new_tri_islands",
+      "x_sclk_low": 10,
+      "y_gap_wait": 10
+    }
+  ],
+  "seeds": [
+    20268001,
+    20268002,
+    20268003,
+    20268004,
+    20268005
+  ],
+  "strategies": [
+    "uniform_grid",
+    "blind_random",
+    "adaptive_cartographer",
+    "hybrid_mapper"
+  ],
+  "summary": {
+    "adaptive_cartographer": {
+      "mean_boundary_accuracy": 0.6912,
+      "mean_failure_region_recall": 1.0,
+      "mean_small_island_recall": 1.0,
+      "mean_unseen_accuracy": 0.9146,
+      "runs": 30
+    },
+    "blind_random": {
+      "mean_boundary_accuracy": 0.656,
+      "mean_failure_region_recall": 0.9778,
+      "mean_small_island_recall": 0.9556,
+      "mean_unseen_accuracy": 0.8833,
+      "runs": 30
+    },
+    "hybrid_mapper": {
+      "mean_boundary_accuracy": 0.7065,
+      "mean_failure_region_recall": 0.9583,
+      "mean_small_island_recall": 0.9583,
+      "mean_unseen_accuracy": 0.9266,
+      "runs": 30
+    },
+    "uniform_grid": {
+      "mean_boundary_accuracy": 0.7111,
+      "mean_failure_region_recall": 0.9583,
+      "mean_small_island_recall": 0.9583,
+      "mean_unseen_accuracy": 0.9076,
+      "runs": 30
+    }
+  },
+  "timestamp_utc": "2026-11-16T20:12:01.386116+00:00"
+}
