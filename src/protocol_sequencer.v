@@ -40,6 +40,7 @@ module protocol_sequencer #(
     output reg                    last_sample_o,
     output reg  [7:0]             sample_reg_o,
     output reg  [15:0]            cycle_cnt_o,
+    output reg  [7:0]             last_mark_tag_o,
 
     // Protocol I/O pins
     input  wire [7:0]             uio_in,
@@ -121,6 +122,7 @@ module protocol_sequencer #(
       last_sample_o    <= 1'b0;
       sample_reg_o     <= 8'h00;
       cycle_cnt_o      <= 16'h0000;
+      last_mark_tag_o  <= 8'h00;
       wait_cnt         <= 12'd0;
       wait_edge_active <= 1'b0;
       wait_edge_pol    <= 1'b0;
@@ -141,6 +143,9 @@ module protocol_sequencer #(
       end
 
       // Event FIFO pointer and count update.
+      if (do_mark) begin
+        last_mark_tag_o <= mark_payload;
+      end
       if (do_push) begin
         ev_tag[ev_wptr] <= mark_payload;
         ev_ts[ev_wptr]  <= cycle_cnt_o;
@@ -172,6 +177,7 @@ module protocol_sequencer #(
           last_sample_o    <= 1'b0;
           sample_reg_o     <= 8'h00;
           cycle_cnt_o      <= 16'h0000;
+          last_mark_tag_o  <= 8'h00;
           wait_cnt         <= 12'd0;
           wait_edge_active <= 1'b0;
           run_param        <= cmd_param;

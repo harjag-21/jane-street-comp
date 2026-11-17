@@ -40,8 +40,8 @@ pinout:
   uo[3]: "ENG_STATE[0] (0=IDLE,1=RUN,2=HALT,3=FAULT)"
   uo[4]: "ENG_STATE[1] (engine state MSB)"
   uo[5]: "EVENT_OVERFLOW (MARK FIFO overflow)"
-  uo[6]: ""
-  uo[7]: ""
+  uo[6]: "SCAN_ACTIVE (autonomous scan running)"
+  uo[7]: "SCAN_DONE (autonomous scan complete)"
 
   # Bidirectional pins
   uio[0]: "PIO[0] (UART_TX / SPI_CS_N / I2C_SCL)"

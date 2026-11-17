@@ -22,6 +22,7 @@ module tb_v1_sequencer;
   wire last_sample;
   wire [7:0] sample_reg;
   wire [15:0] cycle_cnt;
+  wire [7:0] last_mark_tag;
   wire [7:0] uio_out, uio_oe;
   wire trial_active;
 
@@ -57,6 +58,7 @@ module tb_v1_sequencer;
     .last_sample_o(last_sample),
     .sample_reg_o(sample_reg),
     .cycle_cnt_o(cycle_cnt),
+    .last_mark_tag_o(last_mark_tag),
     .uio_in(bus_pins),
     .uio_out_o(uio_out),
     .uio_oe_o(uio_oe),

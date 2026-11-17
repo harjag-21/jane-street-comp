@@ -14,12 +14,17 @@ if ROOT_DIR not in sys.path:
 
 from tools.protocol_asm import (
     UART_OP_BEGIN_LOAD,
+    UART_OP_CFG_SCAN,
     UART_OP_COMMIT_LOAD,
     UART_OP_HALT,
     UART_OP_PING_INFO,
     UART_OP_POP_EVENT,
+    UART_OP_READ_CYCLE_CNT,
+    UART_OP_READ_SCAN_FAIL,
+    UART_OP_READ_SCAN_STATUS,
     UART_OP_READ_STATUS,
     UART_OP_START,
+    UART_OP_START_SCAN,
     UART_OP_WRITE_WORD,
     build_i2c_write_byte_program,
     build_spi_mode0_program,
@@ -328,3 +333,125 @@ async def test_i2c_open_drain_ack_and_nack(dut):
 
     assert await drive_i2c_run(0xA0, True) == 0xA0
     assert await drive_i2c_run(0xA2, False) == 0xF0
+
+
+@cocotb.test()
+async def test_autonomous_scan_controller(dut):
+    cocotb.start_soon(Clock(dut.clk, 10, unit="ns").start())
+    await reset_dut(dut)
+
+    # Bad scan state/arg checks before program load
+    r = await send_cmd(dut, UART_OP_START_SCAN, req_id=1)
+    assert r[2] == 0x04  # ST_BAD_STATE (prog_valid == 0 / scan_num_steps == 0)
+
+    r = await send_cmd(dut, UART_OP_CFG_SCAN, req_id=2, arg0=1, arg1=1, arg2=0, arg3=0xAA)
+    assert r[2] == 0x03  # ST_BAD_ARG (num_steps == 0)
+    r = await send_cmd(dut, UART_OP_CFG_SCAN, req_id=3, arg0=1, arg1=1, arg2=33, arg3=0xAA)
+    assert r[2] == 0x03  # ST_BAD_ARG (num_steps > 32)
+
+    prog = build_spi_mode0_program(tx_byte=0x55)
+    assert (await load_program(dut, prog))[2] == 0
+
+    # Still bad state to START_SCAN before valid CFG_SCAN
+    r = await send_cmd(dut, UART_OP_START_SCAN, req_id=4)
+    assert r[2] == 0x04
+
+    # Configure 6-point sweep low_cycles = 1..6, pass_mode=0 (sample_reg == 0xAA)
+    r = await send_cmd(dut, UART_OP_CFG_SCAN, req_id=5, arg0=1, arg1=1, arg2=6, arg3=0xAA)
+    assert r[2] == 0
+
+    scan_stop = False
+
+    async def spi_target():
+        tx_byte = 0xAA
+        while not scan_stop:
+            while not scan_stop and ((int(dut.uio_out.value) & 0x1) or not (int(dut.uio_oe.value) & 0x1)):
+                await ClockCycles(dut.clk, 1)
+            if scan_stop:
+                break
+            bit_idx = 0
+            dut.uio_in.value = 0xF7 | (((tx_byte >> 7) & 1) << 3)
+            while not scan_stop and not (int(dut.uio_out.value) & 0x1):
+                await ValueChange(dut.uio_out)
+                if scan_stop or (int(dut.uio_out.value) & 0x1):
+                    break
+                if (int(dut.uio_out.value) >> 1) & 1:
+                    if bit_idx == 0:
+                        await Timer(23, unit="ns")
+                        bit_idx = 1
+                else:
+                    bit_idx += 1
+                    b = (tx_byte >> (7 - bit_idx)) & 1 if bit_idx < 8 else 0
+                    dut.uio_in.value = 0xF7 | (b << 3)
+            dut.uio_in.value = 0xFF
+
+    tgt_task = cocotb.start_soon(spi_target())
+
+    r = await send_cmd(dut, UART_OP_START_SCAN, req_id=6)
+    assert r[2] == 0
+    assert ((int(dut.uo_out.value) >> 6) & 1) == 1  # scan_active high
+
+    # While active, mutating commands must return ST_BAD_STATE
+    busy = await send_cmd(dut, UART_OP_START, req_id=7, arg0=1)
+    assert busy[2] == 0x04
+
+    for _ in range(25000):
+        await ClockCycles(dut.clk, 1)
+        if ((int(dut.uo_out.value) >> 7) & 1) == 1:
+            break
+    else:
+        raise AssertionError("Autonomous scan did not complete (uo_out[7] never went high)")
+
+    scan_stop = True
+    await tgt_task
+
+    assert ((int(dut.uo_out.value) >> 6) & 1) == 0  # scan_active cleared
+
+    st0 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=8, arg0=0)
+    st1 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=9, arg0=1)
+    assert st0[2] == 0 and st1[2] == 0
+    assert st0[3] == 0x02  # scan_done=1, scan_active=0
+    assert st0[4] == 6     # steps_done
+    assert st0[5] == 4     # pass_count (low_cycles = 3,4,5,6)
+    assert st0[6] == 2     # fail_count (low_cycles = 1,2)
+    bitmap = st1[3] | (st1[4] << 8) | (st1[5] << 16) | (st1[6] << 24)
+    assert bitmap == 0b111100, f"unexpected bitmap 0b{bitmap:b}"
+
+    f0 = await send_cmd(dut, UART_OP_READ_SCAN_FAIL, req_id=10, arg0=0)
+    f1 = await send_cmd(dut, UART_OP_READ_SCAN_FAIL, req_id=11, arg0=1)
+    assert f0[2] == 0 and f1[2] == 0
+    assert (f0[3] >> 7) == 1        # first_fail_valid
+    assert (f0[3] & 0x3F) == 0       # first_fail_idx = 0
+    assert f0[4] == 1                # first_fail_param = 1
+    assert (f0[5] >> 6) == 2         # ENG_HALTED
+    assert f0[6] != 0xAA             # failed sample_reg != 0xAA
+    fail_cycles = f1[3] | (f1[4] << 8)
+    assert fail_cycles > 0
+    assert f1[5] == f0[6]            # last_mark_tag matched sample_reg for MODE0 MARK
+
+    # Verify pass_mode=1 (MARK tag mode) on all-pass range low_cycles=3..6 (4 steps)
+    scan_stop = False
+    tgt_task = cocotb.start_soon(spi_target())
+    assert (await send_cmd(dut, UART_OP_CFG_SCAN, req_id=12, arg0=3, arg1=1, arg2=(1 << 6) | 4, arg3=0xAA))[2] == 0
+    assert (await send_cmd(dut, UART_OP_START_SCAN, req_id=13))[2] == 0
+    for _ in range(25000):
+        await ClockCycles(dut.clk, 1)
+        if ((int(dut.uo_out.value) >> 7) & 1) == 1:
+            break
+    scan_stop = True
+    await tgt_task
+    st0 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=14, arg0=0)
+    st1 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=15, arg0=1)
+    assert st0[4] == 4 and st0[5] == 4 and st0[6] == 0
+    assert (st1[3] & 0xF) == 0b1111
+    f0 = await send_cmd(dut, UART_OP_READ_SCAN_FAIL, req_id=16, arg0=0)
+    assert (f0[3] >> 7) == 0  # No failure
+
+    # Verify OP_HALT aborts an active long scan cleanly
+    assert (await send_cmd(dut, UART_OP_CFG_SCAN, req_id=17, arg0=10, arg1=1, arg2=32, arg3=0xAA))[2] == 0
+    assert (await send_cmd(dut, UART_OP_START_SCAN, req_id=18))[2] == 0
+    assert ((int(dut.uo_out.value) >> 6) & 1) == 1
+    assert (await send_cmd(dut, UART_OP_HALT, req_id=19))[2] == 0
+    st0 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=20, arg0=0)
+    assert (st0[3] & 0x3) == 0x0  # scan_active=0, scan_done=0
+    assert st0[4] < 32

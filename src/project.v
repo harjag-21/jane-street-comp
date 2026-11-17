@@ -53,8 +53,12 @@ module tt_um_harjag_21_timing_explorer #(
                    OP_HALT           = 8'h15,
                    OP_READ_STATUS    = 8'h16,
                    OP_POP_EVENT      = 8'h17,
-                   OP_READ_CYCLE_CNT = 8'h18,
-                   OP_PATCH_WORD     = 8'h19;
+                   OP_READ_CYCLE_CNT   = 8'h18,
+                   OP_PATCH_WORD       = 8'h19,
+                   OP_CFG_SCAN         = 8'h1A,
+                   OP_START_SCAN       = 8'h1B,
+                   OP_READ_SCAN_STATUS = 8'h1C,
+                   OP_READ_SCAN_FAIL   = 8'h1D;
 
   localparam [7:0] ST_OK        = 8'h00,
                    ST_BAD_CRC   = 8'h01,
@@ -63,7 +67,13 @@ module tt_um_harjag_21_timing_explorer #(
                    ST_BAD_STATE = 8'h04,
                    ST_CHECKSUM  = 8'h05;
 
-  localparam [1:0] ENG_RUN = 2'd1;
+  localparam [1:0] ENG_RUN    = 2'd1,
+                   ENG_HALTED = 2'd2;
+
+  localparam [1:0] SCAN_IDLE   = 2'd0,
+                   SCAN_LAUNCH = 2'd1,
+                   SCAN_ARM    = 2'd2,
+                   SCAN_WAIT   = 2'd3;
 
   wire rst_active_n = rst_n & ena;
 
@@ -99,6 +109,21 @@ module tt_um_harjag_21_timing_explorer #(
   reg        cmd_start, cmd_halt, event_pop;
   reg [11:0] cmd_param;
 
+  // Autonomous on-chip scan controller (0..32 uniform steps)
+  reg [1:0]  scan_state;
+  reg        scan_active, scan_done, scan_pass_mode;
+  reg [7:0]  scan_param_step, scan_expected;
+  reg [5:0]  scan_num_steps, scan_idx, scan_pass_cnt, scan_fail_cnt;
+  reg [11:0] scan_param_start, scan_cur_param;
+  reg [31:0] scan_pass_bitmap;
+  reg        first_fail_valid;
+  reg [5:0]  first_fail_idx;
+  reg [11:0] first_fail_param;
+  reg [1:0]  first_fail_state;
+  reg [7:0]  first_fail_sample, first_fail_tag;
+  reg [15:0] first_fail_cycles;
+  reg [3:0]  first_fail_evcnt;
+
   wire [3:0]  event_count;
   wire        event_overflow;
   wire [7:0]  event_head_tag;
@@ -108,7 +133,14 @@ module tt_um_harjag_21_timing_explorer #(
   wire        last_sample;
   wire [7:0]  sample_reg;
   wire [15:0] cycle_cnt;
+  wire [7:0]  last_mark_tag;
   wire        trial_active;
+
+  wire        scan_point_pass = (eng_state == ENG_HALTED) &&
+                                (scan_pass_mode
+                                  ? ((event_count != 4'd0) && (last_mark_tag == scan_expected))
+                                  : (sample_reg == scan_expected));
+  wire [5:0]  scan_idx_next   = scan_idx + 6'd1;
 
   integer i;
 
@@ -157,6 +189,7 @@ module tt_um_harjag_21_timing_explorer #(
       .last_sample_o(last_sample),
       .sample_reg_o(sample_reg),
       .cycle_cnt_o(cycle_cnt),
+      .last_mark_tag_o(last_mark_tag),
       .uio_in(uio_in),
       .uio_out_o(uio_out),
       .uio_oe_o(uio_oe),
@@ -319,16 +352,87 @@ module tt_um_harjag_21_timing_explorer #(
       exp_sum     <= 8'h00;
       calc_crc    <= 8'h00;
       calc_sum    <= 8'h00;
-      cmd_start   <= 1'b0;
-      cmd_halt    <= 1'b0;
-      event_pop   <= 1'b0;
-      cmd_param   <= 12'd0;
+      cmd_start         <= 1'b0;
+      cmd_halt          <= 1'b0;
+      event_pop         <= 1'b0;
+      cmd_param         <= 12'd0;
+      scan_state        <= SCAN_IDLE;
+      scan_active       <= 1'b0;
+      scan_done         <= 1'b0;
+      scan_pass_mode    <= 1'b0;
+      scan_param_step   <= 8'd0;
+      scan_expected     <= 8'h00;
+      scan_num_steps    <= 6'd0;
+      scan_idx          <= 6'd0;
+      scan_pass_cnt     <= 6'd0;
+      scan_fail_cnt     <= 6'd0;
+      scan_param_start  <= 12'd0;
+      scan_cur_param    <= 12'd0;
+      scan_pass_bitmap  <= 32'd0;
+      first_fail_valid  <= 1'b0;
+      first_fail_idx    <= 6'd0;
+      first_fail_param  <= 12'd0;
+      first_fail_state  <= 2'd0;
+      first_fail_sample <= 8'h00;
+      first_fail_tag    <= 8'h00;
+      first_fail_cycles <= 16'h0000;
+      first_fail_evcnt  <= 4'd0;
     end else begin
       tx_start  <= 1'b0;
       prog_we   <= 1'b0;
       cmd_start <= 1'b0;
       cmd_halt  <= 1'b0;
       event_pop <= 1'b0;
+
+      // Autonomous scan progression (overridden below if OP_HALT aborts scan).
+      if (scan_active) begin
+        case (scan_state)
+          SCAN_LAUNCH: begin
+            cmd_param  <= scan_cur_param;
+            cmd_start  <= 1'b1;
+            scan_state <= SCAN_ARM;
+          end
+
+          SCAN_ARM: begin
+            scan_state <= SCAN_WAIT;
+          end
+
+          SCAN_WAIT: begin
+            if (eng_state != ENG_RUN) begin
+              if (scan_point_pass) begin
+                scan_pass_cnt                  <= scan_pass_cnt + 6'd1;
+                scan_pass_bitmap[scan_idx[4:0]] <= 1'b1;
+              end else begin
+                scan_fail_cnt <= scan_fail_cnt + 6'd1;
+                if (!first_fail_valid) begin
+                  first_fail_valid  <= 1'b1;
+                  first_fail_idx    <= scan_idx;
+                  first_fail_param  <= scan_cur_param;
+                  first_fail_state  <= eng_state;
+                  first_fail_sample <= sample_reg;
+                  first_fail_tag    <= last_mark_tag;
+                  first_fail_cycles <= cycle_cnt;
+                  first_fail_evcnt  <= event_count;
+                end
+              end
+              scan_idx <= scan_idx_next;
+              if (scan_idx_next >= scan_num_steps) begin
+                scan_active <= 1'b0;
+                scan_done   <= 1'b1;
+                scan_state  <= SCAN_IDLE;
+              end else begin
+                scan_cur_param <= scan_cur_param + {4'd0, scan_param_step};
+                scan_state     <= SCAN_LAUNCH;
+              end
+            end
+          end
+
+          default: begin
+            scan_active <= 1'b0;
+            scan_state  <= SCAN_IDLE;
+          end
+        endcase
+      end
 
       case (cmd_state)
         CMD_SYNC: begin
@@ -402,7 +506,7 @@ module tt_um_harjag_21_timing_explorer #(
             end
 
             OP_BEGIN_LOAD: begin
-              if (eng_state == ENG_RUN) begin
+              if ((eng_state == ENG_RUN) || scan_active) begin
                 cmd_status <= ST_BAD_STATE;
               end else if ((req_arg0 == 8'd0) || (req_arg0 > PROG_DEPTH[7:0])) begin
                 cmd_status <= ST_BAD_ARG;
@@ -423,7 +527,7 @@ module tt_um_harjag_21_timing_explorer #(
             end
 
             OP_WRITE_WORD: begin
-              if ((eng_state == ENG_RUN) || !load_active) begin
+              if ((eng_state == ENG_RUN) || scan_active || !load_active) begin
                 cmd_status <= ST_BAD_STATE;
               end else if ((req_arg0 >= PROG_DEPTH[7:0]) || ({1'b0, req_arg0[5:0]} != load_idx)) begin
                 cmd_status <= ST_BAD_ARG;
@@ -441,7 +545,7 @@ module tt_um_harjag_21_timing_explorer #(
             end
 
             OP_COMMIT_LOAD: begin
-              if ((eng_state == ENG_RUN) || !load_active) begin
+              if ((eng_state == ENG_RUN) || scan_active || !load_active) begin
                 cmd_status <= ST_BAD_STATE;
               end else if ((load_idx != load_len) || (calc_crc != exp_crc) || (calc_sum != exp_sum)) begin
                 cmd_status  <= ST_CHECKSUM;
@@ -463,7 +567,7 @@ module tt_um_harjag_21_timing_explorer #(
             end
 
             OP_START: begin
-              if (!prog_valid || (eng_state == ENG_RUN)) begin
+              if (!prog_valid || (eng_state == ENG_RUN) || scan_active) begin
                 cmd_status <= ST_BAD_STATE;
               end else begin
                 cmd_status <= ST_OK;
@@ -477,6 +581,11 @@ module tt_um_harjag_21_timing_explorer #(
             OP_HALT: begin
               cmd_status <= ST_OK;
               cmd_halt   <= 1'b1;
+              if (scan_active) begin
+                cmd_start   <= 1'b0;
+                scan_active <= 1'b0;
+                scan_state  <= SCAN_IDLE;
+              end
               resp_d0    <= {4'd0, prog_valid, event_overflow, eng_state};
               resp_d1    <= {2'd0, pc};
             end
@@ -509,7 +618,7 @@ module tt_um_harjag_21_timing_explorer #(
             end
 
             OP_PATCH_WORD: begin
-              if ((eng_state == ENG_RUN) || !prog_valid) begin
+              if ((eng_state == ENG_RUN) || scan_active || !prog_valid) begin
                 cmd_status <= ST_BAD_STATE;
               end else if (req_arg0 >= PROG_DEPTH[7:0]) begin
                 cmd_status <= ST_BAD_ARG;
@@ -522,6 +631,85 @@ module tt_um_harjag_21_timing_explorer #(
                 resp_d1    <= req_arg1;
                 resp_d2    <= req_arg2;
                 resp_d3    <= 8'h01;
+              end
+            end
+
+            OP_CFG_SCAN: begin
+              if ((eng_state == ENG_RUN) || scan_active) begin
+                cmd_status <= ST_BAD_STATE;
+              end else if ((req_arg2[5:0] == 6'd0) || (req_arg2[5:0] > 6'd32)) begin
+                cmd_status <= ST_BAD_ARG;
+              end else begin
+                cmd_status       <= ST_OK;
+                scan_param_start <= {4'd0, req_arg0};
+                scan_param_step  <= req_arg1;
+                scan_num_steps   <= req_arg2[5:0];
+                scan_pass_mode   <= req_arg2[6];
+                scan_expected    <= req_arg3;
+                scan_done        <= 1'b0;
+                resp_d0          <= req_arg0;
+                resp_d1          <= req_arg1;
+                resp_d2          <= {1'b0, req_arg2[6], req_arg2[5:0]};
+                resp_d3          <= req_arg3;
+              end
+            end
+
+            OP_START_SCAN: begin
+              if (!prog_valid || (eng_state == ENG_RUN) || scan_active || (scan_num_steps == 6'd0)) begin
+                cmd_status <= ST_BAD_STATE;
+              end else begin
+                cmd_status             <= ST_OK;
+                scan_state             <= SCAN_LAUNCH;
+                scan_active            <= 1'b1;
+                scan_done              <= 1'b0;
+                scan_idx               <= 6'd0;
+                scan_pass_cnt          <= 6'd0;
+                scan_fail_cnt          <= 6'd0;
+                scan_pass_bitmap       <= 32'd0;
+                scan_param_start[11:8] <= req_arg0[3:0];
+                scan_cur_param         <= {req_arg0[3:0], scan_param_start[7:0]};
+                first_fail_valid       <= 1'b0;
+                first_fail_idx         <= 6'd0;
+                first_fail_param       <= 12'd0;
+                first_fail_state       <= 2'd0;
+                first_fail_sample      <= 8'h00;
+                first_fail_tag         <= 8'h00;
+                first_fail_cycles      <= 16'h0000;
+                first_fail_evcnt       <= 4'd0;
+                resp_d0                <= scan_param_start[7:0];
+                resp_d1                <= {4'd0, req_arg0[3:0]};
+                resp_d2                <= {2'd0, scan_num_steps};
+                resp_d3                <= {scan_pass_mode, 7'd0};
+              end
+            end
+
+            OP_READ_SCAN_STATUS: begin
+              cmd_status <= ST_OK;
+              if (req_arg0 == 8'd0) begin
+                resp_d0 <= {6'd0, scan_done, scan_active};
+                resp_d1 <= {2'd0, scan_idx};
+                resp_d2 <= {2'd0, scan_pass_cnt};
+                resp_d3 <= {2'd0, scan_fail_cnt};
+              end else begin
+                resp_d0 <= scan_pass_bitmap[7:0];
+                resp_d1 <= scan_pass_bitmap[15:8];
+                resp_d2 <= scan_pass_bitmap[23:16];
+                resp_d3 <= scan_pass_bitmap[31:24];
+              end
+            end
+
+            OP_READ_SCAN_FAIL: begin
+              cmd_status <= ST_OK;
+              if (req_arg0 == 8'd0) begin
+                resp_d0 <= {first_fail_valid, 1'b0, first_fail_idx};
+                resp_d1 <= first_fail_param[7:0];
+                resp_d2 <= {first_fail_state, 2'd0, first_fail_param[11:8]};
+                resp_d3 <= first_fail_sample;
+              end else begin
+                resp_d0 <= first_fail_cycles[7:0];
+                resp_d1 <= first_fail_cycles[15:8];
+                resp_d2 <= first_fail_tag;
+                resp_d3 <= {4'd0, first_fail_evcnt};
               end
             end
 
@@ -585,9 +773,10 @@ module tt_um_harjag_21_timing_explorer #(
   assign uo_out[2]   = prog_valid;
   assign uo_out[4:3] = eng_state;
   assign uo_out[5]   = event_overflow;
-  assign uo_out[7:6] = 2'b00;
+  assign uo_out[6]   = scan_active;
+  assign uo_out[7]   = scan_done;
 
-  wire _unused = &{ui_in[7:3], req_arg3, 1'b0};
+  wire _unused = &{ui_in[7:3], 1'b0};
 
 endmodule
 `default_nettype wire

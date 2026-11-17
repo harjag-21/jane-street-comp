@@ -13,6 +13,7 @@ from tools.protocol_asm import (
     assemble,
     build_i2c_stretch_probe_program,
     build_i2c_write_byte_program,
+    build_spi_mode0_program,
     build_spi_target_responder_program,
     build_uart_tx_program,
     check_timing_contract,
@@ -360,6 +361,73 @@ class TimingExplorerTests(unittest.TestCase):
             self.assertEqual(probe_rtl_surface_point(transport, client, 0, 10, 5)["sample_reg"], 0xAA)
             self.assertEqual(probe_rtl_surface_point(transport, client, 7, 5, 3)["sample_reg"], 0x33)
             self.assertEqual(probe_rtl_surface_point(transport, client, 8, 8, 8)["sample_reg"], 0xEE)
+
+    def test_autonomous_scan_equivalence_and_uart_reduction(self) -> None:
+        with IcarusSimTransport() as transport:
+            client = ProtocolClient(transport)
+            transport.reset(1)
+
+            # 1) 16-point SPI low_cycles sweep (1..16): compare host-driven vs autonomous scan
+            prog = build_spi_mode0_program(0x55)
+            client.load_program(prog)
+            transport.configure_target(0, delay_ns=37, spi_resp=0xAA)  # passes once low_cycles >= 4
+
+            frames_before_host = client.uart_frames_sent
+            host_points = []
+            for p in range(1, 17):
+                tr = client.run_trial(p)
+                host_points.append((p, tr["eng_state"] == "ENG_HALTED" and tr["sample_reg"] == 0xAA, tr))
+            host_frames = client.uart_frames_sent - frames_before_host
+
+            frames_before_auto = client.uart_frames_sent
+            auto = client.run_autonomous_scan(
+                param_start=1,
+                param_step=1,
+                num_steps=16,
+                expected_val=0xAA,
+                pass_mode=0,
+            )
+            auto_frames = client.uart_frames_sent - frames_before_auto
+
+            self.assertTrue(auto["scan_done"])
+            self.assertFalse(auto["scan_active"])
+            self.assertEqual(auto["steps_done"], 16)
+            self.assertEqual(
+                [pt["passed"] for pt in auto["results"]],
+                [ok for _, ok, _ in host_points],
+            )
+            self.assertEqual(auto["pass_count"], sum(1 for _, ok, _ in host_points if ok))
+            self.assertEqual(auto["fail_count"], sum(1 for _, ok, _ in host_points if not ok))
+            self.assertTrue(auto["first_fail"]["valid"])
+            self.assertEqual(auto["first_fail"]["fail_idx"], 0)
+            self.assertEqual(auto["first_fail"]["fail_param"], 1)
+            self.assertEqual(auto["first_fail"]["sample_reg"], host_points[0][2]["sample_reg"])
+            self.assertEqual(auto["first_fail"]["cycle_cnt"], host_points[0][2]["cycle_cnt"])
+            # Autonomous scan: CFG(1) + START(1) + READ_STATUS(2) + READ_FAIL(2) = 6 frames vs 64 host frames
+            self.assertEqual(auto_frames, 6)
+            self.assertEqual(host_frames, 64)
+
+            # 2) I2C clock-stretch sweep using MARK pass_mode=1 (stretch=7 cycles, max_wait=4..11)
+            stretch_prog = build_i2c_stretch_probe_program(scl_pin=0, sda_pin=1, half_cycles=4)
+            client.load_program(stretch_prog)
+            transport.configure_target(4, delay_ns=7)
+            host_stretch = [client.run_trial(p) for p in range(4, 12)]
+            auto_stretch = client.run_autonomous_scan(
+                param_start=4,
+                param_step=1,
+                num_steps=8,
+                expected_val=0x51,  # MARK release tag
+                pass_mode=1,
+            )
+            self.assertEqual(
+                [pt["passed"] for pt in auto_stretch["results"]],
+                [any(e["tag"] == 0x51 for e in tr["events"]) for tr in host_stretch],
+            )
+            self.assertEqual(auto_stretch["pass_count"], 5)  # max_wait = 7..11 pass
+            self.assertEqual(auto_stretch["fail_count"], 3)  # max_wait = 4..6 timeout
+            self.assertTrue(auto_stretch["first_fail"]["valid"])
+            self.assertEqual(auto_stretch["first_fail"]["fail_param"], 4)
+            self.assertEqual(auto_stretch["first_fail"]["last_mark_tag"], 0xEE)
 
 
 if __name__ == "__main__":

@@ -972,6 +972,19 @@ module sim_explorer_tb;
                    {5'd0, i2c_od_fault, i2c_seen, uart_mon_seen}, arg_b);
           $fflush(32'h8000_0001);
         end
+      end else if (cmd_ch == "x") begin
+        if ($fscanf(32'h8000_0000, "%d", arg_a) == 1) begin
+          arg_b = 0;
+          while ((arg_b < arg_a) && (uo_out[7] != 1'b1)) begin
+            @(posedge clk);
+            arg_b = arg_b + 1;
+          end
+          @(posedge clk);
+          $display("STAT %02x %02x %02x %02x %02x %0d",
+                   uo_out, spi_mosi_rx, uart_mon_byte, i2c_rx_byte,
+                   {5'd0, i2c_od_fault, i2c_seen, uart_mon_seen}, arg_b);
+          $fflush(32'h8000_0001);
+        end
       end
       cmd_ch = $fgetc(32'h8000_0000);
     end

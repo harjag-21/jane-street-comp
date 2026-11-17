@@ -23,14 +23,18 @@ if str(ROOT_DIR) not in sys.path:
 from experiments.spi_timing_model import Target  # noqa: E402
 from tools.protocol_asm import (  # noqa: E402
     UART_OP_BEGIN_LOAD,
+    UART_OP_CFG_SCAN,
     UART_OP_COMMIT_LOAD,
     UART_OP_HALT,
     UART_OP_PATCH_WORD,
     UART_OP_PING_INFO,
     UART_OP_POP_EVENT,
     UART_OP_READ_CYCLE_CNT,
+    UART_OP_READ_SCAN_FAIL,
+    UART_OP_READ_SCAN_STATUS,
     UART_OP_READ_STATUS,
     UART_OP_START,
+    UART_OP_START_SCAN,
     UART_OP_WRITE_WORD,
     assemble,
     build_i2c_stretch_probe_program,
@@ -95,6 +99,9 @@ class ProtocolTransport:
         pass
 
     def wait_execution(self, max_cycles: int = 4000) -> Optional[SimObservations]:
+        return None
+
+    def wait_scan_completion(self, max_cycles: int = 200000) -> Optional[Tuple[int, int]]:
         return None
 
     def close(self) -> None:
@@ -248,6 +255,13 @@ class IcarusSimTransport(ProtocolTransport):
             i2c_od_fault=bool(flags & 0x04),
         )
 
+    def wait_scan_completion(self, max_cycles: int = 200000) -> Tuple[int, int]:
+        line = self._send_line(f"x {int(max_cycles)}")
+        parts = line.split()
+        if len(parts) != 7 or parts[0] != "STAT":
+            raise ProtocolError(f"Malformed STAT line: {line}")
+        return int(parts[1], 16), int(parts[6])
+
     def close(self) -> None:
         try:
             if self._proc.poll() is None and self._proc.stdin is not None:
@@ -270,6 +284,7 @@ class ProtocolClient:
         self.transport = transport
         self._req_id = 1
         self._cached_words: Optional[List[int]] = None
+        self.uart_frames_sent = 0
 
     def invalidate_cache(self) -> None:
         self._cached_words = None
@@ -286,6 +301,7 @@ class ProtocolClient:
     ) -> Tuple[int, List[int]]:
         rid = self._next_id()
         req = make_uart_request(opcode, rid, arg0, arg1, arg2, arg3)
+        self.uart_frames_sent += 1
         resp = self.transport.exchange(req)
         if resp[0] != 0x5A:
             raise ProtocolError(f"Bad response sync byte: 0x{resp[0]:02x}")
@@ -414,6 +430,128 @@ class ProtocolClient:
         if sim_obs is not None:
             record["sim_observations"] = asdict(sim_obs)
         return record
+
+    def configure_scan(
+        self,
+        param_start: int,
+        param_step: int,
+        num_steps: int,
+        expected_val: int,
+        pass_mode: int = 0,
+    ) -> Dict[str, int]:
+        if not (0 <= param_start <= 0xFFF):
+            raise ValueError(f"param_start must fit in 12 bits, got {param_start}")
+        if not (0 <= param_step <= 0xFF):
+            raise ValueError(f"param_step must fit in 8 bits, got {param_step}")
+        if not (1 <= num_steps <= 32):
+            raise ValueError(f"num_steps must be in 1..32, got {num_steps}")
+        if pass_mode not in (0, 1):
+            raise ValueError(f"pass_mode must be 0 or 1, got {pass_mode}")
+        cfg_byte = ((pass_mode & 1) << 6) | (num_steps & 0x3F)
+        d = self.require_ok(
+            UART_OP_CFG_SCAN,
+            param_start & 0xFF,
+            param_step & 0xFF,
+            cfg_byte,
+            expected_val & 0xFF,
+        )
+        return {
+            "param_start_lsb": d[0],
+            "param_step": d[1],
+            "num_steps": d[2] & 0x3F,
+            "pass_mode": (d[2] >> 6) & 1,
+            "expected_val": d[3],
+        }
+
+    def start_scan(self, param_start_msb: int = 0) -> Dict[str, int]:
+        d = self.require_ok(UART_OP_START_SCAN, param_start_msb & 0x0F)
+        return {
+            "param_start": d[0] | ((d[1] & 0x0F) << 8),
+            "num_steps": d[2],
+            "pass_mode": (d[3] >> 7) & 1,
+        }
+
+    def read_scan_status(self) -> Dict[str, Any]:
+        d0 = self.require_ok(UART_OP_READ_SCAN_STATUS, 0)
+        d1 = self.require_ok(UART_OP_READ_SCAN_STATUS, 1)
+        steps_done = d0[1]
+        bitmap_raw = d1[0] | (d1[1] << 8) | (d1[2] << 16) | (d1[3] << 24)
+        return {
+            "scan_active": bool(d0[0] & 0x01),
+            "scan_done": bool((d0[0] >> 1) & 0x01),
+            "steps_done": steps_done,
+            "pass_count": d0[2],
+            "fail_count": d0[3],
+            "pass_bitmap": bitmap_raw,
+            "points": [bool((bitmap_raw >> idx) & 1) for idx in range(steps_done)],
+        }
+
+    def read_scan_fail(self) -> Dict[str, Any]:
+        d0 = self.require_ok(UART_OP_READ_SCAN_FAIL, 0)
+        d1 = self.require_ok(UART_OP_READ_SCAN_FAIL, 1)
+        valid = bool((d0[0] >> 7) & 1)
+        state_code = (d0[2] >> 6) & 0x03
+        return {
+            "valid": valid,
+            "fail_idx": d0[0] & 0x3F,
+            "fail_param": d0[1] | ((d0[2] & 0x0F) << 8),
+            "eng_state": state_code,
+            "eng_state_name": ENG_STATE_NAMES.get(state_code, "UNKNOWN"),
+            "sample_reg": d0[3],
+            "cycle_cnt": d1[0] | (d1[1] << 8),
+            "last_mark_tag": d1[2],
+            "event_count": d1[3] & 0x0F,
+        }
+
+    def run_autonomous_scan(
+        self,
+        param_start: int,
+        param_step: int,
+        num_steps: int,
+        expected_val: int,
+        pass_mode: int = 0,
+        max_wait_cycles: int = 200000,
+    ) -> Dict[str, Any]:
+        self.configure_scan(
+            param_start=param_start,
+            param_step=param_step,
+            num_steps=num_steps,
+            expected_val=expected_val,
+            pass_mode=pass_mode,
+        )
+        self.start_scan((param_start >> 8) & 0x0F)
+        sim_scan = self.transport.wait_scan_completion(max_wait_cycles)
+        status: Optional[Dict[str, Any]] = None
+        for _ in range(400):
+            st = self.read_scan_status()
+            if st["scan_done"] and not st["scan_active"]:
+                status = st
+                break
+            time.sleep(0.001)
+        if status is None:
+            raise ProtocolError("Autonomous scan failed to complete within poll limit")
+        first_fail = self.read_scan_fail() if status["fail_count"] > 0 else {"valid": False}
+        points = [
+            {
+                "step_idx": idx,
+                "param": (param_start + idx * param_step) & 0xFFF,
+                "passed": status["points"][idx],
+            }
+            for idx in range(status["steps_done"])
+        ]
+        res: Dict[str, Any] = {
+            **status,
+            "param_start": param_start,
+            "param_step": param_step,
+            "expected_val": expected_val,
+            "pass_mode": pass_mode,
+            "first_fail": first_fail,
+            "results": points,
+        }
+        if sim_scan is not None:
+            res["sim_scan_cycles"] = sim_scan[1]
+            res["sim_uo_out"] = sim_scan[0]
+        return res
 
 
 def classify_boundary(observations: Dict[int, bool]) -> Dict[str, Any]:
