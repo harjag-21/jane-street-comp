@@ -385,7 +385,7 @@ async def test_autonomous_scan_controller(dut):
                     bit_idx += 1
                     if bit_idx < 8:
                         async def update_miso(val):
-                            await Timer(33, unit="ns")
+                            await Timer(23, unit="ns")
                             if not scan_stop:
                                 dut.uio_in.value = 0xF7 | (val << 3)
                         cocotb.start_soon(update_miso(miso_bits[bit_idx]))
