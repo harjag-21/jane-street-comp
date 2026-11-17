@@ -16,7 +16,7 @@ One deterministic, single-issue microsequencer (`protocol_sequencer` in `src/pro
 | Protocol pins | `uio[7:0]`; separate 8-bit `uio_out_o` and `uio_oe_o` registers | Supports push-pull and open-drain (`OE`-driven low / high-Z release) protocols with the same ISA. |
 | Event FIFO | `8`-entry timestamped FIFO (`ev_tag[7:0]`, `ev_ts[15:0]` from 16-bit `cycle_cnt_o`) with overflow flag | Captures cycle-exact boundary/protocol events (`MARK`) for host readback after a trial. |
 | Loader transport | UART RX on `ui_in[0]` (2-FF synchronized), UART TX on `uo_out[0]`, runtime baud divider on `ui_in[2:1]` (`00=CLKS_PER_BIT/8`, `01=104`, `10=217`, `11=434` for `115200` baud at `12/25/50 MHz`) | Reuses the v0.1 host interface while supporting `50 MHz` Tiny Tapeout crystals/PLLs and fast `div8` simulation. |
-| Status outputs | `uo_out[1] = trial_active`, `uo_out[2] = prog_valid`, `uo_out[4:3] = eng_state`, `uo_out[5] = event_overflow`, `uo_out[7:6] = 2'b00` | Gives external instrumentation direct single-cycle observability alongside UART telemetry. |
+| Status outputs | `uo_out[1] = trial_active`, `uo_out[2] = prog_valid`, `uo_out[4:3] = eng_state`, `uo_out[5] = event_overflow`, `uo_out[6] = scan_active`, `uo_out[7] = scan_done` | Gives external instrumentation direct single-cycle observability alongside UART telemetry. |
 | Engine reset & select | `rst_active_n = rst_n & ena` | Clears `prog_valid`, `uio_oe_o`, event FIFO, and loader state cleanly on chip deselection or reset. |
 | Data state | `last_sample_o` (1-bit), `sample_reg_o` (8-bit shift register), `loop_cnt0/1` (8-bit counters), `run_param` (12-bit runtime parameter) | Enables sampled response branching, MSB-first 8-bit capture, bounded loops, and parameterized timing sweeps without a CPU register file. |
 | Timing unit | Whole core clock cycles (`1` cycle per non-wait instruction; `WAIT n` adds `n` extra hold cycles, total `n + 1` cycles on the instruction) | Makes timing explicit and verifiable to the exact clock edge. |
@@ -64,6 +64,10 @@ If `CMD_BODY` or `CMD_CRC` stalls for `64 × CLKS_PER_BIT` cycles, the loader pa
 | `0x17` | `POP_EVENT` | ignored | Returns `d0 = event_count` (pre-pop), `d1 = tag`, `d2 = ts[7:0]`, `d3 = ts[15:8]` and pops FIFO if nonempty |
 | `0x18` | `READ_CYCLE_CNT` | ignored | Returns `d0 = cycle_cnt[7:0]`, `d1 = cycle_cnt[15:8]`, `d2 = sample_reg`, `d3 = event_count` |
 | `0x19` | `PATCH_WORD` | `arg0 = addr`, `arg1 = word[7:0]`, `arg2 = word[15:8]` | Random-access single-word patch when `prog_valid == 1` and halted (accelerates fuzzing/minimization without reloading all 64 words) |
+| `0x1A` | `CFG_SCAN` | `arg0 = start[7:0]`, `arg1 = step[7:0]`, `arg2 = {pass_mode[6], steps[5:0]}`, `arg3 = expected[7:0]` | Configure `1..32` uniform autonomous sweep steps (`ST_BAD_ARG` on `0` or `>32`); `pass_mode=0` checks `sample_reg == expected`, `pass_mode=1` checks nonempty FIFO and `last_mark_tag == expected` |
+| `0x1B` | `START_SCAN` | `arg0[3:0] = start[11:8]` | Launch on-chip sweep; sequencer advances `cur_param += step` across trials with 2-cycle inter-trial overhead, asserting `scan_active` (`uo_out[6]`) then `scan_done` (`uo_out[7]`) |
+| `0x1C` | `READ_SCAN_STATUS` | `arg0 = page` (`0` or `1`) | `arg0=0`: `{scan_done, scan_active}`, `steps_done`, `pass_cnt`, `fail_cnt`; `arg0=1`: `scan_pass_bitmap[31:0]` (LSB first) |
+| `0x1D` | `READ_SCAN_FAIL` | `arg0 = page` (`0` or `1`) | `arg0=0`: `{valid, idx}`, `param[7:0]`, `{state, param[11:8]}`, `sample_reg`; `arg0=1`: `cycle_cnt[15:0]`, `last_mark_tag`, `event_count` for the first failing trial |
 
 Status codes: `0x00 ST_OK`, `0x01 ST_BAD_CRC`, `0x02 ST_BAD_OP`, `0x03 ST_BAD_ARG`, `0x04 ST_BAD_STATE`, `0x05 ST_CHECKSUM`.
 

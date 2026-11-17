@@ -9,6 +9,8 @@ import unittest
 
 from tools.diff_minimizer import eval_ref_vs_dut, minimize_divergence, replay_minimized_case
 from tools.protocol_asm import (
+    UART_OP_CFG_SCAN,
+    UART_OP_START_SCAN,
     analyze_timing_bounds,
     assemble,
     build_i2c_stretch_probe_program,
@@ -428,6 +430,25 @@ class TimingExplorerTests(unittest.TestCase):
             self.assertTrue(auto_stretch["first_fail"]["valid"])
             self.assertEqual(auto_stretch["first_fail"]["fail_param"], 4)
             self.assertEqual(auto_stretch["first_fail"]["last_mark_tag"], 0xEE)
+
+            # 3) Negative scan args/state checks & mid-scan OP_HALT abort
+            st, _ = client.command(UART_OP_CFG_SCAN, 1, 1, 0, 0xAA)
+            self.assertEqual(st, 0x03)  # ST_BAD_ARG (0 steps)
+            st, _ = client.command(UART_OP_CFG_SCAN, 1, 1, 33, 0xAA)
+            self.assertEqual(st, 0x03)  # ST_BAD_ARG (>32 steps)
+
+            transport.reset(1)
+            st, _ = client.command(UART_OP_START_SCAN, 0, 0, 0, 0)
+            self.assertEqual(st, 0x04)  # ST_BAD_STATE before prog_valid/cfg
+
+            client.load_program(prog)
+            client.configure_scan(param_start=20, param_step=1, num_steps=32, expected_val=0xAA)
+            client.start_scan(0)
+            client.halt()
+            st_abort = client.read_scan_status()
+            self.assertFalse(st_abort["scan_active"])
+            self.assertFalse(st_abort["scan_done"])
+            self.assertLess(st_abort["steps_done"], 32)
 
 
 if __name__ == "__main__":
