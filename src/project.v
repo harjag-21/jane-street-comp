@@ -112,9 +112,9 @@ module tt_um_harjag_21_timing_explorer #(
   // Autonomous on-chip scan controller (0..32 uniform steps)
   reg [1:0]  scan_state;
   reg        scan_active, scan_done, scan_pass_mode;
-  reg [7:0]  scan_param_step, scan_expected;
+  reg [7:0]  scan_param_start_lsb, scan_param_step, scan_expected;
   reg [5:0]  scan_num_steps, scan_idx, scan_pass_cnt, scan_fail_cnt;
-  reg [11:0] scan_param_start, scan_cur_param;
+  reg [11:0] scan_cur_param;
   reg [31:0] scan_pass_bitmap;
   reg        first_fail_valid;
   reg [5:0]  first_fail_idx;
@@ -360,13 +360,13 @@ module tt_um_harjag_21_timing_explorer #(
       scan_active       <= 1'b0;
       scan_done         <= 1'b0;
       scan_pass_mode    <= 1'b0;
+      scan_param_start_lsb <= 8'd0;
       scan_param_step   <= 8'd0;
       scan_expected     <= 8'h00;
       scan_num_steps    <= 6'd0;
       scan_idx          <= 6'd0;
       scan_pass_cnt     <= 6'd0;
       scan_fail_cnt     <= 6'd0;
-      scan_param_start  <= 12'd0;
       scan_cur_param    <= 12'd0;
       scan_pass_bitmap  <= 32'd0;
       first_fail_valid  <= 1'b0;
@@ -640,9 +640,9 @@ module tt_um_harjag_21_timing_explorer #(
               end else if ((req_arg2[5:0] == 6'd0) || (req_arg2[5:0] > 6'd32)) begin
                 cmd_status <= ST_BAD_ARG;
               end else begin
-                cmd_status       <= ST_OK;
-                scan_param_start <= {4'd0, req_arg0};
-                scan_param_step  <= req_arg1;
+                cmd_status           <= ST_OK;
+                scan_param_start_lsb <= req_arg0;
+                scan_param_step      <= req_arg1;
                 scan_num_steps   <= req_arg2[5:0];
                 scan_pass_mode   <= req_arg2[6];
                 scan_expected    <= req_arg3;
@@ -665,19 +665,18 @@ module tt_um_harjag_21_timing_explorer #(
                 scan_idx               <= 6'd0;
                 scan_pass_cnt          <= 6'd0;
                 scan_fail_cnt          <= 6'd0;
-                scan_pass_bitmap       <= 32'd0;
-                scan_param_start[11:8] <= req_arg0[3:0];
-                scan_cur_param         <= {req_arg0[3:0], scan_param_start[7:0]};
-                first_fail_valid       <= 1'b0;
-                first_fail_idx         <= 6'd0;
-                first_fail_param       <= 12'd0;
-                first_fail_state       <= 2'd0;
-                first_fail_sample      <= 8'h00;
-                first_fail_tag         <= 8'h00;
-                first_fail_cycles      <= 16'h0000;
-                first_fail_evcnt       <= 4'd0;
-                resp_d0                <= scan_param_start[7:0];
-                resp_d1                <= {4'd0, req_arg0[3:0]};
+                scan_pass_bitmap  <= 32'd0;
+                scan_cur_param    <= {req_arg0[3:0], scan_param_start_lsb};
+                first_fail_valid  <= 1'b0;
+                first_fail_idx    <= 6'd0;
+                first_fail_param  <= 12'd0;
+                first_fail_state  <= 2'd0;
+                first_fail_sample <= 8'h00;
+                first_fail_tag    <= 8'h00;
+                first_fail_cycles <= 16'h0000;
+                first_fail_evcnt  <= 4'd0;
+                resp_d0           <= scan_param_start_lsb;
+                resp_d1           <= {4'd0, req_arg0[3:0]};
                 resp_d2                <= {2'd0, scan_num_steps};
                 resp_d3                <= {scan_pass_mode, 7'd0};
               end
