@@ -4,7 +4,7 @@
 
 ## Purpose
 
-The fixed UART-to-SPI path (`master` / `67f63ab`) established a clean Tiny Tapeout CMOS5L physical hardening baseline. The competition design (`feat/v1-engine`) replaces that fixed controller with a post-silicon programmable protocol engine for the **Timing Boundary Explorer**: the host loads any protocol program over UART, sweeps a 12-bit runtime timing parameter across trials, and records sampled bytes plus cycle-accurate `MARK` timestamps.
+The fixed UART-to-SPI path (`master` / `67f63ab`) established a clean Tiny Tapeout CMOS5L physical hardening baseline. The competition design replaces that fixed controller with a runtime-reprogrammable protocol engine for the **Timing Boundary Explorer**: the host loads any protocol program over UART, sweeps a 12-bit runtime timing parameter across trials, and records sampled bytes plus cycle-accurate `MARK` timestamps.
 
 ## Implemented v1 architecture
 
