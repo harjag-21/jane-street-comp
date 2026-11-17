@@ -28,6 +28,7 @@ module sim_explorer_tb;
   localparam integer MODE_SPI_SHAPES    = 8;
   localparam integer MODE_SPI_PARAM     = 9;
   localparam integer MODE_SPI_SURFACE   = 10;
+  localparam integer MODE_JTAG_TAP      = 11;
 
   reg        clk = 1'b0;
   reg        rst_n = 1'b0;
@@ -146,6 +147,29 @@ module sim_explorer_tb;
   wire scl_bus = i2c_scl_low ? 1'b0 : (uio_oe[0] ? uio_out[0] : 1'b1);
   wire sda_bus = i2c_sda_low ? 1'b0 : (uio_oe[1] ? uio_out[1] : 1'b1);
 
+  // Separately instantiated IEEE 1149.1 JTAG TAP controller (MODE_JTAG_TAP = 11)
+  wire jtag_tck = (target_mode == MODE_JTAG_TAP) && uio_oe[0] ? uio_out[0] : 1'b0;
+  wire jtag_tms = (target_mode == MODE_JTAG_TAP) && uio_oe[1] ? uio_out[1] : 1'b1;
+  wire jtag_tdi = (target_mode == MODE_JTAG_TAP) && uio_oe[2] ? uio_out[2] : 1'b0;
+  wire jtag_tdo_drv;
+  wire [3:0] jtag_state, jtag_ir;
+  wire [15:0] jtag_tlr_cnt, jtag_uir_cnt, jtag_udr_cnt;
+
+  jtag_tap_model #(
+      .IDCODE_VALUE(32'h1A2B4D6F)
+  ) u_jtag_tap (
+      .tck              (jtag_tck),
+      .tms              (jtag_tms),
+      .tdi              (jtag_tdi),
+      .tdo_delay_ns     (spi_delay_ns),
+      .tdo              (jtag_tdo_drv),
+      .tap_state_o      (jtag_state),
+      .ir_o             (jtag_ir),
+      .tlr_entries_o    (jtag_tlr_cnt),
+      .update_ir_count_o(jtag_uir_cnt),
+      .update_dr_count_o(jtag_udr_cnt)
+  );
+
   always @(*) begin
     if ((target_mode == MODE_SPI) || (target_mode == MODE_SPI_STATEFUL) ||
         (target_mode == MODE_SPI_MULTISPEC) || (target_mode == MODE_SPI_NOISY) ||
@@ -154,6 +178,8 @@ module sim_explorer_tb;
       uio_in = {4'hF, spi_miso_drv, 3'b111};
     end else if ((target_mode == MODE_I2C) || (target_mode == MODE_I2C_STRETCH)) begin
       uio_in = {6'h3F, sda_bus, scl_bus};
+    end else if (target_mode == MODE_JTAG_TAP) begin
+      uio_in = {4'hF, jtag_tdo_drv, 3'b111};
     end else begin
       uio_in = 8'hFF;
     end

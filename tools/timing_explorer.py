@@ -158,6 +158,7 @@ class IcarusSimTransport(ProtocolTransport):
         sources = [
             self._root / "src" / "project.v",
             self._root / "src" / "protocol_sequencer.v",
+            self._root / "test" / "jtag_tap_model.v",
             self._root / "tools" / "sim_explorer_tb.v",
         ]
         cmd = ["iverilog", "-g2012", "-o", str(self._vvp_path), *(str(s) for s in sources)]

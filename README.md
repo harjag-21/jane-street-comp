@@ -3,9 +3,9 @@
 **Author:** Hardik Jagga (`harjag-21`)  
 **Target:** Jane Street Protocol Emulator ASIC Competition — Tiny Tapeout IHP 130 nm CMOS5L (`8×4` tiles, submission deadline `2027-01-18`)
 
-A post-silicon **reprogrammable protocol emulator and autonomous timing-boundary explorer**. Instead of hardwiring fixed UART, SPI, or I2C state machines, the chip pairs a CRC-8/07 UART control interface (`src/project.v`) with a deterministic `64 × 16`-word microsequencer (`src/protocol_sequencer.v`) and an **on-chip autonomous scan controller (`0x1A`–`0x1D`)**:
+A **runtime-reprogrammable protocol emulator and autonomous timing-boundary explorer** designed for post-fabrication configurability. Instead of hardwiring fixed UART, SPI, or I2C state machines, the chip pairs a CRC-8/07 UART control interface (`src/project.v`) with a deterministic `64 × 16`-word microsequencer (`src/protocol_sequencer.v`) and an **on-chip autonomous scan controller (`0x1A`–`0x1D`)**:
 
-1. **Load a protocol program once** (`64 × 16` instructions over `ui_in[0]` / `uo_out[0]`, supporting SPI, UART, and open-drain I2C via `OE`-controlled high-Z release).
+1. **Load a protocol program once** (`64 × 16` instructions over `ui_in[0]` / `uo_out[0]`, supporting SPI, UART, open-drain I2C via `OE`-controlled high-Z release, and JTAG TAP `IDCODE` reads).
 2. **Configure a timing sweep on-chip** (`OP_CFG_SCAN`: `param_start`, `param_step`, `1..32` steps, pass classification by shifted `sample_reg` or `MARK` event tag, and `expected_val`).
 3. **Start one autonomous scan** (`OP_START_SCAN`), letting the chip iterate all configured timing parameters back-to-back with 2-cycle inter-trial turnaround (`uo_out[6]=scan_active`, `uo_out[7]=scan_done`).
 4. **Read back compact results** (`OP_READ_SCAN_STATUS` 32-bit pass/fail bitmap + counts, and `OP_READ_SCAN_FAIL` first-failing parameter, sample/tag, cycle count, and event count) or fall back to single-trial / differential host probing (`OP_START`, `OP_PATCH_WORD`, `POP_EVENT`).
@@ -15,7 +15,7 @@ A post-silicon **reprogrammable protocol emulator and autonomous timing-boundary
 - **RTL (`src/project.v`, `src/protocol_sequencer.v`):**
   - **Sequencer (`0x0`–`0xD`):** `NOP`, `OUT`, `OE`, `WAIT`, `SAMPLE`, `JZ`, `JMP`, `LOOP`, `SETCOUNT`, `MARK`, `HALT`, simultaneous `OUT_SAMPLE`, runtime-parameterized `WAIT_PARAM`, and bounded `WAIT_EDGE` (plus safe high-Z `ENG_FAULT` on `0xE`–`0xF`).
   - **Control & Autonomous Scanner (`0x10`–`0x1D`):** 8-byte CRC-8/07 UART frames with `ui_in[2:1]` runtime baud dividers (`8 / 104 / 217 / 434` for sim or `12/25/50 MHz @ 115200`), single-word live patching (`0x19 OP_PATCH_WORD`), autonomous sweep (`0x1A`–`0x1D`), and `ena & rst_n` deselection reset.
-- **Assembler & Cycle-Contract Checker (`tools/protocol_asm.py`):** Symbolic assembler generating UART TX (`24` words), SPI mode-0 sweep (`38` words), 2D SPI (`59` words), SPI target responder (`WAIT_EDGE`), I2C open-drain ACK/NACK (`62` words), and I2C clock-stretch probe programs, plus `analyze_timing_bounds` and `check_timing_contract` (`JZ`, `LOOP`, `WAIT_EDGE`).
+- **Assembler & Cycle-Contract Checker (`tools/protocol_asm.py`):** Symbolic assembler generating UART TX (`24` words), SPI mode-0 sweep (`38` words), 2D SPI (`59` words), SPI target responder (`WAIT_EDGE`), I2C open-drain ACK/NACK (`62` words), I2C clock-stretch probe, and IEEE 1149.1 JTAG TAP `IDCODE` (`50` words) programs, plus `analyze_timing_bounds` and `check_timing_contract` (`JZ`, `LOOP`, `WAIT_EDGE`).
 - **Host CLI & Simulator Bridge (`tools/timing_explorer.py`, `tools/sim_explorer_tb.v`):** Unified `ProtocolClient` (`--sim` Icarus RTL or `--port` serial UART) with `run_autonomous_scan`, single-trial sweeps/binary search, JSONL trace replay (`replay --exec`), differential timing fuzzing + minimization (`tools/diff_minimizer.py`), and noisy-target sweeps (`tools/noisy_boundary_study.py`).
 - **Software Reference Model & Benchmarks (`experiments/`):** Femtosecond SPI timing oracle (`15/15` unit tests), `experiments/autonomous_scan_eval.py`, and reproducible fuzzing/cartographer studies (`docs/evidence/`).
 - **Documentation:** [PROGRAMMABLE_ENGINE_ARCHITECTURE.md](docs/PROGRAMMABLE_ENGINE_ARCHITECTURE.md), [TIMING_BOUNDARY_EXPLORER_ARCHITECTURE.md](docs/TIMING_BOUNDARY_EXPLORER_ARCHITECTURE.md), [COMPETITION_PLAN_AND_EVIDENCE.md](docs/COMPETITION_PLAN_AND_EVIDENCE.md), [PROJECT_STATUS_REPORT_2026-11-16.md](docs/PROJECT_STATUS_REPORT_2026-11-16.md), [info.md](docs/info.md).
@@ -33,8 +33,9 @@ python -m unittest discover -s tools -v
 python tools/contract_audit.py
 python -m unittest discover -s experiments -v
 
-# 4. Standalone sequencer RTL testbench (Icarus Verilog)
+# 4. Standalone sequencer & JTAG TAP RTL testbenches (Icarus Verilog)
 iverilog -g2012 -Wall -s tb_v1_sequencer -o sim_seq.vvp src/protocol_sequencer.v test/tb_v1_sequencer.v && vvp sim_seq.vvp
+iverilog -g2012 -Wall -s tb_jtag_tap -o sim_jtag.vvp src/project.v src/protocol_sequencer.v test/jtag_tap_model.v test/tb_jtag_tap.v && vvp sim_jtag.vvp
 
 # 5. Live protocol sweeps, replay, & differential fuzzing
 python tools/timing_explorer.py run-example --sim --example uart

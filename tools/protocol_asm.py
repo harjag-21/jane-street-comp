@@ -358,6 +358,88 @@ def build_spi_target_responder_program(
     return assemble(lines)
 
 
+def bitrev8(val: int) -> int:
+    """Reverse bits of an 8-bit integer (MSB-first <-> LSB-first conversion)."""
+    return int(f"{val & 0xFF:08b}"[::-1], 2)
+
+
+def build_jtag_idcode_program(
+    ir_opcode: int = 0x1,
+    dr_bytes: int = 4,
+    tck_pin: int = 0,
+    tms_pin: int = 1,
+    tdi_pin: int = 2,
+    tdo_pin: int = 3,
+) -> List[int]:
+    """Assemble an IEEE 1149.1 TAP reset + Shift-IR + parameterized Shift-DR IDCODE reader (<=64 words)."""
+    if not (1 <= dr_bytes <= 8):
+        raise ValueError(f"dr_bytes must be in 1..8 to fit MARK FIFO, got {dr_bytes}")
+    tck = 1 << tck_pin
+    tms = 1 << tms_pin
+    tdi = 1 << tdi_pin
+    oe_mask = tck | tms | tdi
+
+    lines = [
+        f"OUT 0x{tms:02x}",       # hold TMS=1, TCK=0
+        f"OE  0x{oe_mask:02x}",
+        "SETCOUNT 0, 5",          # 5 TCK edges with TMS=1 -> Test-Logic-Reset from any state
+        "jtag_rst_loop:",
+        f"OUT 0x{(tms | tck):02x}",
+        f"OUT 0x{tms:02x}",
+        "LOOP 0, jtag_rst_loop",
+    ]
+
+    def tick(tms_bit: int, tdi_bit: int = 0) -> None:
+        base = (tms if tms_bit else 0) | (tdi if tdi_bit else 0)
+        lines.append(f"OUT 0x{base:02x}")
+        lines.append(f"OUT 0x{(base | tck):02x}")
+
+    # TLR -> RTI (0) -> Sel-DR (1) -> Sel-IR (1) -> Cap-IR (0) -> Shift-IR (0)
+    for t in (0, 1, 1, 0, 0):
+        tick(t, 0)
+
+    # Shift 4-bit IR instruction LSB-first; assert TMS=1 on MSB to enter Exit1-IR
+    for bit in range(4):
+        tick(1 if bit == 3 else 0, (ir_opcode >> bit) & 1)
+
+    # Exit1-IR -> Update-IR (1) -> Sel-DR (1) -> Cap-DR (0) -> Shift-DR (0)
+    for t in (1, 1, 0, 0):
+        tick(t, 0)
+
+    # Shift dr_bytes * 8 bits from DR (LSB-first on TDO), parameterizing low-half TCK via WAIT_PARAM
+    lines += [
+        f"SETCOUNT 1, {dr_bytes}",
+        "jtag_byte_loop:",
+        "SETCOUNT 0, 8",
+        "jtag_bit_loop:",
+        "OUT 0x00",               # TCK falling edge shifts next bit onto TDO
+        "WAIT_PARAM 0",           # wait run_param + 1 extra cycles before sampling TDO
+        f"SAMPLE {tdo_pin}, 0",   # shifts sampled bit into LSB of sample_reg
+        f"OUT 0x{tck:02x}",       # TCK rising edge shifts TAP DR
+        "WAIT 1",
+        "LOOP 0, jtag_bit_loop",
+        "MARK_SAMPLE",            # log bit-reversed captured byte & cycle_cnt
+        "LOOP 1, jtag_byte_loop",
+    ]
+
+    # Shift-DR -> Exit1-DR (1) -> Update-DR (1) -> RTI (0), park TCK=0 and halt
+    for t in (1, 1, 0):
+        tick(t, 0)
+    lines += [
+        "OUT 0x00",
+        "HALT 0",
+    ]
+    return assemble(lines)
+
+
+def decode_jtag_idcode_events(events: Sequence[Dict[str, Any]]) -> int:
+    """Reconstruct a little-endian integer (e.g. 32-bit IDCODE) from 8-bit MARK_SAMPLE events."""
+    val = 0
+    for idx, ev in enumerate(events):
+        val |= bitrev8(int(ev["tag"])) << (8 * idx)
+    return val
+
+
 def build_spi_two_txn_sequence(
     cmd0: int,
     cmd1: int,
@@ -880,7 +962,9 @@ def check_timing_contract(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="v1 Protocol Engine assembler helper")
     parser.add_argument(
-        "--example", choices=["uart", "spi", "i2c", "i2c_stretch", "spi_target"], required=True
+        "--example",
+        choices=["uart", "spi", "i2c", "i2c_stretch", "spi_target", "jtag_idcode"],
+        required=True,
     )
     args = parser.parse_args()
     if args.example == "uart":
@@ -891,7 +975,9 @@ if __name__ == "__main__":
         prog = build_i2c_write_byte_program(0xA0)
     elif args.example == "i2c_stretch":
         prog = build_i2c_stretch_probe_program()
-    else:
+    elif args.example == "spi_target":
         prog = build_spi_target_responder_program(0x5A)
+    else:
+        prog = build_jtag_idcode_program()
     crc, s8 = program_checksums(prog)
     print(json.dumps({"example": args.example, "length": len(prog), "crc8": crc, "sum8": s8, "words": [f"0x{w:04x}" for w in prog]}, indent=2))

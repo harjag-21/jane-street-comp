@@ -9,7 +9,7 @@ You can also include images in this folder and reference them in the markdown. E
 
 ## How it works
 
-**Timing Boundary Explorer** is a post-silicon programmable protocol emulator built on Tiny Tapeout IHP 130 nm CMOS5L (`8×4` tiles). Instead of fixed UART, SPI, or I2C state machines, the chip pairs a **CRC-8-verified UART control plane** (`src/project.v`) with a **deterministic single-issue 16-bit microsequencer** (`src/protocol_sequencer.v`):
+**Timing Boundary Explorer** is a reprogrammable protocol emulator designed for Tiny Tapeout IHP 130 nm CMOS5L (`8×4` tiles), allowing new protocol programs to be loaded after fabrication. Instead of fixed UART, SPI, or I2C state machines, the chip pairs a **CRC-8-verified UART control plane** (`src/project.v`) with a **deterministic single-issue 16-bit microsequencer** (`src/protocol_sequencer.v`):
 
 - **Instruction store & state:** `64 × 16`-bit program memory (`OP_WRITE_WORD`), 8-bit pin value and direction registers (`uio_out[7:0]`, `uio_oe[7:0]`), 1-bit `last_sample`, an 8-bit MSB-first shift register (`sample_reg`), two 8-bit loop counters, a 12-bit runtime sweep parameter (`run_param` via `WAIT_PARAM`), a 16-bit free-running cycle counter (`cycle_cnt`), and an 8-entry timestamped `MARK` event FIFO.
 - **Deterministic ISA (`0x0`–`0xD`, `0xE`–`0xF` fault):** Single-cycle instructions (`NOP`, `OUT`, `OE`, `SAMPLE`, `JZ`, `JMP`, `SETCOUNT`, `LOOP`, `MARK`, `HALT`, atomic `OUT_SAMPLE`) plus cycle-exact `WAIT`, `WAIT_PARAM`, and bounded `WAIT_EDGE` holds. Illegal opcodes (`0xE`–`0xF`) immediately halt in `ENG_FAULT` with `uio_oe[7:0] = 0`.

@@ -1,7 +1,9 @@
-# Timing Boundary Explorer — Architecture Draft
+# Timing Boundary Explorer — v0.1 Historical Architecture Draft
 
-**Status:** v0.1 UART-to-SPI bring-up RTL has passed a standalone RTL simulation; the final reprogrammable protocol engine and ISA remain to be designed.
-**Purpose:** keep the experiment, ASIC, host software, and evidence plan aligned before RTL work.
+> **Superseded notice (2026-11-17):** This document preserves the original **v0.1 bring-up contract** (`master` @ `67f63ab`). The final `64 × 16` programmable protocol engine, `0x0`–`0xD` ISA, and `0x1A`–`0x1D` autonomous on-chip timing scan controller are implemented, hardened, and specified in [PROGRAMMABLE_ENGINE_ARCHITECTURE.md](PROGRAMMABLE_ENGINE_ARCHITECTURE.md).
+
+**Status (historical v0.1):** Preserved as the v0.1 UART-to-SPI bring-up record prior to implementing the v1 programmable engine.
+**Purpose:** Record the initial v0.1 experiment, pin plan, and framing conventions used before RTL convergence.
 
 ## Research question (hypothesis)
 

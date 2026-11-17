@@ -95,10 +95,11 @@ If `CMD_BODY` or `CMD_CRC` stalls for `64 × CLKS_PER_BIT` cycles, the loader pa
    - Reset (`rst_n == 0` or `ena == 0`) clears all scan state, `scan_active`, `scan_done`, counters, bitmap, and snapshot.
    - While `scan_active == 1`, `BEGIN_LOAD`, `WRITE_WORD`, `COMMIT_LOAD`, `PATCH_WORD`, `START`, `CFG_SCAN`, and `START_SCAN` are rejected with `ST_BAD_STATE`; readback commands (`PING_INFO`, `READ_STATUS`, `READ_SCAN_STATUS`, `READ_SCAN_FAIL`, `READ_CYCLE_CNT`, `POP_EVENT`) remain available.
 
-## Verified example programs (`tools/protocol_asm.py`, `test/test.py`)
+## Verified example programs (`tools/protocol_asm.py`, `test/test.py`, `test/tb_jtag_tap.v`)
 
-All three acceptance programs compile cleanly via `tools/protocol_asm.py` (`--example uart|spi|i2c`) and execute end-to-end over the UART loader in Cocotb (`test/test.py`):
+Four protocol families compile cleanly via `tools/protocol_asm.py` (`--example uart|spi|i2c|jtag_idcode`) and execute end-to-end over the UART loader without RTL changes:
 
 1. **UART TX (`24` words):** Loaded over `ui_in[0]`, emits `0x55` (`8N1`) on `uio[0]`, and logs `MARK` start/end timestamps (`test_uart_tx_loaded_program`: `PASS`).
-2. **SPI Mode-0 Timing Sweep (`38` words):** Loaded over UART and invoked repeatedly via `START(param)` across `run_param` delays; verifies transition from failed capture (`run_param=0`, MISO delayed too long -> `0x00 != 0xA5`) to exact capture (`run_param=8` -> `sample_reg == 0xA5`) plus deterministic `cycle_cnt` scaling (`test_spi_mode0_timing_sweep_over_uart`: `PASS`).
-3. **I2C Open-Drain ACK/NACK (`62` words):** Generates START, shifts 8-bit address (`0xA0`) using `OE`-controlled open-drain drive and high-Z release, samples ACK (`0`) vs NACK (`1`), generates STOP, and emits `MARK` tags checked by the host (`test_i2c_open_drain_ack_and_nack`: `PASS`).
+2. **SPI Mode-0 Timing Sweep (`38` words):** Loaded over UART and invoked repeatedly via `START(param)` across `run_param` delays (or autonomously via `START_SCAN`); verifies transition from failed capture (`run_param=0`, MISO delayed too long -> `0x00 != 0xA5`) to exact capture plus deterministic `cycle_cnt` scaling (`test_spi_mode0_timing_sweep_over_uart`, `test_autonomous_scan_controller`: `PASS`).
+3. **I2C Open-Drain ACK/NACK & Clock-Stretch (`62` words / `WAIT_EDGE` probe):** Generates START, shifts 8-bit address (`0xA0`) using `OE`-controlled open-drain drive and high-Z release, samples ACK (`0`) vs NACK (`1`), generates STOP, and emits `MARK` tags checked by the host (`test_i2c_open_drain_ack_and_nack`: `PASS`).
+4. **IEEE 1149.1 JTAG TAP `IDCODE` (`50` words):** With zero RTL modifications, resets an independently written behavioral JTAG TAP (`test/jtag_tap_model.v`) from a dirty `PAUSE_DR`/`BYPASS` state via 5× `TMS=1` into `Test-Logic-Reset`, shifts 4-bit `IR=IDCODE (4'h1)`, reads the 32-bit `IDCODE` (`0x1A2B4D6F`) across 4 nested-loop `MARK_SAMPLE` events (`cycle_cnt = 321`), passes `check_timing_contract`, and exercises `TDO` delay sweeping via both `START` and the autonomous scan controller (`test/tb_jtag_tap.v`, `test_jtag_tap_idcode_read_contract_and_tdo_sweep`: `PASS`).

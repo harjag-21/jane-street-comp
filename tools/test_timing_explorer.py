@@ -13,12 +13,15 @@ from tools.protocol_asm import (
     UART_OP_START_SCAN,
     analyze_timing_bounds,
     assemble,
+    bitrev8,
     build_i2c_stretch_probe_program,
     build_i2c_write_byte_program,
+    build_jtag_idcode_program,
     build_spi_mode0_program,
     build_spi_target_responder_program,
     build_uart_tx_program,
     check_timing_contract,
+    decode_jtag_idcode_events,
     insn,
     predict_dynamic_contract,
 )
@@ -449,6 +452,56 @@ class TimingExplorerTests(unittest.TestCase):
             self.assertFalse(st_abort["scan_active"])
             self.assertFalse(st_abort["scan_done"])
             self.assertLess(st_abort["steps_done"], 32)
+
+    def test_jtag_tap_idcode_read_contract_and_tdo_sweep(self) -> None:
+        jtag_words = build_jtag_idcode_program(ir_opcode=0x1, dr_bytes=4)
+        self.assertLessEqual(len(jtag_words), 64)
+        expected_idcode = 0x1A2B4D6F
+        expected_msb_rev = bitrev8((expected_idcode >> 24) & 0xFF)  # 0x58
+
+        with IcarusSimTransport() as transport:
+            client = ProtocolClient(transport)
+            transport.reset(1)
+            client.load_program(jtag_words)
+
+            # 1) Exact IDCODE read & dynamic cycle-contract check against separately written TAP model
+            transport.configure_target(11, delay_ns=0)  # MODE_JTAG_TAP = 11
+            res0 = client.run_trial(1)
+            self.assertEqual(res0["eng_state"], "ENG_HALTED")
+            self.assertEqual(len(res0["events"]), 4)
+            self.assertEqual(decode_jtag_idcode_events(res0["events"]), expected_idcode)
+
+            idcode_bits = [(expected_idcode >> b) & 1 for b in range(32)]
+            chk = check_timing_contract(
+                jtag_words,
+                1,
+                observed_cycles=res0["cycle_cnt"],
+                observed_events=res0["events"],
+                eng_state=res0["eng_state"],
+                sample_bits=idcode_bits,
+            )
+            self.assertTrue(chk["contract_ok"], chk["errors"])
+            self.assertEqual(chk["bounds"]["min_cycles"], chk["bounds"]["max_cycles"])
+
+            # 2) TDO clock-to-out delay sweep (23 ns): fail at run_param=0, pass at run_param>=1
+            transport.configure_target(11, delay_ns=23)
+            host_idcodes = []
+            for p in range(4):
+                tr = client.run_trial(p)
+                host_idcodes.append(decode_jtag_idcode_events(tr["events"]))
+            self.assertNotEqual(host_idcodes[0], expected_idcode)
+            self.assertEqual(host_idcodes[1:], [expected_idcode, expected_idcode, expected_idcode])
+
+            # 3) Autonomous on-chip scan matches host-driven JTAG IDCODE delay boundary (0 fails, 1..3 pass)
+            auto_jtag = client.run_autonomous_scan(
+                param_start=0,
+                param_step=1,
+                num_steps=4,
+                expected_val=expected_msb_rev,
+                pass_mode=1,
+            )
+            self.assertEqual([pt["passed"] for pt in auto_jtag["results"]], [False, True, True, True])
+            self.assertEqual(auto_jtag["first_fail"]["fail_param"], 0)
 
 
 if __name__ == "__main__":
