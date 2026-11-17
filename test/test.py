@@ -349,41 +349,49 @@ async def test_autonomous_scan_controller(dut):
     r = await send_cmd(dut, UART_OP_CFG_SCAN, req_id=3, arg0=1, arg1=1, arg2=33, arg3=0xAA)
     assert r[2] == 0x03  # ST_BAD_ARG (num_steps > 32)
 
-    prog = build_spi_mode0_program(tx_byte=0x55)
+    prog = build_spi_mode0_program(0x55)
     assert (await load_program(dut, prog))[2] == 0
 
     # Still bad state to START_SCAN before valid CFG_SCAN
     r = await send_cmd(dut, UART_OP_START_SCAN, req_id=4)
     assert r[2] == 0x04
 
-    # Configure 6-point sweep low_cycles = 1..6, pass_mode=0 (sample_reg == 0xAA)
-    r = await send_cmd(dut, UART_OP_CFG_SCAN, req_id=5, arg0=1, arg1=1, arg2=6, arg3=0xAA)
+    # Configure 6-point sweep run_param = 0..5 (low_cycles = 2..7), pass_mode=0 (sample_reg == 0xAA)
+    r = await send_cmd(dut, UART_OP_CFG_SCAN, req_id=5, arg0=0, arg1=1, arg2=6, arg3=0xAA)
     assert r[2] == 0
 
     scan_stop = False
 
     async def spi_target():
-        tx_byte = 0xAA
+        miso_bits = [(0xAA >> b) & 1 for b in range(7, -1, -1)]
+        prev_cs = 1
+        prev_sclk = 0
+        bit_idx = 0
+        dut.uio_in.value = 0xF7 | (miso_bits[0] << 3)
         while not scan_stop:
-            while not scan_stop and ((int(dut.uio_out.value) & 0x1) or not (int(dut.uio_oe.value) & 0x1)):
-                await ClockCycles(dut.clk, 1)
-            if scan_stop:
-                break
-            bit_idx = 0
-            dut.uio_in.value = 0xF7 | (((tx_byte >> 7) & 1) << 3)
-            while not scan_stop and not (int(dut.uio_out.value) & 0x1):
-                await ValueChange(dut.uio_out)
-                if scan_stop or (int(dut.uio_out.value) & 0x1):
-                    break
-                if (int(dut.uio_out.value) >> 1) & 1:
-                    if bit_idx == 0:
-                        await Timer(23, unit="ns")
-                        bit_idx = 1
-                else:
+            await ClockCycles(dut.clk, 1)
+            oe = int(dut.uio_oe.value)
+            out = int(dut.uio_out.value)
+            cs = (out & 1) if (oe & 1) else 1
+            sclk = ((out >> 1) & 1) if (oe & 2) else 0
+            if cs == 1:
+                bit_idx = 0
+                dut.uio_in.value = 0xF7 | (miso_bits[0] << 3)
+            else:
+                if prev_cs == 1 and cs == 0:
+                    bit_idx = 0
+                    dut.uio_in.value = 0xF7 | (miso_bits[0] << 3)
+                if prev_sclk == 1 and sclk == 0:
                     bit_idx += 1
-                    b = (tx_byte >> (7 - bit_idx)) & 1 if bit_idx < 8 else 0
-                    dut.uio_in.value = 0xF7 | (b << 3)
-            dut.uio_in.value = 0xFF
+                    if bit_idx < 8:
+                        async def update_miso(val):
+                            await Timer(33, unit="ns")
+                            if not scan_stop:
+                                dut.uio_in.value = 0xF7 | (val << 3)
+                        cocotb.start_soon(update_miso(miso_bits[bit_idx]))
+            prev_cs = cs
+            prev_sclk = sclk
+        dut.uio_in.value = 0xFF
 
     tgt_task = cocotb.start_soon(spi_target())
 
@@ -412,8 +420,8 @@ async def test_autonomous_scan_controller(dut):
     assert st0[2] == 0 and st1[2] == 0
     assert st0[3] == 0x02  # scan_done=1, scan_active=0
     assert st0[4] == 6     # steps_done
-    assert st0[5] == 4     # pass_count (low_cycles = 3,4,5,6)
-    assert st0[6] == 2     # fail_count (low_cycles = 1,2)
+    assert st0[5] == 4     # pass_count (run_param = 2,3,4,5)
+    assert st0[6] == 2     # fail_count (run_param = 0,1)
     bitmap = st1[3] | (st1[4] << 8) | (st1[5] << 16) | (st1[6] << 24)
     assert bitmap == 0b111100, f"unexpected bitmap 0b{bitmap:b}"
 
@@ -422,17 +430,17 @@ async def test_autonomous_scan_controller(dut):
     assert f0[2] == 0 and f1[2] == 0
     assert (f0[3] >> 7) == 1        # first_fail_valid
     assert (f0[3] & 0x3F) == 0       # first_fail_idx = 0
-    assert f0[4] == 1                # first_fail_param = 1
+    assert f0[4] == 0                # first_fail_param = 0
     assert (f0[5] >> 6) == 2         # ENG_HALTED
     assert f0[6] != 0xAA             # failed sample_reg != 0xAA
     fail_cycles = f1[3] | (f1[4] << 8)
     assert fail_cycles > 0
     assert f1[5] == f0[6]            # last_mark_tag matched sample_reg for MODE0 MARK
 
-    # Verify pass_mode=1 (MARK tag mode) on all-pass range low_cycles=3..6 (4 steps)
+    # Verify pass_mode=1 (MARK tag mode) on all-pass range run_param=2..5 (4 steps)
     scan_stop = False
     tgt_task = cocotb.start_soon(spi_target())
-    assert (await send_cmd(dut, UART_OP_CFG_SCAN, req_id=12, arg0=3, arg1=1, arg2=(1 << 6) | 4, arg3=0xAA))[2] == 0
+    assert (await send_cmd(dut, UART_OP_CFG_SCAN, req_id=12, arg0=2, arg1=1, arg2=(1 << 6) | 4, arg3=0xAA))[2] == 0
     assert (await send_cmd(dut, UART_OP_START_SCAN, req_id=13))[2] == 0
     for _ in range(25000):
         await ClockCycles(dut.clk, 1)
