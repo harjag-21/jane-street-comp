@@ -17,6 +17,7 @@ from tools.protocol_asm import (
     UART_OP_CFG_SCAN,
     UART_OP_COMMIT_LOAD,
     UART_OP_HALT,
+    UART_OP_PATCH_WORD,
     UART_OP_PING_INFO,
     UART_OP_POP_EVENT,
     UART_OP_READ_CYCLE_CNT,
@@ -26,6 +27,7 @@ from tools.protocol_asm import (
     UART_OP_START,
     UART_OP_START_SCAN,
     UART_OP_WRITE_WORD,
+    assemble,
     build_i2c_write_byte_program,
     build_spi_mode0_program,
     build_uart_tx_program,
@@ -435,9 +437,11 @@ async def test_autonomous_scan_controller(dut):
     assert f1[5] == f0[6]            # last_mark_tag matched sample_reg for MODE0 MARK
 
     # Verify pass_mode=1 (MARK tag mode) on all-pass range run_param=2..5 (4 steps)
+    # Note: OP_CFG_SCAN clears prior scan_done (uo_out[7]) before START_SCAN.
     scan_stop = False
     tgt_task = cocotb.start_soon(spi_target())
     assert (await send_cmd(dut, UART_OP_CFG_SCAN, req_id=12, arg0=2, arg1=1, arg2=(1 << 6) | 4, arg3=0xAA))[2] == 0
+    assert ((int(dut.uo_out.value) >> 7) & 1) == 0  # scan_done cleared by CFG_SCAN
     assert (await send_cmd(dut, UART_OP_START_SCAN, req_id=13))[2] == 0
     for _ in range(25000):
         await ClockCycles(dut.clk, 1)
@@ -452,13 +456,52 @@ async def test_autonomous_scan_controller(dut):
     f0 = await send_cmd(dut, UART_OP_READ_SCAN_FAIL, req_id=16, arg0=0)
     assert (f0[3] >> 7) == 0  # No failure
 
-    # Verify busy-guard (ST_BAD_STATE) and OP_HALT abort on an active long scan
+    # Verify busy-guard (ST_BAD_STATE) for all prohibited commands & OP_HALT abort
     assert (await send_cmd(dut, UART_OP_CFG_SCAN, req_id=17, arg0=20, arg1=4, arg2=32, arg3=0xAA))[2] == 0
     assert (await send_cmd(dut, UART_OP_START_SCAN, req_id=18))[2] == 0
     assert ((int(dut.uo_out.value) >> 6) & 1) == 1
-    busy = await send_cmd(dut, UART_OP_START, req_id=19, arg0=1)
-    assert busy[2] == 0x04  # ST_BAD_STATE while scan_active
-    assert (await send_cmd(dut, UART_OP_HALT, req_id=20))[2] == 0
-    st0 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=21, arg0=0)
+    for rid, op in (
+        (19, UART_OP_BEGIN_LOAD),
+        (20, UART_OP_START),
+        (21, UART_OP_PATCH_WORD),
+        (22, UART_OP_CFG_SCAN),
+        (23, UART_OP_START_SCAN),
+    ):
+        busy = await send_cmd(dut, op, req_id=rid, arg0=1, arg1=1, arg2=1)
+        assert busy[2] == 0x04, f"op 0x{op:02x} allowed during scan_active"
+    assert (await send_cmd(dut, UART_OP_HALT, req_id=24))[2] == 0
+    st0 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=25, arg0=0)
     assert (st0[3] & 0x3) == 0x0  # scan_active=0, scan_done=0
     assert st0[4] < 32
+
+    # Verify 12-bit param_start[11:8], param_step > 1, and pass_mode=1 failure on empty FIFO
+    no_mark_prog = assemble(["WAIT_PARAM 0", "HALT 0"])
+    assert (await load_program(dut, no_mark_prog))[2] == 0
+    # param_start = 0x102 (arg0=0x02 in CFG, arg0=0x01 in START_SCAN), param_step = 3, 2 steps -> 0x102, 0x105
+    assert (await send_cmd(dut, UART_OP_CFG_SCAN, req_id=26, arg0=0x02, arg1=3, arg2=(1 << 6) | 2, arg3=0x00))[2] == 0
+    assert (await send_cmd(dut, UART_OP_START_SCAN, req_id=27, arg0=0x01))[2] == 0
+    for _ in range(10000):
+        await ClockCycles(dut.clk, 1)
+        if ((int(dut.uo_out.value) >> 7) & 1) == 1:
+            break
+    else:
+        raise AssertionError("12-bit stepped scan did not complete")
+    st0 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=28, arg0=0)
+    assert st0[4] == 2 and st0[5] == 0 and st0[6] == 2  # event_count == 0 fails even when expected == 0x00
+    f0 = await send_cmd(dut, UART_OP_READ_SCAN_FAIL, req_id=29, arg0=0)
+    f1 = await send_cmd(dut, UART_OP_READ_SCAN_FAIL, req_id=30, arg0=1)
+    assert (f0[3] >> 7) == 1 and (f0[3] & 0x3F) == 0
+    assert (f0[4] | ((f0[5] & 0xF) << 8)) == 0x102  # 12-bit first_fail_param preserved
+    assert (f1[6] & 0xF) == 0  # first_fail_evcnt == 0
+
+    # Verify ena=0 deselection resets scan_active and scan_done cleanly
+    assert (await send_cmd(dut, UART_OP_CFG_SCAN, req_id=31, arg0=0x40, arg1=8, arg2=16, arg3=0x00))[2] == 0
+    assert (await send_cmd(dut, UART_OP_START_SCAN, req_id=32, arg0=0x02))[2] == 0
+    assert ((int(dut.uo_out.value) >> 6) & 1) == 1
+    dut.ena.value = 0
+    await ClockCycles(dut.clk, 4)
+    assert ((int(dut.uo_out.value) >> 6) & 0x3) == 0
+    dut.ena.value = 1
+    await ClockCycles(dut.clk, 4)
+    st0 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=33, arg0=0)
+    assert st0[3] == 0 and st0[4] == 0 and st0[5] == 0 and st0[6] == 0

@@ -69,7 +69,31 @@ If `CMD_BODY` or `CMD_CRC` stalls for `64 × CLKS_PER_BIT` cycles, the loader pa
 | `0x1C` | `READ_SCAN_STATUS` | `arg0 = page` (`0` or `1`) | `arg0=0`: `{scan_done, scan_active}`, `steps_done`, `pass_cnt`, `fail_cnt`; `arg0=1`: `scan_pass_bitmap[31:0]` (LSB first) |
 | `0x1D` | `READ_SCAN_FAIL` | `arg0 = page` (`0` or `1`) | `arg0=0`: `{valid, idx}`, `param[7:0]`, `{state, param[11:8]}`, `sample_reg`; `arg0=1`: `cycle_cnt[15:0]`, `last_mark_tag`, `event_count` for the first failing trial |
 
-Status codes: `0x00 ST_OK`, `0x01 ST_BAD_CRC`, `0x02 ST_BAD_OP`, `0x03 ST_BAD_ARG`, `0x04 ST_BAD_STATE`, `0x05 ST_CHECKSUM`.
+| Status codes: `0x00 ST_OK`, `0x01 ST_BAD_CRC`, `0x02 ST_BAD_OP`, `0x03 ST_BAD_ARG`, `0x04 ST_BAD_STATE`, `0x05 ST_CHECKSUM`.
+
+## Autonomous on-chip scan operating contract (`0x1A`–`0x1D`)
+
+1. **Typical host sequence:**
+   - Load and commit a protocol program (`BEGIN_LOAD` → `WRITE_WORD`* → `COMMIT_LOAD`) so `prog_valid == 1`.
+   - Configure the sweep via `CFG_SCAN`: `arg0 = param_start[7:0]`, `arg1 = param_step[7:0]`, `arg2 = {pass_mode[6], num_steps[5:0]}`, `arg3 = expected_val`.
+   - Launch via `START_SCAN` with `arg0[3:0] = param_start[11:8]`.
+   - Wait for `uo_out[7]` (`scan_done`) or poll `READ_SCAN_STATUS(arg0=0)` until `scan_active == 0 && scan_done == 1`.
+   - Read `READ_SCAN_STATUS(arg0=1)` for the 32-bit pass/fail bitmap, and if `fail_cnt > 0`, read `READ_SCAN_FAIL(arg0=0)` and `READ_SCAN_FAIL(arg0=1)` for the first failing snapshot.
+2. **Configuration validation & stepping:**
+   - `CFG_SCAN` rejects `num_steps == 0` or `num_steps > 32` (low 6 bits `arg2[5:0]`) with `ST_BAD_ARG`, and returns `ST_BAD_STATE` if `eng_state == ENG_RUN` or `scan_active == 1`. Valid `CFG_SCAN` clears prior `scan_done`.
+   - `START_SCAN` returns `ST_BAD_STATE` unless `prog_valid == 1`, `eng_state != ENG_RUN`, `scan_active == 0`, and `scan_num_steps != 0`.
+   - Each step `i` (`0 .. scan_num_steps - 1`) sets `run_param` to `scan_cur_param` and advances `scan_cur_param <= scan_cur_param + param_step` (12-bit modular arithmetic).
+3. **Pass classification & bitmap encoding:**
+   - `pass_mode == 0`: trial `i` passes iff `eng_state == ENG_HALTED && sample_reg == expected_val`.
+   - `pass_mode == 1`: trial `i` passes iff `eng_state == ENG_HALTED && event_count != 0 && last_mark_tag == expected_val` (`event_count == 0` always fails even if `expected_val == 0`).
+   - `scan_pass_bitmap[i]` is `1` if step `i` passed (`0` if failed or `i >= steps_done`), packed LSB-first (`bit 0` = step `0`, ..., `bit 31` = step `31`). Always `pass_cnt + fail_cnt == steps_done`.
+4. **First-failure snapshot:**
+   - Cleared on `OP_START_SCAN` (`first_fail_valid = 0`). Latched permanently on the earliest failing step `i` (`!first_fail_valid`) and preserved across any subsequent failures: `{first_fail_valid, first_fail_idx}`, `first_fail_param[11:0]`, `first_fail_state` (`ENG_HALTED`/`ENG_FAULT`), `first_fail_sample`, `first_fail_cycles[15:0]`, `first_fail_tag`, and `first_fail_evcnt[3:0]`.
+5. **Lifecycle, abort, reset, and busy guards:**
+   - `uo_out[6]` (`scan_active`) stays `1` from `START_SCAN` until step `num_steps - 1` completes (`scan_done` rises on `uo_out[7]`), `OP_HALT`, or reset.
+   - `OP_HALT` stops the sequencer and clears `scan_active <= 0` immediately without setting `scan_done` (so `scan_active == 0 && scan_done == 0` distinguishes abort from normal completion, while partial `steps_done`/`pass_cnt`/`fail_cnt`/`first_fail_*` remain readable).
+   - Reset (`rst_n == 0` or `ena == 0`) clears all scan state, `scan_active`, `scan_done`, counters, bitmap, and snapshot.
+   - While `scan_active == 1`, `BEGIN_LOAD`, `WRITE_WORD`, `COMMIT_LOAD`, `PATCH_WORD`, `START`, `CFG_SCAN`, and `START_SCAN` are rejected with `ST_BAD_STATE`; readback commands (`PING_INFO`, `READ_STATUS`, `READ_SCAN_STATUS`, `READ_SCAN_FAIL`, `READ_CYCLE_CNT`, `POP_EVENT`) remain available.
 
 ## Verified example programs (`tools/protocol_asm.py`, `test/test.py`)
 
