@@ -397,18 +397,15 @@ async def test_autonomous_scan_controller(dut):
 
     r = await send_cmd(dut, UART_OP_START_SCAN, req_id=6)
     assert r[2] == 0
-    assert ((int(dut.uo_out.value) >> 6) & 1) == 1  # scan_active high
+    assert ((int(dut.uo_out.value) >> 6) & 0x3) != 0  # scan_active or already scan_done
 
-    # While active, mutating commands must return ST_BAD_STATE
-    busy = await send_cmd(dut, UART_OP_START, req_id=7, arg0=1)
-    assert busy[2] == 0x04
-
-    for _ in range(25000):
-        await ClockCycles(dut.clk, 1)
-        if ((int(dut.uo_out.value) >> 7) & 1) == 1:
-            break
-    else:
-        raise AssertionError("Autonomous scan did not complete (uo_out[7] never went high)")
+    if ((int(dut.uo_out.value) >> 7) & 1) == 0:
+        for _ in range(25000):
+            await ClockCycles(dut.clk, 1)
+            if ((int(dut.uo_out.value) >> 7) & 1) == 1:
+                break
+        else:
+            raise AssertionError("Autonomous scan did not complete (uo_out[7] never went high)")
 
     scan_stop = True
     await tgt_task
@@ -455,11 +452,13 @@ async def test_autonomous_scan_controller(dut):
     f0 = await send_cmd(dut, UART_OP_READ_SCAN_FAIL, req_id=16, arg0=0)
     assert (f0[3] >> 7) == 0  # No failure
 
-    # Verify OP_HALT aborts an active long scan cleanly
-    assert (await send_cmd(dut, UART_OP_CFG_SCAN, req_id=17, arg0=10, arg1=1, arg2=32, arg3=0xAA))[2] == 0
+    # Verify busy-guard (ST_BAD_STATE) and OP_HALT abort on an active long scan
+    assert (await send_cmd(dut, UART_OP_CFG_SCAN, req_id=17, arg0=20, arg1=4, arg2=32, arg3=0xAA))[2] == 0
     assert (await send_cmd(dut, UART_OP_START_SCAN, req_id=18))[2] == 0
     assert ((int(dut.uo_out.value) >> 6) & 1) == 1
-    assert (await send_cmd(dut, UART_OP_HALT, req_id=19))[2] == 0
-    st0 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=20, arg0=0)
+    busy = await send_cmd(dut, UART_OP_START, req_id=19, arg0=1)
+    assert busy[2] == 0x04  # ST_BAD_STATE while scan_active
+    assert (await send_cmd(dut, UART_OP_HALT, req_id=20))[2] == 0
+    st0 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=21, arg0=0)
     assert (st0[3] & 0x3) == 0x0  # scan_active=0, scan_done=0
     assert st0[4] < 32
