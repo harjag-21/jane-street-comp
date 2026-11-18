@@ -229,6 +229,14 @@ For each final protocol claim, state protocol role, pin mapping, supported modes
   - Assembled a `50`-word IEEE 1149.1 JTAG TAP microprogram (`build_jtag_idcode_program` in `tools/protocol_asm.py`) using only existing `0x0`–`0xD` instructions, without changing `src/`.
   - Verified against a separately written behavioral TAP model (`test/jtag_tap_model.v`) in both standalone Icarus (`test/tb_jtag_tap.v`: recovers from dirty `PAUSE_DR`/`BYPASS` via 5× `TMS=1`, traverses all required TAP states `TLR -> RTI -> SelIR -> CapIR -> ShiftIR(4'h1) -> UpdateIR -> SelDR -> CapDR -> ShiftDR -> UpdateDR -> RTI`, captures `IDCODE = 0x1A2B4D6F` across 4 nested-loop `MARK_SAMPLE` events in `321` cycles) and live host bridge (`tools/test_timing_explorer.py`: `check_timing_contract` exact match + `23 ns` `TDO` propagation delay sweep via both host trials and on-chip `pass_mode=1` autonomous scan).
 
+### Hardening Build Provenance (Phase 1)
+
+| Role / Branch | Hardened Commit | Exact Hardened Sources & Blob Prefixes | Local Flow Status | Upstream CI Workflow |
+|---|---|---|---|---|
+| **Primary Candidate** (`exp/autonomous-scan`) | `cb0fddbf751a0819aa14b5e92ad3766c6953edf9` (`cb0fddb`, RTL/pinout identical on HEAD) | `src/project.v` (`8d7023f`), `src/protocol_sequencer.v` (`1d562e2`), `src/config.json` (`91aa3a1`), `info.yaml` (`090dfb9`) | `80/80` CMOS5L (`1:31:17`, `0` lint warnings, `19.42%` util, `+11.07 ns` slow setup slack), `5/5` functional GL | Pending `origin` URL + push |
+| **Hardened Fallback** (`feat/v1-engine`, tag `v1.1-fallback` @ `2fadd1e2`) | `fd670a07af3e98369889fb7347a2eff876a807a0` (`fd670a0`) | `src/project.v` (`4f8e88d`), `src/protocol_sequencer.v` (`066455e`), `src/config.json` (`91aa3a1`), `info.yaml` (`f5648bf`) | `80/80` CMOS5L (`1:20:23`, `0` lint warnings, `17.25%` util, `+10.97 ns` slow setup slack), `4/4` functional GL | Pending `origin` URL + push |
+| **v0.1 Baseline** (`master`) | `67f63ab579a8a498ba122942a3c5bcfce750f1ef` (`67f63ab`) | `src/project.v` (`8847c5d`), `src/config.json` (`e19276d`), `info.yaml` (`6e3cf98`) | `80/80` CMOS5L (`1:22:01`, `2.44%` util) | Pending `origin` URL + push |
+
 ## 9. Decision log
 
 | Date | Decision | Reason | Revisit condition |
