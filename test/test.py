@@ -29,12 +29,16 @@ from tools.protocol_asm import (
     UART_OP_START_SCAN,
     UART_OP_WRITE_WORD,
     assemble,
+    bitrev8,
     build_i2c_write_byte_program,
     build_spi_mode0_program,
+    build_spi_multibyte_program,
     build_spi_program,
     build_spi_target_responder_program,
+    build_uart_tx_multibyte_program,
     build_uart_tx_program,
     crc8_07,
+    insn,
     make_uart_request,
     program_checksums,
 )
@@ -793,3 +797,152 @@ async def test_i2c_100khz_and_400khz_at_50mhz(dut):
     await run_rate_check(half_cycles=64, expected_period_cycles=129)
     # 99.800 kHz Standard-mode <= 100 kHz at 50 MHz: 501 cycles/bit (251 low + 250 high)
     await run_rate_check(half_cycles=250, expected_period_cycles=501)
+
+
+@cocotb.test()
+async def test_tx_shifter_multibyte_uart_spi_and_patch(dut):
+    """Test 9: Transmit shifter (LD_TX / SHIFT_TX) multi-byte UART & SPI (MSB/LSB) + OP_PATCH_WORD + reserved 0xE fault."""
+    clock = Clock(dut.clk, 20, unit="ns")
+    cocotb.start_soon(clock.start())
+    await reset_dut(dut)
+
+    # 1) 2-byte UART TX via LD_TX + SHIFT_TX (22 words vs 44 unrolled) in LSB-first and MSB-first orders
+    uart_lsb_prog, uart_ld_addrs = build_uart_tx_multibyte_program([0xA3, 0x5C], bit_cycles=8, pin=0, lsb_first=True)
+    uart_msb_prog, _ = build_uart_tx_multibyte_program([0xA3, 0x5C], bit_cycles=8, pin=0, lsb_first=False)
+    assert len(uart_lsb_prog) == 22 and len(uart_lsb_prog) < 44
+    assert uart_ld_addrs == [3, 12]
+    assert (await load_program(dut, uart_lsb_prog))[2] == 0
+
+    async def capture_uart_bytes(count: int, lsb_first: bool):
+        out_bytes = []
+        for _ in range(count):
+            while (int(dut.uio_oe.value) & 1) == 0 or (int(dut.uio_out.value) & 1) == 1:
+                await ClockCycles(dut.clk, 1)
+            await ClockCycles(dut.clk, 4)
+            assert (int(dut.uio_out.value) & 1) == 0
+            val = 0
+            for b in range(8):
+                await ClockCycles(dut.clk, 8)
+                bit = int(dut.uio_out.value) & 1
+                if lsb_first:
+                    val |= bit << b
+                else:
+                    val = (val << 1) | bit
+            await ClockCycles(dut.clk, 8)
+            assert (int(dut.uio_out.value) & 1) == 1
+            out_bytes.append(val)
+        return out_bytes
+
+    cap = cocotb.start_soon(capture_uart_bytes(2, lsb_first=True))
+    assert (await send_cmd(dut, UART_OP_START, req_id=140))[2] == 0
+    rx_bytes = await cap
+    assert await wait_halted_or_fault(dut) == 2
+    assert rx_bytes == [0xA3, 0x5C]
+
+    # Patch second byte's LD_TX word (addr 12) from 0x5C to 0x96 via OP_PATCH_WORD (1 command, no reload)
+    new_ld_word = insn("LD_TX", (1 << 8) | 0x96)
+    p_rsp = await send_cmd(
+        dut,
+        UART_OP_PATCH_WORD,
+        req_id=141,
+        arg0=uart_ld_addrs[1],
+        arg1=new_ld_word & 0xFF,
+        arg2=(new_ld_word >> 8) & 0xFF,
+    )
+    assert p_rsp[2] == 0
+    cap_p = cocotb.start_soon(capture_uart_bytes(2, lsb_first=True))
+    assert (await send_cmd(dut, UART_OP_START, req_id=142))[2] == 0
+    assert (await cap_p) == [0xA3, 0x96]
+    assert await wait_halted_or_fault(dut) == 2
+
+    # MSB-first 2-byte UART TX
+    assert (await load_program(dut, uart_msb_prog))[2] == 0
+    cap_m = cocotb.start_soon(capture_uart_bytes(2, lsb_first=False))
+    assert (await send_cmd(dut, UART_OP_START, req_id=143))[2] == 0
+    assert (await cap_m) == [0xA3, 0x5C]
+    assert await wait_halted_or_fault(dut) == 2
+
+    # 2) 2-byte parameterized SPI via LD_TX + SHIFT_TX (20 words vs 70 unrolled) in MSB-first and LSB-first orders
+    spi_msb_prog, spi_ld_addrs = build_spi_multibyte_program([0xA5, 0x3C], lsb_first=False)
+    spi_lsb_prog, _ = build_spi_multibyte_program([0xA5, 0x3C], lsb_first=True)
+    assert len(spi_msb_prog) == 20 and len(spi_msb_prog) < 70
+    assert spi_ld_addrs == [3, 10]
+    assert (await load_program(dut, spi_msb_prog))[2] == 0
+
+    async def spi_2byte_target(miso_bytes, lsb_first: bool):
+        miso_bits = []
+        for mb in miso_bytes:
+            for b in (range(8) if lsb_first else range(7, -1, -1)):
+                miso_bits.append((mb >> b) & 1)
+        mosi_bits = []
+        prev_sclk = 0
+        bit_idx = 0
+        dut.uio_in.value = (miso_bits[0] << 3) | 0xF7
+        while True:
+            await ValueChange(dut.uio_out)
+            val = int(dut.uio_out.value)
+            cs_n = val & 1
+            sclk = (val >> 1) & 1
+            mosi = (val >> 2) & 1
+            if cs_n == 0:
+                if prev_sclk == 0 and sclk == 1:
+                    mosi_bits.append(mosi)
+                    if len(mosi_bits) == 16:
+                        prev_sclk = sclk
+                        break
+                elif prev_sclk == 1 and sclk == 0 and bit_idx + 1 < len(miso_bits):
+                    bit_idx += 1
+                    dut.uio_in.value = (miso_bits[bit_idx] << 3) | 0xF7
+            prev_sclk = sclk
+        out = []
+        for by in range(2):
+            v = 0
+            for b in range(8):
+                bit = mosi_bits[by * 8 + b]
+                if lsb_first:
+                    v |= bit << b
+                else:
+                    v = (v << 1) | bit
+            out.append(v)
+        return out
+
+    tgt_msb = cocotb.start_soon(spi_2byte_target([0x5A, 0xC3], lsb_first=False))
+    assert (await send_cmd(dut, UART_OP_START, req_id=144, arg0=0x02, arg1=0x00))[2] == 0
+    assert (await tgt_msb) == [0xA5, 0x3C]
+    assert await wait_halted_or_fault(dut) == 2
+    ev0 = await send_cmd(dut, UART_OP_POP_EVENT, req_id=145)
+    ev1 = await send_cmd(dut, UART_OP_POP_EVENT, req_id=146)
+    assert ev0[3] == 2 and ev0[4] == 0x5A
+    assert ev1[3] == 1 and ev1[4] == 0xC3
+
+    # Patch byte 0 (addr 3) from 0xA5 to 0xF0 via OP_PATCH_WORD and re-run
+    patch_spi = insn("LD_TX", 0xF0)
+    assert (
+        await send_cmd(
+            dut,
+            UART_OP_PATCH_WORD,
+            req_id=147,
+            arg0=spi_ld_addrs[0],
+            arg1=patch_spi & 0xFF,
+            arg2=(patch_spi >> 8) & 0xFF,
+        )
+    )[2] == 0
+    tgt_patch = cocotb.start_soon(spi_2byte_target([0x11, 0x22], lsb_first=False))
+    assert (await send_cmd(dut, UART_OP_START, req_id=148, arg0=0x02, arg1=0x00))[2] == 0
+    assert (await tgt_patch) == [0xF0, 0x3C]
+    assert await wait_halted_or_fault(dut) == 2
+
+    # LSB-first 2-byte SPI
+    assert (await load_program(dut, spi_lsb_prog))[2] == 0
+    tgt_lsb = cocotb.start_soon(spi_2byte_target([0x5A, 0xC3], lsb_first=True))
+    assert (await send_cmd(dut, UART_OP_START, req_id=149, arg0=0x02, arg1=0x00))[2] == 0
+    assert (await tgt_lsb) == [0xA5, 0x3C]
+    assert await wait_halted_or_fault(dut) == 2
+
+    # 3) Reserved OP_TX encoding (0xE200) must trap to ENG_FAULT (3) and drop uio_oe to 0x00
+    fault_prog = [insn("OE", 0xFF), 0xE200]
+    assert (await load_program(dut, fault_prog))[2] == 0
+    assert (await send_cmd(dut, UART_OP_START, req_id=150))[2] == 0
+    assert await wait_halted_or_fault(dut) == 3
+    assert int(dut.uio_oe.value) == 0x00
+

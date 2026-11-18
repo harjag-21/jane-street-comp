@@ -80,7 +80,8 @@ module tb_v1_sequencer;
                    OP_HALT       = 4'hA,
                    OP_OUT_SAMPLE = 4'hB,
                    OP_WAIT_PARAM = 4'hC,
-                   OP_WAIT_EDGE  = 4'hD;
+                   OP_WAIT_EDGE  = 4'hD,
+                   OP_TX         = 4'hE;
 
   function [15:0] insn;
     input [3:0] op;
@@ -495,6 +496,107 @@ module tb_v1_sequencer;
     end
   endtask
 
+  // ---- Test 6: Transmit Shifter (LD_TX / SHIFT_TX) Multi-Byte UART & SPI + Reserved 0xE Fault ----
+  task test_tx_shifter_multibyte_and_faults;
+    reg [7:0] rx0, rx1, t0, t1;
+    reg [15:0] ts0, ts1;
+    integer b;
+    begin
+      // 1) 2-byte UART TX via LD_TX + LOOP(SHIFT_TX) (22 words total vs 44 unrolled)
+      // First run LSB-first: bytes [0xA3, 0x5C]
+      clear_imem;
+      a = 0;
+      load_word(a[5:0], insn(OP_OUT, 12'h001));       a = a + 1; // 0: idle high
+      load_word(a[5:0], insn(OP_OE,  12'h001));       a = a + 1; // 1: OE=1
+      load_word(a[5:0], insn(OP_WAIT, 12'd4));        a = a + 1; // 2: idle wait
+      // Byte 0 (0xA3, LSB-first: imm = 12'h1A3)
+      load_word(a[5:0], insn(OP_TX,  12'h1A3));       a = a + 1; // 3: LD_TX 0xA3, lsb=1
+      load_word(a[5:0], insn(OP_OUT, 12'h000));       a = a + 1; // 4: start bit
+      load_word(a[5:0], insn(OP_WAIT, 12'd6));        a = a + 1; // 5
+      load_word(a[5:0], insn(OP_SETCOUNT, 12'd8));    a = a + 1; // 6
+      load_word(a[5:0], insn(OP_TX,  12'hC00));       a = a + 1; // 7: SHIFT_TX tx=0, rx=0, clk=0, val=0, shift=1
+      load_word(a[5:0], insn(OP_WAIT, 12'd5));        a = a + 1; // 8
+      load_word(a[5:0], insn(OP_LOOP, 12'd7));        a = a + 1; // 9
+      load_word(a[5:0], insn(OP_OUT, 12'h001));       a = a + 1; // 10: stop bit
+      load_word(a[5:0], insn(OP_WAIT, 12'd6));        a = a + 1; // 11
+      // Byte 1 (0x5C, LSB-first: imm = 12'h15C)
+      load_word(a[5:0], insn(OP_TX,  12'h15C));       a = a + 1; // 12: LD_TX 0x5C, lsb=1
+      load_word(a[5:0], insn(OP_OUT, 12'h000));       a = a + 1; // 13: start bit
+      load_word(a[5:0], insn(OP_WAIT, 12'd6));        a = a + 1; // 14
+      load_word(a[5:0], insn(OP_SETCOUNT, 12'd8));    a = a + 1; // 15
+      load_word(a[5:0], insn(OP_TX,  12'hC00));       a = a + 1; // 16: SHIFT_TX
+      load_word(a[5:0], insn(OP_WAIT, 12'd5));        a = a + 1; // 17
+      load_word(a[5:0], insn(OP_LOOP, 12'd16));       a = a + 1; // 18
+      load_word(a[5:0], insn(OP_OUT, 12'h001));       a = a + 1; // 19: stop bit
+      load_word(a[5:0], insn(OP_WAIT, 12'd6));        a = a + 1; // 20
+      load_word(a[5:0], insn(OP_HALT, 12'h000));      a = a + 1; // 21
+      prog_valid = 1;
+
+      @(negedge clk);
+      cmd_param = 12'd0;
+      cmd_start = 1;
+      @(posedge clk); #1;
+      cmd_start = 0;
+
+      // Capture Byte 0 (LSB-first)
+      @(negedge bus_pins[0]);
+      repeat (4) @(posedge clk); #1;
+      check(bus_pins[0] == 1'b0, "UART 2-byte LSB start0 valid");
+      for (b = 0; b < 8; b = b + 1) begin
+        repeat (8) @(posedge clk); #1;
+        rx0[b] = bus_pins[0];
+      end
+      repeat (8) @(posedge clk); #1;
+      check(bus_pins[0] == 1'b1, "UART 2-byte LSB stop0 valid");
+      // Capture Byte 1 (LSB-first)
+      @(negedge bus_pins[0]);
+      repeat (4) @(posedge clk); #1;
+      check(bus_pins[0] == 1'b0, "UART 2-byte LSB start1 valid");
+      for (b = 0; b < 8; b = b + 1) begin
+        repeat (8) @(posedge clk); #1;
+        rx1[b] = bus_pins[0];
+      end
+      repeat (8) @(posedge clk); #1;
+      check(bus_pins[0] == 1'b1, "UART 2-byte LSB stop1 valid");
+      while (eng_state == 2'd1) @(posedge clk);
+      #1;
+      check(rx0 == 8'hA3 && rx1 == 8'h5C, "UART 2-byte LD_TX/SHIFT_TX LSB-first emitted 0xA3, 0x5C");
+
+      // Patch word 3 and word 12 to MSB-first (lsb_first=0) and verify reversed bit order on wire
+      load_word(6'd3,  insn(OP_TX, 12'h0A3)); // LD_TX 0xA3, lsb=0 (MSB-first)
+      load_word(6'd12, insn(OP_TX, 12'h05C)); // LD_TX 0x5C, lsb=0 (MSB-first)
+      @(negedge clk);
+      cmd_start = 1;
+      @(posedge clk); #1;
+      cmd_start = 0;
+      @(negedge bus_pins[0]);
+      repeat (4) @(posedge clk); #1;
+      for (b = 7; b >= 0; b = b - 1) begin
+        repeat (8) @(posedge clk); #1;
+        rx0[b] = bus_pins[0];
+      end
+      repeat (8) @(posedge clk); #1;
+      @(negedge bus_pins[0]);
+      repeat (4) @(posedge clk); #1;
+      for (b = 7; b >= 0; b = b - 1) begin
+        repeat (8) @(posedge clk); #1;
+        rx1[b] = bus_pins[0];
+      end
+      while (eng_state == 2'd1) @(posedge clk);
+      #1;
+      check(rx0 == 8'hA3 && rx1 == 8'h5C, "UART 2-byte LD_TX/SHIFT_TX MSB-first emitted 0xA3, 0x5C");
+
+      // 2) Reserved OP_TX sub-opcode (0xE200..0xE7FF) must fault and drop uio_oe to 0x00
+      clear_imem;
+      load_word(6'd0, insn(OP_OE, 12'h0FF));
+      load_word(6'd1, insn(OP_TX, 12'h200)); // reserved imm[11]=0, imm[10:9]=2'b01
+      prog_valid = 1;
+      start_and_wait(12'd0);
+      check(eng_state == 2'd3, "Reserved 0xE200 enters ENG_FAULT");
+      check(uio_oe == 8'h00, "Reserved 0xE200 drops uio_oe to 0x00");
+    end
+  endtask
+
   initial begin
     #500000;
     $display("FAIL: global simulation timeout at time=%0t pc=%0d state=%0d", $time, pc, eng_state);
@@ -517,8 +619,10 @@ module tb_v1_sequencer;
     test_i2c_open_drain_program;
     $display("Running test_wait_edge_stretch");
     test_wait_edge_stretch;
+    $display("Running test_tx_shifter_multibyte_and_faults");
+    test_tx_shifter_multibyte_and_faults;
 
-    if (errors == 0) $display("PASS: v1 protocol_sequencer ISA + UART + SPI sweep + I2C + WAIT_EDGE tests passed");
+    if (errors == 0) $display("PASS: v1 protocol_sequencer ISA + UART + SPI sweep + I2C + WAIT_EDGE + OP_TX tests passed");
     else $display("FAIL: %0d checks failed", errors);
     $finish_and_return(errors != 0);
   end

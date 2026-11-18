@@ -24,6 +24,9 @@ OPCODES: Dict[str, int] = {
     "OUT_SAMPLE": 0xB,
     "WAIT_PARAM": 0xC,
     "WAIT_EDGE": 0xD,
+    "TX": 0xE,
+    "LD_TX": 0xE,
+    "SHIFT_TX": 0xE,
 }
 
 UART_OP_PING_INFO = 0x10
@@ -174,6 +177,25 @@ def assemble(lines: Iterable[str]) -> List[int]:
         elif mnem == "HALT":
             keep_oe = (_parse_int(args[0], labels) & 0x1) if args else 0
             words.append(insn("HALT", keep_oe))
+        elif mnem == "LD_TX":
+            val = _parse_int(args[0], labels) & 0xFF
+            lsb_first = (_parse_int(args[1], labels) & 0x1) if len(args) > 1 else 0
+            words.append(insn("TX", (lsb_first << 8) | val))
+        elif mnem == "SHIFT_TX":
+            tx_pin = _parse_int(args[0], labels) & 0x7
+            rx_pin = (_parse_int(args[1], labels) & 0x7) if len(args) > 1 else tx_pin
+            clk_pin = (_parse_int(args[2], labels) & 0x7) if len(args) > 2 else tx_pin
+            clk_val = (_parse_int(args[3], labels) & 0x1) if len(args) > 3 else 0
+            do_shift = (_parse_int(args[4], labels) & 0x1) if len(args) > 4 else 1
+            imm = (
+                (1 << 11)
+                | (do_shift << 10)
+                | (clk_val << 9)
+                | (clk_pin << 6)
+                | (rx_pin << 3)
+                | tx_pin
+            )
+            words.append(insn("TX", imm))
         else:
             raise ValueError(f"Unknown mnemonic at PC {pc}: {mnem!r}")
 
@@ -205,6 +227,46 @@ def build_uart_tx_program(byte_val: int, bit_cycles: int = 8, pin: int = 0) -> L
         "HALT 0",
     ]
     return assemble(lines)
+
+
+def build_uart_tx_multibyte_program(
+    bytes_seq: Sequence[int],
+    bit_cycles: int = 8,
+    pin: int = 0,
+    lsb_first: bool = True,
+) -> Tuple[List[int], List[int]]:
+    """Build a multi-byte 8N1 UART TX program using `LD_TX` + `SHIFT_TX` loops, returning (words, ld_tx_addrs)."""
+    if not bytes_seq:
+        raise ValueError("bytes_seq must be non-empty")
+    if bit_cycles < 3:
+        raise ValueError("bit_cycles must be >= 3 for looped UART TX")
+    mask = 1 << pin
+    wait_idle = bit_cycles - 2
+    wait_loop = bit_cycles - 3  # 1 (OUT/SHIFT_TX) + (bit_cycles - 2) (WAIT) + 1 (SETCOUNT/LOOP) = bit_cycles
+    lsb_flag = 1 if lsb_first else 0
+
+    lines: List[str] = [
+        f"OUT 0x{mask:02x}",
+        f"OE  0x{mask:02x}",
+        f"WAIT {wait_idle}",
+    ]
+    ld_tx_addrs: List[int] = []
+    for idx, b in enumerate(bytes_seq):
+        ld_tx_addrs.append(3 + idx * 9)
+        lines += [
+            f"LD_TX 0x{b & 0xFF:02x}, {lsb_flag}",
+            "OUT 0x00",
+            f"WAIT {wait_loop}",
+            "SETCOUNT 0, 8",
+            f"uart_mb_loop_{idx}:",
+            f"SHIFT_TX {pin}, {pin}, {pin}, 0, 1",
+            f"WAIT {wait_loop}",
+            f"LOOP 0, uart_mb_loop_{idx}",
+            f"OUT 0x{mask:02x}",
+            f"WAIT {wait_idle}",
+        ]
+    lines.append("HALT 0")
+    return assemble(lines), ld_tx_addrs
 
 
 def build_spi_program(
@@ -271,6 +333,59 @@ def build_spi_mode0_program(
         mosi_pin=mosi_pin,
         miso_pin=miso_pin,
     )
+
+
+def build_spi_multibyte_program(
+    mosi_bytes: Sequence[int],
+    mode: int = 0,
+    lsb_first: bool = False,
+    cs_pin: int = 0,
+    sclk_pin: int = 1,
+    mosi_pin: int = 2,
+    miso_pin: int = 3,
+) -> Tuple[List[int], List[int]]:
+    """Build a multi-byte parameterized SPI Mode 0..3 program using `LD_TX` + `SHIFT_TX`, returning (words, ld_tx_addrs)."""
+    if not mosi_bytes:
+        raise ValueError("mosi_bytes must be non-empty")
+    if mode not in (0, 1, 2, 3):
+        raise ValueError(f"SPI mode must be 0..3, got {mode}")
+    cpol = (mode >> 1) & 1
+    cpha = mode & 1
+    cs_mask = 1 << cs_pin
+    sclk_mask = 1 << sclk_pin
+    mosi_mask = 1 << mosi_pin
+    oe_mask = cs_mask | sclk_mask | mosi_mask
+    sclk_idle_mask = sclk_mask if cpol else 0
+    sclk_idle_bit = 1 if cpol else 0
+    sclk_lead_bit = 0 if cpol else 1
+    clk_setup = sclk_idle_bit if cpha == 0 else sclk_lead_bit
+    clk_sample = sclk_lead_bit if cpha == 0 else sclk_idle_bit
+    lsb_flag = 1 if lsb_first else 0
+
+    lines: List[str] = [
+        f"OUT 0x{(cs_mask | sclk_idle_mask):02x}",
+        f"OE  0x{oe_mask:02x}",
+        f"OUT 0x{sclk_idle_mask:02x}",
+    ]
+    ld_tx_addrs: List[int] = []
+    for idx, b in enumerate(mosi_bytes):
+        ld_tx_addrs.append(3 + idx * 7)
+        lines += [
+            f"LD_TX 0x{b & 0xFF:02x}, {lsb_flag}",
+            "SETCOUNT 0, 8",
+            f"spi_mb_loop_{idx}:",
+            f"SHIFT_TX {mosi_pin}, {mosi_pin}, {sclk_pin}, {clk_setup}, 0",
+            "WAIT_PARAM 0",
+            f"SHIFT_TX {mosi_pin}, {miso_pin}, {sclk_pin}, {clk_sample}, 1",
+            f"LOOP 0, spi_mb_loop_{idx}",
+            "MARK_SAMPLE",
+        ]
+    lines += [
+        f"OUT 0x{sclk_idle_mask:02x}",
+        f"OUT 0x{(cs_mask | sclk_idle_mask):02x}",
+        "HALT 0",
+    ]
+    return assemble(lines), ld_tx_addrs
 
 
 def build_i2c_write_byte_program(
@@ -575,6 +690,8 @@ def predict_straight_line_cycles(words: Sequence[int], run_param: int) -> Dict[s
         imm = w & 0xFFF
         if op in (0x5, 0x6, 0x7, 0xD):
             raise ValueError(f"Dynamic branch/edge op 0x{op:x} at PC {pc} requires dynamic trace")
+        if op == 0xF or (op == 0xE and ((imm >> 11) & 1) == 0 and ((imm >> 9) & 0x3) != 0):
+            raise ValueError(f"Illegal opcode 0x{w:04x} at PC {pc}")
         if op == 0x9:  # MARK records pre-increment cycle_cnt_o
             marks.append(cycles)
         cycles += 1
@@ -669,6 +786,23 @@ def analyze_timing_bounds(
                     ((next_pc, lc0, lc1, 0), 1 + lim, 1 + lim),
                 ],
             )
+        if op == 0xE:  # OP_TX: LD_TX (imm[11]==0, imm[10:9]==0) or SHIFT_TX (imm[11]==1)
+            if ((imm >> 11) & 1) == 0:
+                if ((imm >> 9) & 0x3) == 0:
+                    return ("step", [((next_pc, lc0, lc1, last_s), 1, 1)])
+                return ("fault", [(None, 1, 1)])
+            do_shift = (imm >> 10) & 1
+            rx_pin = (imm >> 3) & 7
+            tx_pin = imm & 7
+            if do_shift and (rx_pin != tx_pin):
+                return (
+                    "step",
+                    [
+                        ((next_pc, lc0, lc1, 0), 1, 1),
+                        ((next_pc, lc0, lc1, 1), 1, 1),
+                    ],
+                )
+            return ("step", [((next_pc, lc0, lc1, last_s), 1, 1)])
         return ("fault", [(None, 1, 1)])
 
     # Iterative DFS topological sort + cycle check
@@ -889,6 +1023,27 @@ def predict_dynamic_contract(
                 cycles += 1 + int(wait_spec)
                 last_sample = 1
             pc = next_pc
+        elif op == 0xE:  # OP_TX (LD_TX / SHIFT_TX)
+            if ((imm >> 11) & 1) == 0:
+                if ((imm >> 9) & 0x3) != 0:
+                    cycles += 1
+                    final_state = "ENG_FAULT"
+                    break
+                cycles += 1
+                pc = next_pc
+            else:
+                do_shift = (imm >> 10) & 1
+                rx_pin = (imm >> 3) & 7
+                tx_pin = imm & 7
+                if do_shift and (rx_pin != tx_pin):
+                    if s_idx >= len(sample_bits):
+                        raise ValueError(f"Missing sample_bits entry #{s_idx} at PC {pc}")
+                    bit = int(sample_bits[s_idx]) & 0x1
+                    s_idx += 1
+                    last_sample = bit
+                    sample_reg = ((sample_reg << 1) | bit) & 0xFF
+                cycles += 1
+                pc = next_pc
         else:
             cycles += 1
             final_state = "ENG_FAULT"
@@ -1000,7 +1155,9 @@ if __name__ == "__main__":
         "--example",
         choices=[
             "uart",
+            "uart_multibyte",
             "spi",
+            "spi_multibyte",
             "spi_mode1",
             "spi_mode2",
             "spi_mode3",
@@ -1017,8 +1174,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.example == "uart":
         prog = build_uart_tx_program(0xA3, bit_cycles=8)
+    elif args.example == "uart_multibyte":
+        prog, _ = build_uart_tx_multibyte_program([0xA3, 0x5C], bit_cycles=8)
     elif args.example == "spi":
         prog = build_spi_mode0_program(0x55)
+    elif args.example == "spi_multibyte":
+        prog, _ = build_spi_multibyte_program([0xA5, 0x3C], lsb_first=False)
     elif args.example == "spi_mode1":
         prog = build_spi_program(0x55, mode=1)
     elif args.example == "spi_mode2":

@@ -67,7 +67,8 @@ module protocol_sequencer #(
                    OP_HALT       = 4'hA,
                    OP_OUT_SAMPLE = 4'hB,
                    OP_WAIT_PARAM = 4'hC,
-                   OP_WAIT_EDGE  = 4'hD;
+                   OP_WAIT_EDGE  = 4'hD,
+                   OP_TX         = 4'hE;
 
   reg [15:0] imem [0:PROG_DEPTH-1];
   reg [11:0] wait_cnt;
@@ -76,6 +77,8 @@ module protocol_sequencer #(
   reg [2:0]  wait_edge_pin;
   reg [11:0] run_param;
   reg [7:0]  loop_cnt0, loop_cnt1;
+  reg [7:0]  tx_reg;
+  reg        tx_lsb_first;
 
   reg [7:0]  ev_tag [0:EVENT_DEPTH-1];
   reg [15:0] ev_ts  [0:EVENT_DEPTH-1];
@@ -96,6 +99,20 @@ module protocol_sequencer #(
   wire [11:0] edge_wait_lim = (imm[7:0] == 8'd0) ? run_param : {4'd0, imm[7:0]};
   wire        edge_now_hit  = (uio_in[imm[10:8]] == imm[11]);
   wire        edge_wait_hit = (uio_in[wait_edge_pin] == wait_edge_pol);
+
+  wire        tx_cur_bit    = tx_lsb_first ? tx_reg[0] : tx_reg[7];
+  wire [2:0]  tx_pin_sel    = imm[2:0];
+  wire [2:0]  tx_rx_sel     = imm[5:3];
+  wire [2:0]  tx_clk_sel    = imm[8:6];
+  wire        tx_clk_val    = imm[9];
+  wire        tx_do_shift   = imm[10];
+  wire        tx_samp_bit   = uio_in[tx_rx_sel];
+  wire [7:0]  tx_pin_mask   = (8'h01 << tx_pin_sel);
+  wire [7:0]  tx_clk_mask   = (8'h01 << tx_clk_sel);
+  wire [7:0]  tx_out_step1  = tx_cur_bit ? (uio_out_o | tx_pin_mask) : (uio_out_o & ~tx_pin_mask);
+  wire [7:0]  tx_out_next   = (tx_clk_sel != tx_pin_sel)
+                            ? (tx_clk_val ? (tx_out_step1 | tx_clk_mask) : (tx_out_step1 & ~tx_clk_mask))
+                            : tx_out_step1;
 
   wire [EVENT_PTR_W:0] ev_depth_max = EVENT_DEPTH[EVENT_PTR_W:0];
   wire                 do_pop       = event_pop && (ev_count != 0);
@@ -130,6 +147,8 @@ module protocol_sequencer #(
       run_param        <= 12'd0;
       loop_cnt0        <= 8'd0;
       loop_cnt1        <= 8'd0;
+      tx_reg           <= 8'h00;
+      tx_lsb_first     <= 1'b0;
       ev_wptr          <= {EVENT_PTR_W{1'b0}};
       ev_rptr          <= {EVENT_PTR_W{1'b0}};
       ev_count         <= {(EVENT_PTR_W+1){1'b0}};
@@ -183,6 +202,8 @@ module protocol_sequencer #(
           run_param        <= cmd_param;
           loop_cnt0        <= 8'd0;
           loop_cnt1        <= 8'd0;
+          tx_reg           <= 8'h00;
+          tx_lsb_first     <= 1'b0;
           ev_wptr          <= {EVENT_PTR_W{1'b0}};
           ev_rptr          <= {EVENT_PTR_W{1'b0}};
           ev_count         <= {(EVENT_PTR_W+1){1'b0}};
@@ -299,6 +320,28 @@ module protocol_sequencer #(
                 wait_edge_pol    <= imm[11];
                 wait_edge_pin    <= imm[10:8];
                 wait_cnt         <= edge_wait_lim;
+              end
+            end
+            OP_TX: begin
+              if (!imm[11]) begin
+                if (imm[10:9] == 2'b00) begin
+                  tx_reg       <= imm[7:0];
+                  tx_lsb_first <= imm[8];
+                  pc_o         <= pc_o + {{(ADDR_W-1){1'b0}}, 1'b1};
+                end else begin
+                  eng_state_o <= ENG_FAULT;
+                  uio_oe_o    <= 8'h00;
+                end
+              end else begin
+                uio_out_o <= tx_out_next;
+                if (tx_do_shift) begin
+                  tx_reg <= tx_lsb_first ? {1'b0, tx_reg[7:1]} : {tx_reg[6:0], 1'b0};
+                  if (tx_rx_sel != tx_pin_sel) begin
+                    last_sample_o <= tx_samp_bit;
+                    sample_reg_o  <= {sample_reg_o[6:0], tx_samp_bit};
+                  end
+                end
+                pc_o <= pc_o + {{(ADDR_W-1){1'b0}}, 1'b1};
               end
             end
             default: begin

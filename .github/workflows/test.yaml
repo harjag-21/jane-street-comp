@@ -112,7 +112,11 @@ jobs:
           python tools/contract_audit.py | tee ci_artifacts/contract_audit.md
           python experiments/autonomous_scan_eval.py | tee ci_artifacts/autonomous_scan_eval.json
           python tools/protocol_asm.py --example jtag_idcode > ci_artifacts/jtag_prog.json
+          python tools/protocol_asm.py --example uart_multibyte > ci_artifacts/uart_multibyte_prog.json
+          python tools/protocol_asm.py --example spi_multibyte > ci_artifacts/spi_multibyte_prog.json
           python tools/timing_explorer.py run-example --sim --example jtag > ci_artifacts/jtag_example.json
+          python tools/timing_explorer.py run-example --sim --example uart-multibyte > ci_artifacts/uart_multibyte.json
+          python tools/timing_explorer.py run-example --sim --example spi-multibyte > ci_artifacts/spi_multibyte.json
           python tools/timing_explorer.py run-example --sim --example spi-mode1 > ci_artifacts/spi_mode1.json
           python tools/timing_explorer.py run-example --sim --example spi-mode2 > ci_artifacts/spi_mode2.json
           python tools/timing_explorer.py run-example --sim --example spi-mode3 > ci_artifacts/spi_mode3.json

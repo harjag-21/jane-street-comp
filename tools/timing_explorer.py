@@ -41,8 +41,10 @@ from tools.protocol_asm import (  # noqa: E402
     build_i2c_write_byte_program,
     build_jtag_idcode_program,
     build_spi_mode0_program,
+    build_spi_multibyte_program,
     build_spi_program,
     build_spi_target_responder_program,
+    build_uart_tx_multibyte_program,
     build_uart_tx_program,
     check_timing_contract,
     crc8_07,
@@ -1135,7 +1137,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "--example",
         choices=[
             "uart",
+            "uart-multibyte",
             "spi",
+            "spi-multibyte",
             "spi-mode1",
             "spi-mode2",
             "spi-mode3",
@@ -1229,10 +1233,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 if args.sim:
                     transport.configure_target(1)
                 words = build_uart_tx_program(0xA3, bit_cycles=8, pin=0)
+            elif args.example == "uart-multibyte":
+                if args.sim:
+                    transport.configure_target(1)
+                words, _ = build_uart_tx_multibyte_program([0xA3, 0x5C], bit_cycles=8, pin=0)
             elif args.example == "spi":
                 if args.sim:
                     transport.configure_target(0, delay_ns=args.delay_ns, spi_resp=0xAA)
                 words = build_spi_mode0_program(0x55)
+            elif args.example == "spi-multibyte":
+                if args.sim:
+                    transport.configure_target(0, delay_ns=args.delay_ns, spi_resp=0xAA)
+                words, _ = build_spi_multibyte_program([0xA5, 0x3C], lsb_first=False)
             elif args.example in ("spi-mode1", "spi-mode2", "spi-mode3"):
                 spi_mode = int(args.example[-1])
                 if args.sim:

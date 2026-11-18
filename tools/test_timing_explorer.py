@@ -18,8 +18,10 @@ from tools.protocol_asm import (
     build_i2c_write_byte_program,
     build_jtag_idcode_program,
     build_spi_mode0_program,
+    build_spi_multibyte_program,
     build_spi_program,
     build_spi_target_responder_program,
+    build_uart_tx_multibyte_program,
     build_uart_tx_program,
     check_timing_contract,
     decode_jtag_idcode_events,
@@ -674,6 +676,80 @@ class TimingExplorerTests(unittest.TestCase):
         self.assertFalse(char_rows[14]["exact_xfer"])      # truncated 4-bit partial capture
         self.assertFalse(char_rows[16]["exact_xfer"])      # CS_N glitch + long gap misframes without 0xEE
         self.assertEqual(char_rows[17]["responder_sample_reg"], "0x3c")  # CS_N glitch + shared SCLK
+
+    def test_tx_shifter_multibyte_uart_spi_and_patch_word(self) -> None:
+        # 1) Code-size reduction vs unrolled equivalents
+        uart_2b_lsb, uart_ld_addrs = build_uart_tx_multibyte_program([0xA3, 0x5C], bit_cycles=8, lsb_first=True)
+        uart_2b_msb, _ = build_uart_tx_multibyte_program([0xA3, 0x5C], bit_cycles=8, lsb_first=False)
+        self.assertEqual(len(uart_2b_lsb), 22)
+        self.assertEqual(uart_ld_addrs, [3, 12])
+        self.assertLess(len(uart_2b_lsb), 44)  # unrolled 2-byte UART takes 44 words
+
+        spi_2b_msb, spi_ld_addrs = build_spi_multibyte_program([0xA5, 0x3C], lsb_first=False)
+        spi_2b_lsb, _ = build_spi_multibyte_program([0xA5, 0x3C], lsb_first=True)
+        self.assertEqual(len(spi_2b_msb), 20)
+        self.assertEqual(spi_ld_addrs, [3, 10])
+        self.assertLess(len(spi_2b_msb), 70)   # unrolled 2-byte parameterized SPI takes 70 words
+
+        with IcarusSimTransport() as transport:
+            transport.reset(1)
+            client = ProtocolClient(transport)
+
+            # 2) Multi-byte UART TX (LSB-first and MSB-first) + OP_PATCH_WORD
+            transport.configure_target(1)
+            client.load_program(uart_2b_lsb)
+            r_lsb = client.run_trial(0)
+            self.assertTrue(r_lsb["sim_observations"]["uart_mon_seen"])
+            self.assertEqual(r_lsb["sim_observations"]["uart_mon_byte"], 0x5C)
+            chk_u = check_timing_contract(
+                uart_2b_lsb,
+                0,
+                observed_cycles=r_lsb["cycle_cnt"],
+                observed_events=r_lsb["events"],
+                eng_state=r_lsb["eng_state"],
+            )
+            self.assertTrue(chk_u["contract_ok"], chk_u["errors"])
+
+            # Patch word 12 (second byte's LD_TX) from 0x5C to 0x96 without changing structure
+            client.patch_word(uart_ld_addrs[1], insn("LD_TX", (1 << 8) | 0x96))
+            r_patched = client.run_trial(0)
+            self.assertTrue(r_patched["sim_observations"]["uart_mon_seen"])
+            self.assertEqual(r_patched["sim_observations"]["uart_mon_byte"], 0x96)
+            self.assertEqual(r_patched["cycle_cnt"], r_lsb["cycle_cnt"])
+
+            # MSB-first UART TX: wire bits are reversed relative to LSB-first UART receiver
+            client.load_program(uart_2b_msb)
+            r_msb = client.run_trial(0)
+            self.assertTrue(r_msb["sim_observations"]["uart_mon_seen"])
+            self.assertEqual(r_msb["sim_observations"]["uart_mon_byte"], bitrev8(0x5C))
+
+            # 3) Multi-byte parameterized SPI (MSB-first and LSB-first) + OP_PATCH_WORD
+            transport.configure_target(0, delay_ns=15, spi_resp=0xAA)
+            client.load_program(spi_2b_msb)
+            r_spi_msb = client.run_trial(2)
+            self.assertEqual(r_spi_msb["sim_observations"]["spi_mosi_rx"], 0x3C)
+            self.assertEqual(len(r_spi_msb["events"]), 2)
+            self.assertEqual(r_spi_msb["events"][0]["tag"], 0xAA)
+            chk_s = check_timing_contract(
+                spi_2b_msb,
+                2,
+                observed_cycles=r_spi_msb["cycle_cnt"],
+                observed_events=r_spi_msb["events"],
+                eng_state=r_spi_msb["eng_state"],
+                sample_bits=([(r_spi_msb["events"][0]["tag"] >> b) & 1 for b in range(7, -1, -1)]
+                             + [(r_spi_msb["events"][1]["tag"] >> b) & 1 for b in range(7, -1, -1)]),
+            )
+            self.assertTrue(chk_s["contract_ok"], chk_s["errors"])
+
+            # Patch word 10 (second byte's LD_TX) from 0x3C to 0xF0 via OP_PATCH_WORD
+            client.patch_word(spi_ld_addrs[1], insn("LD_TX", 0xF0))
+            r_spi_patch = client.run_trial(2)
+            self.assertEqual(r_spi_patch["sim_observations"]["spi_mosi_rx"], 0xF0)
+
+            # LSB-first 2-byte SPI: MSB-first target monitor observes bitrev8(0x3C)
+            client.load_program(spi_2b_lsb)
+            r_spi_lsb = client.run_trial(2)
+            self.assertEqual(r_spi_lsb["sim_observations"]["spi_mosi_rx"], bitrev8(0x3C))
 
 
 if __name__ == "__main__":
