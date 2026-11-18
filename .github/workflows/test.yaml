@@ -1,7 +1,8 @@
 name: test
 on: [push, workflow_dispatch]
 jobs:
-  test:
+  cocotb_rtl:
+    name: Cocotb RTL
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repo
@@ -13,7 +14,6 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y iverilog
 
-      # Set Python up and install cocotb
       - name: Setup python
         uses: actions/setup-python@v6
         with:
@@ -23,12 +23,13 @@ jobs:
         shell: bash
         run: pip install -r test/requirements.txt
 
-      - name: Run tests
+      - name: Run Cocotb RTL tests
+        shell: bash
         run: |
           cd test
           make clean
           make
-          # make will return success even if the tests fail, so check results.xml for failed tests
+          # make can return 0 even when Cocotb tests fail; enforce zero failures via results.xml
           python -m cocotb_tools.check_results results.xml
 
       - name: Test Summary
@@ -37,12 +38,85 @@ jobs:
           paths: "test/results.xml"
         if: always()
 
-      - name: upload waveform and test results
-        if: success() || failure()
+      - name: Upload Cocotb test artifacts
+        if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: test-results
+          name: cocotb-rtl-results
           path: |
             test/tb.fst
             test/results.xml
             test/output/*
+
+  standalone_rtl:
+    name: Standalone Verilog Benches (Sequencer + JTAG TAP)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Install iverilog
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y iverilog
+
+      - name: Compile and run standalone benches cleanly
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci_artifacts
+          iverilog -g2012 -Wall -s tb_v1_sequencer -o ci_artifacts/seq.vvp src/protocol_sequencer.v test/tb_v1_sequencer.v 2> ci_artifacts/seq_compile.log
+          if [ -s ci_artifacts/seq_compile.log ]; then cat ci_artifacts/seq_compile.log; exit 1; fi
+          vvp ci_artifacts/seq.vvp | tee ci_artifacts/tb_v1_sequencer.log
+          grep -q "^PASS:" ci_artifacts/tb_v1_sequencer.log
+
+          iverilog -g2012 -Wall -s tb_jtag_tap -o ci_artifacts/jtag.vvp src/project.v src/protocol_sequencer.v test/jtag_tap_model.v test/tb_jtag_tap.v 2> ci_artifacts/jtag_compile.log
+          if [ -s ci_artifacts/jtag_compile.log ]; then cat ci_artifacts/jtag_compile.log; exit 1; fi
+          vvp ci_artifacts/jtag.vvp | tee ci_artifacts/tb_jtag_tap.log
+          grep -q "^PASS:" ci_artifacts/tb_jtag_tap.log
+
+      - name: Upload standalone RTL logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: standalone-rtl-logs
+          path: ci_artifacts/*.log
+
+  host_suites:
+    name: Host Suites (Tools, Contract Audit, Experiments, Autonomous Scan)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Install iverilog
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y iverilog
+
+      - name: Setup python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Python packages
+        shell: bash
+        run: pip install -r test/requirements.txt
+
+      - name: Run experiment, tool, contract-audit, and autonomous-scan checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci_artifacts
+          python -m unittest discover -s experiments -v 2>&1 | tee ci_artifacts/experiments_unittest.log
+          python -m unittest discover -s tools -v 2>&1 | tee ci_artifacts/tools_unittest.log
+          python tools/contract_audit.py | tee ci_artifacts/contract_audit.md
+          python experiments/autonomous_scan_eval.py | tee ci_artifacts/autonomous_scan_eval.json
+
+      - name: Upload host verification artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: host-verification-logs
+          path: |
+            ci_artifacts/*.log
+            ci_artifacts/*.md
+            ci_artifacts/*.json

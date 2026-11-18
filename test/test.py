@@ -462,15 +462,17 @@ async def test_autonomous_scan_controller(dut):
     assert ((int(dut.uo_out.value) >> 6) & 1) == 1
     for rid, op in (
         (19, UART_OP_BEGIN_LOAD),
-        (20, UART_OP_START),
-        (21, UART_OP_PATCH_WORD),
-        (22, UART_OP_CFG_SCAN),
-        (23, UART_OP_START_SCAN),
+        (20, UART_OP_WRITE_WORD),
+        (21, UART_OP_COMMIT_LOAD),
+        (22, UART_OP_START),
+        (23, UART_OP_PATCH_WORD),
+        (24, UART_OP_CFG_SCAN),
+        (25, UART_OP_START_SCAN),
     ):
         busy = await send_cmd(dut, op, req_id=rid, arg0=1, arg1=1, arg2=1)
         assert busy[2] == 0x04, f"op 0x{op:02x} allowed during scan_active"
-    assert (await send_cmd(dut, UART_OP_HALT, req_id=24))[2] == 0
-    st0 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=25, arg0=0)
+    assert (await send_cmd(dut, UART_OP_HALT, req_id=26))[2] == 0
+    st0 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=27, arg0=0)
     assert (st0[3] & 0x3) == 0x0  # scan_active=0, scan_done=0
     assert st0[4] < 32
 
@@ -478,30 +480,89 @@ async def test_autonomous_scan_controller(dut):
     no_mark_prog = assemble(["WAIT_PARAM 0", "HALT 0"])
     assert (await load_program(dut, no_mark_prog))[2] == 0
     # param_start = 0x102 (arg0=0x02 in CFG, arg0=0x01 in START_SCAN), param_step = 3, 2 steps -> 0x102, 0x105
-    assert (await send_cmd(dut, UART_OP_CFG_SCAN, req_id=26, arg0=0x02, arg1=3, arg2=(1 << 6) | 2, arg3=0x00))[2] == 0
-    assert (await send_cmd(dut, UART_OP_START_SCAN, req_id=27, arg0=0x01))[2] == 0
+    assert (await send_cmd(dut, UART_OP_CFG_SCAN, req_id=28, arg0=0x02, arg1=3, arg2=(1 << 6) | 2, arg3=0x00))[2] == 0
+    assert (await send_cmd(dut, UART_OP_START_SCAN, req_id=29, arg0=0x01))[2] == 0
     for _ in range(10000):
         await ClockCycles(dut.clk, 1)
         if ((int(dut.uo_out.value) >> 7) & 1) == 1:
             break
     else:
         raise AssertionError("12-bit stepped scan did not complete")
-    st0 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=28, arg0=0)
+    st0 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=30, arg0=0)
     assert st0[4] == 2 and st0[5] == 0 and st0[6] == 2  # event_count == 0 fails even when expected == 0x00
-    f0 = await send_cmd(dut, UART_OP_READ_SCAN_FAIL, req_id=29, arg0=0)
-    f1 = await send_cmd(dut, UART_OP_READ_SCAN_FAIL, req_id=30, arg0=1)
+    f0 = await send_cmd(dut, UART_OP_READ_SCAN_FAIL, req_id=31, arg0=0)
+    f1 = await send_cmd(dut, UART_OP_READ_SCAN_FAIL, req_id=32, arg0=1)
     assert (f0[3] >> 7) == 1 and (f0[3] & 0x3F) == 0
     assert (f0[4] | ((f0[5] & 0xF) << 8)) == 0x102  # 12-bit first_fail_param preserved
     assert (f1[6] & 0xF) == 0  # first_fail_evcnt == 0
 
+    # Verify maximum 32-step scan completion, full 0xFFFFFFFF pass bitmap, and uio_oe == 0
+    max_prog = assemble(["OE 0x00", "SAMPLE 3, 0", "MARK 0xA5, 0", "HALT 0"])
+    assert (await load_program(dut, max_prog))[2] == 0
+    assert (await send_cmd(dut, UART_OP_CFG_SCAN, req_id=33, arg0=0, arg1=1, arg2=(1 << 6) | 32, arg3=0xA5))[2] == 0
+    assert (await send_cmd(dut, UART_OP_START_SCAN, req_id=34, arg0=0))[2] == 0
+    for _ in range(10000):
+        await ClockCycles(dut.clk, 1)
+        if ((int(dut.uo_out.value) >> 7) & 1) == 1:
+            break
+    else:
+        raise AssertionError("32-step scan did not complete")
+    st0 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=35, arg0=0)
+    st1 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=36, arg0=1)
+    assert st0[3] == 0x02 and st0[4] == 32 and st0[5] == 32 and st0[6] == 0
+    bitmap32 = st1[3] | (st1[4] << 8) | (st1[5] << 16) | (st1[6] << 24)
+    assert bitmap32 == 0xFFFFFFFF
+    f0 = await send_cmd(dut, UART_OP_READ_SCAN_FAIL, req_id=37, arg0=0)
+    assert (f0[3] >> 7) == 0
+    assert int(dut.uio_oe.value) == 0
+
+    # Verify 12-bit modular parameter wraparound: 0xFFE + 3 -> 0x001 on step 1
+    wrap_prog = assemble(["WAIT_PARAM 0", "SAMPLE 3, 0", "MARK_SAMPLE", "HALT 0"])
+    assert (await load_program(dut, wrap_prog))[2] == 0
+    dut.uio_in.value = 0xFF  # pin 3 = 1 -> step 0 (0xFFE) samples 0x01 and passes
+    assert (await send_cmd(dut, UART_OP_CFG_SCAN, req_id=38, arg0=0xFE, arg1=3, arg2=2, arg3=0x01))[2] == 0
+    assert (await send_cmd(dut, UART_OP_START_SCAN, req_id=39, arg0=0x0F))[2] == 0
+    # Wait for trial 0 (0xFFE cycles) to finish via trial_active falling edge, then drop pin 3 = 0 for trial 1 (0x001)
+    await wait_falling_bit(dut.uo_out, 1)
+    dut.uio_in.value = 0xF7
+    for _ in range(5000):
+        await ClockCycles(dut.clk, 1)
+        if ((int(dut.uo_out.value) >> 7) & 1) == 1:
+            break
+    else:
+        raise AssertionError("Wraparound scan did not complete")
+    st0 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=40, arg0=0)
+    st1 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=41, arg0=1)
+    f0 = await send_cmd(dut, UART_OP_READ_SCAN_FAIL, req_id=42, arg0=0)
+    assert st0[4] == 2 and st0[5] == 1 and st0[6] == 1
+    assert (st1[3] & 0x3) == 0b01
+    assert (f0[3] >> 7) == 1 and (f0[3] & 0x3F) == 1
+    assert (f0[4] | ((f0[5] & 0xF) << 8)) == 0x001
+
     # Verify ena=0 deselection resets scan_active and scan_done cleanly
-    assert (await send_cmd(dut, UART_OP_CFG_SCAN, req_id=31, arg0=0x40, arg1=8, arg2=16, arg3=0x00))[2] == 0
-    assert (await send_cmd(dut, UART_OP_START_SCAN, req_id=32, arg0=0x02))[2] == 0
+    assert (await send_cmd(dut, UART_OP_CFG_SCAN, req_id=43, arg0=0x40, arg1=8, arg2=16, arg3=0x00))[2] == 0
+    assert (await send_cmd(dut, UART_OP_START_SCAN, req_id=44, arg0=0x02))[2] == 0
     assert ((int(dut.uo_out.value) >> 6) & 1) == 1
     dut.ena.value = 0
     await ClockCycles(dut.clk, 4)
     assert ((int(dut.uo_out.value) >> 6) & 0x3) == 0
     dut.ena.value = 1
     await ClockCycles(dut.clk, 4)
-    st0 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=33, arg0=0)
+    st0 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=45, arg0=0)
     assert st0[3] == 0 and st0[4] == 0 and st0[5] == 0 and st0[6] == 0
+
+    # Verify mid-scan synchronous reset (rst_n=0) clears active scan, prog_valid, and rejects START_SCAN
+    assert (await load_program(dut, no_mark_prog))[2] == 0
+    assert (await send_cmd(dut, UART_OP_CFG_SCAN, req_id=46, arg0=0x20, arg1=2, arg2=16, arg3=0x00))[2] == 0
+    assert (await send_cmd(dut, UART_OP_START_SCAN, req_id=47, arg0=0x00))[2] == 0
+    assert ((int(dut.uo_out.value) >> 6) & 1) == 1
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 4)
+    assert ((int(dut.uo_out.value) >> 6) & 0x3) == 0
+    assert int(dut.uio_oe.value) == 0
+    dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 4)
+    st0 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=48, arg0=0)
+    assert st0[3] == 0 and st0[4] == 0 and st0[5] == 0 and st0[6] == 0
+    bad = await send_cmd(dut, UART_OP_START_SCAN, req_id=49, arg0=0x00)
+    assert bad[2] == 0x04

@@ -22,6 +22,8 @@ A **runtime-reprogrammable protocol emulator and autonomous timing-boundary expl
 
 ## Quickstart & Runnable Examples
 
+**Prerequisites (for clean checkout):** Icarus Verilog (`iverilog >= 12`), GNU `make`, and Python 3.11+ with `pip install -r test/requirements.txt` (all `tools/` and `experiments/` runtime/test scripts use Python standard library only; `pyserial` is required only for `--port` hardware UART).
+
 ```bash
 # 1. Autonomous scan API vs host-driven sweep benchmark (1D 32-pt + 2D 192-pt surfaces)
 python experiments/autonomous_scan_eval.py
