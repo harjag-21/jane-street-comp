@@ -511,6 +511,30 @@ class TimingExplorerTests(unittest.TestCase):
             self.assertEqual(res_bp["eng_state"], "ENG_HALTED")
             self.assertEqual(decode_jtag_idcode_events(res_bp["events"]), 0x00000000)
 
+    def test_scan_wait_budget_and_cli_entry_points(self) -> None:
+        import contextlib
+        import io
+        import json
+
+        from tools.timing_explorer import main as cli_main
+
+        self.assertEqual(ProtocolClient.compute_scan_wait_cycles(0, 1, 16, 200000), 200000)
+        high_budget = ProtocolClient.compute_scan_wait_cycles(4000, 1, 32, 200000)
+        self.assertGreater(high_budget, 2000000)
+
+        jtag_out = io.StringIO()
+        with contextlib.redirect_stdout(jtag_out):
+            rc_jtag = cli_main(["run-example", "--sim", "--example", "jtag"])
+        self.assertEqual(rc_jtag, 0)
+        self.assertEqual(json.loads(jtag_out.getvalue())["decoded_idcode_hex"], "0x1a2b4d6f")
+
+        scan_out = io.StringIO()
+        with contextlib.redirect_stdout(scan_out):
+            rc_scan = cli_main(["scan", "--sim", "--delay-ns", "37", "--start", "0", "--step", "1", "--steps", "4", "--expect", "0xAA"])
+        self.assertEqual(rc_scan, 0)
+        scan_payload = json.loads(scan_out.getvalue())
+        self.assertEqual([pt["passed"] for pt in scan_payload["results"]], [False, False, True, True])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -107,6 +107,7 @@ jobs:
           set -euo pipefail
           mkdir -p ci_artifacts
           python -m unittest discover -s experiments -v 2>&1 | tee ci_artifacts/experiments_unittest.log
+          python experiments/audit_model_regression.py | tee ci_artifacts/audit_model_regression.log
           python -m unittest discover -s tools -v 2>&1 | tee ci_artifacts/tools_unittest.log
           python tools/contract_audit.py | tee ci_artifacts/contract_audit.md
           python experiments/autonomous_scan_eval.py | tee ci_artifacts/autonomous_scan_eval.json

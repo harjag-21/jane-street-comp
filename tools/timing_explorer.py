@@ -506,6 +506,18 @@ class ProtocolClient:
             "event_count": d1[3] & 0x0F,
         }
 
+    @staticmethod
+    def compute_scan_wait_cycles(
+        param_start: int,
+        param_step: int,
+        num_steps: int,
+        max_wait_cycles: int = 200000,
+    ) -> int:
+        """Return a simulation wait budget that covers high-parameter multi-step scans."""
+        peak_param = min(0xFFF, max(0, param_start + max(0, num_steps) * max(0, param_step)))
+        per_step_budget = max(4000, peak_param * 20 + 1000)
+        return max(int(max_wait_cycles), max(0, int(num_steps)) * per_step_budget)
+
     def run_autonomous_scan(
         self,
         param_start: int,
@@ -523,7 +535,13 @@ class ProtocolClient:
             pass_mode=pass_mode,
         )
         self.start_scan((param_start >> 8) & 0x0F)
-        sim_scan = self.transport.wait_scan_completion(max_wait_cycles)
+        effective_wait = self.compute_scan_wait_cycles(
+            param_start=param_start,
+            param_step=param_step,
+            num_steps=num_steps,
+            max_wait_cycles=max_wait_cycles,
+        )
+        sim_scan = self.transport.wait_scan_completion(effective_wait)
         status: Optional[Dict[str, Any]] = None
         for _ in range(400):
             st = self.read_scan_status()
