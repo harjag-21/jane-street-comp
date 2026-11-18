@@ -49,11 +49,11 @@ python tools/diff_minimizer.py --budget 30 --seed 20261116 --repeats 10
 
 ## Verification Results & Scope Limits
 
-- **Physical ASIC hardening (`exp/autonomous-scan`, `cb0fddb` RTL / `80/80` IHP CMOS5L LibreLane):**
-  - `--check-docs` passed (`0` errors); `Verilator` lint passed (`0` errors, `0` warnings); Cocotb RTL passed **`5/5`** (`3,729,390 ns`, `22.61 s` on final commit).
+- **Physical ASIC hardening (`cb0fddb` RTL / `80/80` IHP CMOS5L LibreLane, unchanged `src/` & `info.yaml`):**
+  - `--check-docs` passed (`0` errors); `Verilator` lint passed (`0` errors, `0` warnings); Cocotb RTL passed **`5/5`** (`4,479,630 ns`, `23.70 s`, including expanded max-step/wraparound/reset/`ENG_FAULT` lifecycle regressions).
   - Full LibreLane flow completed **`80/80` stages** (`1:31:17`): `15,112` stdcells (`1,832` sequential), `234,680 µm²` active stdcells (`0.235 mm²`, `19.4244%` of `1,208,170 µm²` placeable core [`1.208 mm²`] / `17.007 %` via `--print-stats`), `601,220 µm` routed wirelength, `+11.0661 ns` worst slow setup slack (`20 ns` period), `+0.1175 ns` fast hold slack, and `0` setup/hold/slew/cap/route-DRC/Magic-DRC/Netgen-LVS/antenna violations.
   - Area note: per `tt/tech/ihp-sg13cmos5l/tile_sizes.yaml`, one `1×1` tile is `202.08 × 154.98 µm` (`32 × 1×1 ≈ 1.00 mm²`), while the `8×4` macro bbox (`1724.16 × 710.64 µm`) includes inter-tile routing and power-mux channels (`1,225,260 µm²` die / `1,208,170 µm²` core).
-  - Gate-level verification: post-PnR Cocotb against `tt_um_harjag_21_timing_explorer.nl.v` passed **`5/5`** (`3,729,390 ns`, `346.41 s`), executed as **functional verification** without SDF timing annotation (using a temporary `/tmp` copy of `sg13cmos5l_stdcell.v` with `specify`/`delayed_*` removed for Icarus `12.0`). `KLayout.DRC`/XOR remain disabled in default Tiny Tapeout `src/config.json`.
+  - Gate-level verification: post-PnR Cocotb against `tt_um_harjag_21_timing_explorer.nl.v` passed **`5/5`** (`4,479,630 ns`, `390.50 s`), executed as **functional verification** without SDF timing annotation (using a temporary `/tmp` copy of `sg13cmos5l_stdcell.v` with `specify`/`delayed_*` removed for Icarus `12.0`). `KLayout.DRC`/XOR remain disabled in default Tiny Tapeout `src/config.json`.
 - **Simulated experiment scope:**
   - All tested autonomous scans matched host-driven results `100%` in RTL simulation (`32/32` 1D SPI bitmap + exact `first_fail` trace; `192/192` exact grid match with `0` mismatches across `12×16` surfaces `S0`, `S4`, `S8`).
   - Reported UART reductions (**`21.33×`**, `6` vs `128` frames on a 32-pt 1D sweep; **`3.25×–3.32×`**, `309`/`303` vs `1005` frames on `12×16` grids) measure **host-control UART traffic in RTL simulation**, not a measured physical/hardware speedup. There are **no FPGA or fabricated-ASIC measurements yet**.
