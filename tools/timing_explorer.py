@@ -41,6 +41,8 @@ from tools.protocol_asm import (  # noqa: E402
     build_i2c_write_byte_program,
     build_jtag_idcode_program,
     build_spi_mode0_program,
+    build_spi_program,
+    build_spi_target_responder_program,
     build_uart_tx_program,
     check_timing_contract,
     crc8_07,
@@ -406,7 +408,7 @@ class ProtocolClient:
                 break
         return events
 
-    def run_trial(self, run_param: int, max_wait_cycles: int = 4000) -> Dict[str, Any]:
+    def run_trial(self, run_param: int, max_wait_cycles: int = 20000) -> Dict[str, Any]:
         self.start(run_param)
         sim_obs = self.transport.wait_execution(max_wait_cycles)
         status: Optional[Dict[str, Any]] = None
@@ -1035,11 +1037,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     p_replay.add_argument("--trials", type=int, default=5)
     p_replay.add_argument("--all", dest="all_cases", action="store_true")
 
-    p_ex = sub.add_parser("run-example", help="Run built-in uart/spi/i2c/jtag example over UART")
+    p_ex = sub.add_parser("run-example", help="Run built-in protocol example over UART")
     p_ex.add_argument("--sim", action="store_true")
     p_ex.add_argument("--port")
     p_ex.add_argument("--baud", type=int, default=115200)
-    p_ex.add_argument("--example", choices=["uart", "spi", "i2c", "jtag"], required=True)
+    p_ex.add_argument(
+        "--example",
+        choices=["uart", "spi", "spi-mode1", "spi-mode2", "spi-mode3", "spi-responder", "i2c", "i2c-100k", "i2c-400k", "jtag"],
+        required=True,
+    )
     p_ex.add_argument("--param", type=int, default=2)
     p_ex.add_argument("--delay-ns", type=int, default=23)
     p_ex.add_argument("--i2c-ack", type=int, choices=[0, 1], default=1)
@@ -1116,6 +1122,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 0
 
         if args.cmd == "run-example":
+            param = args.param
             if args.example == "uart":
                 if args.sim:
                     transport.configure_target(1)
@@ -1124,16 +1131,35 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 if args.sim:
                     transport.configure_target(0, delay_ns=args.delay_ns, spi_resp=0xAA)
                 words = build_spi_mode0_program(0x55)
+            elif args.example in ("spi-mode1", "spi-mode2", "spi-mode3"):
+                spi_mode = int(args.example[-1])
+                if args.sim:
+                    transport.configure_target(11 + spi_mode, delay_ns=args.delay_ns, spi_resp=0xAA)
+                words = build_spi_program(0x55, mode=spi_mode)
+            elif args.example == "spi-responder":
+                if args.sim:
+                    transport.configure_target(15, delay_ns=2, spi_resp=0xA5, i2c_ack=6)
+                words = build_spi_target_responder_program(0x5A, max_wait=0)
+                if param <= 2:
+                    param = 120
             elif args.example == "i2c":
                 if args.sim:
                     transport.configure_target(2, i2c_ack=args.i2c_ack)
                 words = build_i2c_write_byte_program(0xA0, half_cycles=4)
+            elif args.example == "i2c-100k":
+                if args.sim:
+                    transport.configure_target(2, i2c_ack=args.i2c_ack)
+                words = build_i2c_write_byte_program(0xA0, half_cycles=250)
+            elif args.example == "i2c-400k":
+                if args.sim:
+                    transport.configure_target(2, i2c_ack=args.i2c_ack)
+                words = build_i2c_write_byte_program(0xA0, half_cycles=62)
             else:
                 if args.sim:
                     transport.configure_target(11, delay_ns=0)
                 words = build_jtag_idcode_program()
             client.load_program(words)
-            result = client.run_trial(args.param)
+            result = client.run_trial(param)
             if args.example == "jtag":
                 result["decoded_idcode_hex"] = f"0x{decode_jtag_idcode_events(result['events']):08x}"
             print(json.dumps(result, indent=2, sort_keys=True))

@@ -15,7 +15,7 @@ A **runtime-reprogrammable protocol emulator and autonomous timing-boundary expl
 - **RTL (`src/project.v`, `src/protocol_sequencer.v`):**
   - **Sequencer (`0x0`–`0xD`):** `NOP`, `OUT`, `OE`, `WAIT`, `SAMPLE`, `JZ`, `JMP`, `LOOP`, `SETCOUNT`, `MARK`, `HALT`, simultaneous `OUT_SAMPLE`, runtime-parameterized `WAIT_PARAM`, and bounded `WAIT_EDGE` (plus safe high-Z `ENG_FAULT` on `0xE`–`0xF`).
   - **Control & Autonomous Scanner (`0x10`–`0x1D`):** 8-byte CRC-8/07 UART frames with `ui_in[2:1]` runtime baud dividers (`8 / 104 / 217 / 434` for sim or `12/25/50 MHz @ 115200`), single-word live patching (`0x19 OP_PATCH_WORD`), autonomous sweep (`0x1A`–`0x1D`), and `ena & rst_n` deselection reset.
-- **Assembler & Cycle-Contract Checker (`tools/protocol_asm.py`):** Symbolic assembler generating UART TX (`24` words), SPI mode-0 sweep (`38` words), 2D SPI (`59` words), SPI target responder (`WAIT_EDGE`), I2C open-drain ACK/NACK (`62` words), I2C clock-stretch probe, and IEEE 1149.1 JTAG TAP `IDCODE` (`50` words) programs, plus `analyze_timing_bounds` and `check_timing_contract` (`JZ`, `LOOP`, `WAIT_EDGE`).
+- **Assembler & Cycle-Contract Checker (`tools/protocol_asm.py`):** Symbolic assembler generating UART TX (`24` words), SPI modes `0–3` sweeps (`38 / 39 / 38 / 39` words), 2D SPI (`59` words), end-to-end SPI target responder (`40` words, `WAIT_EDGE`), I2C open-drain ACK/NACK at `400 kHz` / `100 kHz` (`62` words), I2C clock-stretch probe, and IEEE 1149.1 JTAG TAP `IDCODE` (`50` words) programs, plus `analyze_timing_bounds` and `check_timing_contract` (`JZ`, `LOOP`, `WAIT_EDGE`).
 - **Host CLI & Simulator Bridge (`tools/timing_explorer.py`, `tools/sim_explorer_tb.v`):** Unified `ProtocolClient` (`--sim` Icarus RTL or `--port` serial UART) with `run_autonomous_scan`, single-trial sweeps/binary search, JSONL trace replay (`replay --exec`), differential timing fuzzing + minimization (`tools/diff_minimizer.py`), and noisy-target sweeps (`tools/noisy_boundary_study.py`).
 - **Software Reference Model & Benchmarks (`experiments/`):** Femtosecond SPI timing oracle (`15/15` unit tests), `experiments/autonomous_scan_eval.py`, and reproducible fuzzing/cartographer studies (`docs/evidence/`).
 - **Documentation:** [PROGRAMMABLE_ENGINE_ARCHITECTURE.md](docs/PROGRAMMABLE_ENGINE_ARCHITECTURE.md), [TIMING_BOUNDARY_EXPLORER_ARCHITECTURE.md](docs/TIMING_BOUNDARY_EXPLORER_ARCHITECTURE.md), [COMPETITION_PLAN_AND_EVIDENCE.md](docs/COMPETITION_PLAN_AND_EVIDENCE.md), [PROJECT_STATUS_REPORT_2026-11-16.md](docs/PROJECT_STATUS_REPORT_2026-11-16.md), [info.md](docs/info.md).
@@ -28,7 +28,7 @@ A **runtime-reprogrammable protocol emulator and autonomous timing-boundary expl
 # 1. Autonomous scan API vs host-driven sweep benchmark (1D 32-pt + 2D 192-pt surfaces)
 python experiments/autonomous_scan_eval.py
 
-# 2. Explorer CLI + live-RTL multi-protocol, autonomous scan, & minimizer tests (6/6)
+# 2. Explorer CLI + live-RTL multi-protocol, SPI modes 0-3, responder, I2C 100k/400k, JTAG, autonomous scan, & minimizer tests (9/9)
 python -m unittest discover -s tools -v
 
 # 3. Dynamic cycle-contract audit (13/13) & software timing oracle tests (15/15)
@@ -41,7 +41,10 @@ iverilog -g2012 -Wall -s tb_jtag_tap -o sim_jtag.vvp src/project.v src/protocol_
 
 # 5. Live protocol sweeps, autonomous scan CLI, replay, & differential fuzzing
 python tools/timing_explorer.py run-example --sim --example uart
-python tools/timing_explorer.py run-example --sim --example i2c --i2c-ack 1
+python tools/timing_explorer.py run-example --sim --example spi-mode1
+python tools/timing_explorer.py run-example --sim --example spi-responder
+python tools/timing_explorer.py run-example --sim --example i2c-400k --i2c-ack 1
+python tools/timing_explorer.py run-example --sim --example i2c-100k --i2c-ack 1
 python tools/timing_explorer.py run-example --sim --example jtag
 python tools/timing_explorer.py scan --sim --delay-ns 37 --start 0 --step 1 --steps 16 --expect 0xAA
 python tools/timing_explorer.py sweep --sim --delay-ns 23 --min-low 2 --max-low 8 --method sweep --out trace.jsonl --report report.md
@@ -52,7 +55,7 @@ python tools/diff_minimizer.py --budget 30 --seed 20261116 --repeats 10
 ## Verification Results & Scope Limits
 
 - **Physical ASIC hardening (`cb0fddb` RTL / `80/80` IHP CMOS5L LibreLane, unchanged `src/` & `info.yaml`):**
-  - `--check-docs` passed (`0` errors); `Verilator` lint passed (`0` errors, `0` warnings); Cocotb RTL passed **`5/5`** (`4,479,630 ns`, `23.70 s`, including expanded max-step/wraparound/reset/`ENG_FAULT` lifecycle regressions).
+  - `--check-docs` passed (`0` errors); `Verilator` lint passed (`0` errors, `0` warnings); Cocotb RTL passed **`8/8`** (`10,465,450 ns`, `44.14 s`, covering loader, UART, SPI modes `0–3`, end-to-end SPI target-responder, I2C ACK/NACK & `100/400 kHz` @ `50 MHz`, and autonomous scan lifecycle regressions); `tools/` host + live-RTL suite passed **`9/9`** (`20.81 s`, including JTAG `IDCODE`, SPI modes `0–3` host + autonomous scan, SPI responder, I2C `100/400 kHz`, and contract audit). On GitHub Actions (`harjag-21/jane-street-comp`, run `44284895394`), `exp/autonomous-scan` (`bf6a6ce`) passed `gds`, `gl_test`, and `precheck` (only `viewer` awaits GitHub Pages enablement).
   - Full LibreLane flow completed **`80/80` stages** (`1:31:17`): `15,112` stdcells (`1,832` sequential), `234,680 µm²` active stdcells (`0.235 mm²`, `19.4244%` of `1,208,170 µm²` placeable core [`1.208 mm²`] / `17.007 %` via `--print-stats`), `601,220 µm` routed wirelength, `+11.0661 ns` worst slow setup slack (`20 ns` period), `+0.1175 ns` fast hold slack, and `0` setup/hold/slew/cap/route-DRC/Magic-DRC/Netgen-LVS/antenna violations.
   - Area note: per `tt/tech/ihp-sg13cmos5l/tile_sizes.yaml`, one `1×1` tile is `202.08 × 154.98 µm` (`32 × 1×1 ≈ 1.00 mm²`), while the `8×4` macro bbox (`1724.16 × 710.64 µm`) includes inter-tile routing and power-mux channels (`1,225,260 µm²` die / `1,208,170 µm²` core).
   - Gate-level verification: post-PnR Cocotb against `tt_um_harjag_21_timing_explorer.nl.v` passed **`5/5`** (`4,479,630 ns`, `390.50 s`), executed as **functional verification** without SDF timing annotation (using a temporary `/tmp` copy of `sg13cmos5l_stdcell.v` with `specify`/`delayed_*` removed for Icarus `12.0`). `KLayout.DRC`/XOR remain disabled in default Tiny Tapeout `src/config.json`.

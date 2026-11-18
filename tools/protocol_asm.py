@@ -207,6 +207,54 @@ def build_uart_tx_program(byte_val: int, bit_cycles: int = 8, pin: int = 0) -> L
     return assemble(lines)
 
 
+def build_spi_program(
+    mosi_byte: int,
+    mode: int = 0,
+    cs_pin: int = 0,
+    sclk_pin: int = 1,
+    mosi_pin: int = 2,
+    miso_pin: int = 3,
+) -> List[int]:
+    """Build an 8-bit SPI mode 0/1/2/3 program parameterized via `WAIT_PARAM` (38 or 39 words)."""
+    if mode not in (0, 1, 2, 3):
+        raise ValueError(f"SPI mode must be 0..3, got {mode}")
+    cpol = (mode >> 1) & 1
+    cpha = mode & 1
+    cs_mask = 1 << cs_pin
+    sclk_mask = 1 << sclk_pin
+    mosi_mask = 1 << mosi_pin
+    oe_mask = cs_mask | sclk_mask | mosi_mask
+    sclk_idle = sclk_mask if cpol else 0
+    sclk_lead = 0 if cpol else sclk_mask
+
+    lines = [
+        f"OUT 0x{(cs_mask | sclk_idle):02x}",
+        f"OE  0x{oe_mask:02x}",
+    ]
+    if cpha == 1:
+        # Drop CS_N cleanly before the first leading SCLK shift edge.
+        lines.append(f"OUT 0x{sclk_idle:02x}")
+    for bit in range(7, -1, -1):
+        m = mosi_mask if ((mosi_byte >> bit) & 1) else 0
+        if cpha == 0:
+            lines.append(f"OUT 0x{(sclk_idle | m):02x}")
+            lines.append("WAIT_PARAM 0")
+            lines.append(f"OUT_SAMPLE 0x{(sclk_lead | m):02x}, {miso_pin}, 0")
+            lines.append("NOP")
+        else:
+            lines.append(f"OUT 0x{(sclk_lead | m):02x}")
+            lines.append("WAIT_PARAM 0")
+            lines.append(f"OUT_SAMPLE 0x{(sclk_idle | m):02x}, {miso_pin}, 0")
+            lines.append("NOP")
+    lines += [
+        f"OUT 0x{sclk_idle:02x}",
+        f"OUT 0x{(cs_mask | sclk_idle):02x}",
+        "MARK_SAMPLE",
+        "HALT 0",
+    ]
+    return assemble(lines)
+
+
 def build_spi_mode0_program(
     mosi_byte: int,
     cs_pin: int = 0,
@@ -215,27 +263,14 @@ def build_spi_mode0_program(
     miso_pin: int = 3,
 ) -> List[int]:
     """Build an 8-bit mode-0 SPI program parameterized via `WAIT_PARAM` (`L = param + 2`)."""
-    cs_mask = 1 << cs_pin
-    sclk_mask = 1 << sclk_pin
-    mosi_mask = 1 << mosi_pin
-    oe_mask = cs_mask | sclk_mask | mosi_mask
-    lines = [
-        f"OUT 0x{cs_mask:02x}",
-        f"OE  0x{oe_mask:02x}",
-    ]
-    for bit in range(7, -1, -1):
-        m = mosi_mask if ((mosi_byte >> bit) & 1) else 0
-        lines.append(f"OUT 0x{m:02x}")
-        lines.append("WAIT_PARAM 0")
-        lines.append(f"OUT_SAMPLE 0x{(sclk_mask | m):02x}, {miso_pin}, 0")
-        lines.append("NOP")
-    lines += [
-        "OUT 0x00",
-        f"OUT 0x{cs_mask:02x}",
-        "MARK_SAMPLE",
-        "HALT 0",
-    ]
-    return assemble(lines)
+    return build_spi_program(
+        mosi_byte,
+        mode=0,
+        cs_pin=cs_pin,
+        sclk_pin=sclk_pin,
+        mosi_pin=mosi_pin,
+        miso_pin=miso_pin,
+    )
 
 
 def build_i2c_write_byte_program(
@@ -963,7 +998,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="v1 Protocol Engine assembler helper")
     parser.add_argument(
         "--example",
-        choices=["uart", "spi", "i2c", "i2c_stretch", "spi_target", "jtag_idcode"],
+        choices=[
+            "uart",
+            "spi",
+            "spi_mode1",
+            "spi_mode2",
+            "spi_mode3",
+            "i2c",
+            "i2c_100k",
+            "i2c_400k",
+            "i2c_stretch",
+            "spi_target",
+            "jtag_idcode",
+        ],
         required=True,
     )
     args = parser.parse_args()
@@ -971,8 +1018,18 @@ if __name__ == "__main__":
         prog = build_uart_tx_program(0xA3, bit_cycles=8)
     elif args.example == "spi":
         prog = build_spi_mode0_program(0x55)
+    elif args.example == "spi_mode1":
+        prog = build_spi_program(0x55, mode=1)
+    elif args.example == "spi_mode2":
+        prog = build_spi_program(0x55, mode=2)
+    elif args.example == "spi_mode3":
+        prog = build_spi_program(0x55, mode=3)
     elif args.example == "i2c":
         prog = build_i2c_write_byte_program(0xA0)
+    elif args.example == "i2c_100k":
+        prog = build_i2c_write_byte_program(0xA0, half_cycles=250)
+    elif args.example == "i2c_400k":
+        prog = build_i2c_write_byte_program(0xA0, half_cycles=62)
     elif args.example == "i2c_stretch":
         prog = build_i2c_stretch_probe_program()
     elif args.example == "spi_target":

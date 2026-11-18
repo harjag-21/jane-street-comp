@@ -29,6 +29,10 @@ module sim_explorer_tb;
   localparam integer MODE_SPI_PARAM     = 9;
   localparam integer MODE_SPI_SURFACE   = 10;
   localparam integer MODE_JTAG_TAP      = 11;
+  localparam integer MODE_SPI_MODE1     = 12;
+  localparam integer MODE_SPI_MODE2     = 13;
+  localparam integer MODE_SPI_MODE3     = 14;
+  localparam integer MODE_SPI_EXT_CTRL  = 15;
 
   reg        clk = 1'b0;
   reg        rst_n = 1'b0;
@@ -70,6 +74,13 @@ module sim_explorer_tb;
   reg  [7:0] spi_mosi_rx   = 8'h00;
   reg  [3:0] spi_bit_idx   = 4'd0;
   reg        spi_miso_drv  = 1'b1;
+
+  // External SPI Mode-0 controller signals (MODE_SPI_EXT_CTRL = 15)
+  reg        ext_spi_cs_n  = 1'b1;
+  reg        ext_spi_sclk  = 1'b0;
+  reg        ext_spi_mosi  = 1'b0;
+  reg  [7:0] ext_miso_rx   = 8'h00;
+  integer    ext_half_clks = 6;
 
   // Stateful SPI flash-style responder state (MODE_SPI_STATEFUL)
   reg        st_wren        = 1'b0;
@@ -174,8 +185,12 @@ module sim_explorer_tb;
     if ((target_mode == MODE_SPI) || (target_mode == MODE_SPI_STATEFUL) ||
         (target_mode == MODE_SPI_MULTISPEC) || (target_mode == MODE_SPI_NOISY) ||
         (target_mode == MODE_SPI_HELD) || (target_mode == MODE_SPI_SHAPES) ||
-        (target_mode == MODE_SPI_PARAM) || (target_mode == MODE_SPI_SURFACE)) begin
+        (target_mode == MODE_SPI_PARAM) || (target_mode == MODE_SPI_SURFACE) ||
+        (target_mode == MODE_SPI_MODE1) || (target_mode == MODE_SPI_MODE2) ||
+        (target_mode == MODE_SPI_MODE3)) begin
       uio_in = {4'hF, spi_miso_drv, 3'b111};
+    end else if (target_mode == MODE_SPI_EXT_CTRL) begin
+      uio_in = {5'b11111, ext_spi_mosi, ext_spi_sclk, ext_spi_cs_n};
     end else if ((target_mode == MODE_I2C) || (target_mode == MODE_I2C_STRETCH)) begin
       uio_in = {6'h3F, sda_bus, scl_bus};
     end else if (target_mode == MODE_JTAG_TAP) begin
@@ -185,18 +200,24 @@ module sim_explorer_tb;
     end
   end
 
-  wire spi_cs_n = uio_oe[0] ? uio_out[0] : 1'b1;
-  wire spi_sclk = uio_oe[1] ? uio_out[1] : 1'b0;
+  wire is_spi_delay_mode = (target_mode == MODE_SPI) || (target_mode == MODE_SPI_NOISY) ||
+                           (target_mode == MODE_SPI_MODE1) || (target_mode == MODE_SPI_MODE2) ||
+                           (target_mode == MODE_SPI_MODE3);
+  wire spi_cpol_cfg = (target_mode == MODE_SPI_MODE2) || (target_mode == MODE_SPI_MODE3);
+  wire spi_cpha_cfg = (target_mode == MODE_SPI_MODE1) || (target_mode == MODE_SPI_MODE3);
 
-  // MODE_SPI & MODE_SPI_NOISY: transport-delayed MISO SPI target
+  wire spi_cs_n = uio_oe[0] ? uio_out[0] : 1'b1;
+  wire spi_sclk = uio_oe[1] ? uio_out[1] : spi_cpol_cfg;
+
+  // MODE_SPI, MODE_SPI_NOISY, and MODE_SPI_MODE1..3: transport-delayed MISO SPI target
   always @(negedge spi_cs_n) begin : spi_noisy_cs_blk
     integer span;
     integer off;
     integer raw_d;
-    if ((target_mode == MODE_SPI) || (target_mode == MODE_SPI_NOISY)) begin
+    if (is_spi_delay_mode) begin
       spi_bit_idx  = 4'd0;
       spi_mosi_rx  = 8'h00;
-      spi_miso_drv <= spi_resp_byte[7];
+      spi_miso_drv <= spi_cpha_cfg ? 1'b0 : spi_resp_byte[7];
       if ((target_mode == MODE_SPI_NOISY) && (spi_jitter_ns > 0)) begin
         tb_lfsr = tb_lfsr ^ (tb_lfsr << 13);
         tb_lfsr = tb_lfsr ^ (tb_lfsr >> 17);
@@ -213,16 +234,78 @@ module sim_explorer_tb;
   end
 
   always @(posedge spi_sclk) begin
-    if (((target_mode == MODE_SPI) || (target_mode == MODE_SPI_NOISY)) && !spi_cs_n) begin
-      spi_mosi_rx = {spi_mosi_rx[6:0], uio_out[2]};
+    if (is_spi_delay_mode && !spi_cs_n) begin
+      if (!spi_cpol_cfg && !spi_cpha_cfg) begin
+        spi_mosi_rx = {spi_mosi_rx[6:0], uio_out[2]};
+      end else if (!spi_cpol_cfg && spi_cpha_cfg) begin
+        if (spi_bit_idx < 4'd8) begin
+          spi_miso_drv <= #(cur_tx_delay_ns) spi_resp_byte[7 - spi_bit_idx];
+        end
+      end else if (spi_cpol_cfg && !spi_cpha_cfg) begin
+        if (spi_bit_idx < 4'd7) begin
+          spi_bit_idx = spi_bit_idx + 4'd1;
+          spi_miso_drv <= #(cur_tx_delay_ns) spi_resp_byte[7 - spi_bit_idx];
+        end
+      end else begin
+        spi_mosi_rx = {spi_mosi_rx[6:0], uio_out[2]};
+        spi_bit_idx = spi_bit_idx + 4'd1;
+      end
     end
   end
 
   always @(negedge spi_sclk) begin
-    if (((target_mode == MODE_SPI) || (target_mode == MODE_SPI_NOISY)) && !spi_cs_n) begin
-      if (spi_bit_idx < 4'd7) begin
+    if (is_spi_delay_mode && !spi_cs_n) begin
+      if (!spi_cpol_cfg && !spi_cpha_cfg) begin
+        if (spi_bit_idx < 4'd7) begin
+          spi_bit_idx = spi_bit_idx + 4'd1;
+          spi_miso_drv <= #(cur_tx_delay_ns) spi_resp_byte[7 - spi_bit_idx];
+        end
+      end else if (!spi_cpol_cfg && spi_cpha_cfg) begin
+        spi_mosi_rx = {spi_mosi_rx[6:0], uio_out[2]};
         spi_bit_idx = spi_bit_idx + 4'd1;
-        spi_miso_drv <= #(cur_tx_delay_ns) spi_resp_byte[7 - spi_bit_idx];
+      end else if (spi_cpol_cfg && !spi_cpha_cfg) begin
+        spi_mosi_rx = {spi_mosi_rx[6:0], uio_out[2]};
+      end else begin
+        if (spi_bit_idx < 4'd8) begin
+          spi_miso_drv <= #(cur_tx_delay_ns) spi_resp_byte[7 - spi_bit_idx];
+        end
+      end
+    end
+  end
+
+  // MODE_SPI_EXT_CTRL = 15: external SPI mode-0 controller driving CS_N/SCLK/MOSI
+  // once responder asserts MISO OE (`uio_oe[3]`). Captures responder MISO into `i2c_rx_byte`.
+  always @(posedge uio_oe[3]) begin : ext_spi_ctrl_blk
+    integer wait_i;
+    integer eb;
+    integer hclks;
+    if (target_mode == MODE_SPI_EXT_CTRL) begin
+      ext_spi_cs_n = 1'b1;
+      ext_spi_sclk = 1'b0;
+      ext_spi_mosi = 1'b0;
+      ext_miso_rx  = 8'h00;
+      hclks = (ext_half_clks >= 2) ? ext_half_clks : 6;
+      for (wait_i = 0; (wait_i < spi_delay_ns) && uio_oe[3]; wait_i = wait_i + 1) begin
+        @(posedge clk);
+      end
+      if (uio_oe[3]) begin
+        ext_spi_mosi = spi_resp_byte[7];
+        ext_spi_cs_n = 1'b0;
+        repeat (hclks) @(posedge clk);
+        for (eb = 0; eb < 8; eb = eb + 1) begin
+          ext_spi_sclk = 1'b1;
+          ext_miso_rx  = {ext_miso_rx[6:0], uio_out[3]};
+          repeat (hclks) @(posedge clk);
+          ext_spi_sclk = 1'b0;
+          if (eb < 7) begin
+            ext_spi_mosi = spi_resp_byte[6 - eb];
+          end
+          repeat (hclks) @(posedge clk);
+        end
+        repeat (2) @(posedge clk);
+        ext_spi_cs_n = 1'b1;
+        i2c_rx_byte  = ext_miso_rx;
+        i2c_seen     = 1'b1;
       end
     end
   end
@@ -855,7 +938,11 @@ module sim_explorer_tb;
           sf_prev_sclk   = 1'b0;
           cur_tx_delay_ns = spi_delay_ns;
           spi_mosi_rx    = 8'h00;
-          spi_miso_drv   = spi_resp_byte[7];
+          spi_miso_drv   = spi_cpha_cfg ? 1'b0 : spi_resp_byte[7];
+          ext_spi_cs_n   = 1'b1;
+          ext_spi_sclk   = 1'b0;
+          ext_spi_mosi   = 1'b0;
+          ext_miso_rx    = 8'h00;
           repeat (6) @(posedge clk);
           rst_n = 1'b1;
           repeat (4) @(posedge clk);
@@ -889,8 +976,14 @@ module sim_explorer_tb;
           spi_resp_byte  = arg_c[7:0];
           i2c_do_ack     = arg_d[0];
           spi_jitter_ns  = (arg_d > 0) ? arg_d : 0;
+          ext_half_clks  = (arg_d > 1) ? arg_d : 6;
           cur_tx_delay_ns = spi_delay_ns;
-          spi_miso_drv   = ((target_mode == MODE_SPI) || (target_mode == MODE_SPI_NOISY)) ? spi_resp_byte[7] : 1'b0;
+          spi_miso_drv   = ((target_mode == MODE_SPI) || (target_mode == MODE_SPI_NOISY) ||
+                            (target_mode == MODE_SPI_MODE2)) ? spi_resp_byte[7] : 1'b0;
+          ext_spi_cs_n   = 1'b1;
+          ext_spi_sclk   = 1'b0;
+          ext_spi_mosi   = 1'b0;
+          ext_miso_rx    = 8'h00;
           uart_mon_seen  = 1'b0;
           uart_mon_byte  = 8'h00;
           i2c_seen       = 1'b0;

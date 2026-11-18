@@ -18,6 +18,7 @@ from tools.protocol_asm import (
     build_i2c_write_byte_program,
     build_jtag_idcode_program,
     build_spi_mode0_program,
+    build_spi_program,
     build_spi_target_responder_program,
     build_uart_tx_program,
     check_timing_contract,
@@ -534,6 +535,106 @@ class TimingExplorerTests(unittest.TestCase):
         self.assertEqual(rc_scan, 0)
         scan_payload = json.loads(scan_out.getvalue())
         self.assertEqual([pt["passed"] for pt in scan_payload["results"]], [False, False, True, True])
+
+    def test_phase3_spi_modes_responder_and_i2c_rates(self) -> None:
+        import contextlib
+        import io
+        import json
+
+        from tools.timing_explorer import main as cli_main
+
+        with IcarusSimTransport() as transport:
+            transport.reset(1)
+            client = ProtocolClient(transport)
+
+            # 1) SPI Modes 0, 1, 2, 3 fit well inside 64 words and match host + autonomous scan boundaries
+            for mode in (0, 1, 2, 3):
+                words = build_spi_program(0x55, mode=mode)
+                self.assertLessEqual(len(words), 64)
+                client.load_program(words)
+                transport.configure_target(0 if mode == 0 else (11 + mode), delay_ns=23, spi_resp=0xAA)
+
+                res_fail = client.run_trial(0)
+                self.assertNotEqual(res_fail["sample_reg"], 0xAA, f"mode {mode} run_param=0 unexpectedly passed")
+                self.assertEqual(res_fail["sim_observations"]["spi_mosi_rx"], 0x55)
+
+                res_pass = client.run_trial(1)
+                self.assertEqual(res_pass["sample_reg"], 0xAA, f"mode {mode} run_param=1 failed")
+                self.assertEqual(res_pass["sim_observations"]["spi_mosi_rx"], 0x55)
+                chk = check_timing_contract(
+                    words,
+                    1,
+                    observed_cycles=res_pass["cycle_cnt"],
+                    observed_events=res_pass["events"],
+                    eng_state=res_pass["eng_state"],
+                    sample_bits=[(0xAA >> b) & 1 for b in range(7, -1, -1)],
+                )
+                self.assertTrue(chk["contract_ok"], chk["errors"])
+
+                scan_res = client.run_autonomous_scan(
+                    param_start=0,
+                    param_step=1,
+                    num_steps=4,
+                    expected_val=0xAA,
+                    pass_mode=0,
+                )
+                self.assertEqual([pt["passed"] for pt in scan_res["results"]], [False, True, True, True])
+                self.assertEqual(scan_res["first_fail"]["fail_param"], 0)
+
+            # 2) Complete end-to-end SPI target-responder against external controller (MODE_SPI_EXT_CTRL=15)
+            resp_words = build_spi_target_responder_program(0x5A, max_wait=0)
+            self.assertEqual(len(resp_words), 40)
+            client.load_program(resp_words)
+            transport.configure_target(15, delay_ns=2, spi_resp=0xA5, i2c_ack=6)
+            resp_ok = client.run_trial(120)
+            self.assertEqual(resp_ok["eng_state"], "ENG_HALTED")
+            self.assertEqual(resp_ok["sample_reg"], 0xA5)
+            self.assertEqual([e["tag"] for e in resp_ok["events"]], [0xA5])
+            self.assertTrue(resp_ok["sim_observations"]["i2c_seen"])
+            self.assertEqual(resp_ok["sim_observations"]["i2c_rx_byte"], 0x5A)
+
+            # Timeout path when external CS_N arrives after run_param=20 expires
+            transport.configure_target(15, delay_ns=200, spi_resp=0xA5, i2c_ack=6)
+            resp_to = client.run_trial(20)
+            self.assertEqual(resp_to["eng_state"], "ENG_HALTED")
+            self.assertEqual([e["tag"] for e in resp_to["events"]], [0xEE])
+            self.assertFalse(resp_to["sim_observations"]["i2c_seen"])
+
+            # 3) I2C 400 kHz (half_cycles=62 -> 125 cyc/bit @ 50 MHz) & 100 kHz (half_cycles=250 -> 501 cyc/bit)
+            for label, half_cycles in (("400k", 62), ("100k", 250)):
+                i2c_words = build_i2c_write_byte_program(0xA0, half_cycles=half_cycles, ack_tag=0xAC, nack_tag=0xDE)
+                self.assertEqual(len(i2c_words), 62)
+                client.load_program(i2c_words)
+                transport.configure_target(2, i2c_ack=1)
+                ack_r = client.run_trial(0)
+                self.assertFalse(ack_r["sim_observations"]["i2c_od_fault"], label)
+                self.assertTrue(ack_r["sim_observations"]["i2c_seen"], label)
+                self.assertEqual(ack_r["sim_observations"]["i2c_rx_byte"], 0xA0)
+                self.assertEqual([e["tag"] for e in ack_r["events"]], [0xAC])
+                chk_ack = check_timing_contract(
+                    i2c_words,
+                    0,
+                    observed_cycles=ack_r["cycle_cnt"],
+                    observed_events=ack_r["events"],
+                    eng_state=ack_r["eng_state"],
+                    sample_bits=[0],
+                )
+                self.assertTrue(chk_ack["contract_ok"], chk_ack["errors"])
+
+                transport.configure_target(2, i2c_ack=0)
+                nack_r = client.run_trial(0)
+                self.assertFalse(nack_r["sim_observations"]["i2c_od_fault"], label)
+                self.assertEqual([e["tag"] for e in nack_r["events"]], [0xDE])
+                self.assertEqual(nack_r["cycle_cnt"], ack_r["cycle_cnt"] + 1)
+
+        # CLI run-example check for Phase 3 examples
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = cli_main(["run-example", "--sim", "--example", "spi-responder"])
+        self.assertEqual(rc, 0)
+        ex_payload = json.loads(buf.getvalue())
+        self.assertEqual(ex_payload["sample_reg"], 0xA5)
+        self.assertEqual(ex_payload["sim_observations"]["i2c_rx_byte"], 0x5A)
 
 
 if __name__ == "__main__":

@@ -22,8 +22,10 @@ By loading a protocol program (such as SPI mode-0) once and sweeping the 12-bit 
 ## How to test
 
 1. **Assemble and run protocol programs against the RTL simulation bridge** (`tools/timing_explorer.py`, `tools/protocol_asm.py`):
-   - `python tools/timing_explorer.py run-example --sim --example uart` (loads an 8N1 UART TX program driving `uio[0]`)
-   - `python tools/timing_explorer.py run-example --sim --example i2c --i2c-ack 1` (open-drain START/byte/ACK/NACK/STOP on `uio[0]=SCL`, `uio[1]=SDA`)
+   - `python tools/timing_explorer.py run-example --sim --example uart` (8N1 UART TX driving `uio[0]`)
+   - `python tools/timing_explorer.py run-example --sim --example spi-mode1` (`spi`, `spi-mode1`, `spi-mode2`, `spi-mode3`, or `spi-responder` for external-controller SPI target mode)
+   - `python tools/timing_explorer.py run-example --sim --example i2c-400k --i2c-ack 1` (open-drain START/byte/ACK/NACK/STOP on `uio[0]=SCL`, `uio[1]=SDA` at `400 kHz` / `100 kHz` for `50 MHz` core clock)
+   - `python tools/timing_explorer.py run-example --sim --example jtag` (IEEE 1149.1 JTAG TAP `IDCODE` read)
    - `python tools/timing_explorer.py sweep --sim --delay-ns 23 --min-low 2 --max-low 8 --method sweep --out trace.jsonl --report report.md` (sweeps SPI mode-0 `WAIT_PARAM` across a delayed target and writes a replayable trace)
    - `python tools/timing_explorer.py replay trace.jsonl` (verifies program CRC-8 and recomputes the boundary summary)
 2. **Run repository unit and Cocotb verification suites:**
@@ -35,7 +37,7 @@ By loading a protocol program (such as SPI mode-0) once and sweeping the 12-bit 
 
 ## External hardware
 
-- Required only when testing **I2C open-drain** programs on physical hardware: external pull-up resistors (typically `4.7 kOhm` to the I/O rail) on `uio[0]` (`SCL`) and `uio[1]` (`SDA`), because open-drain mode releases pins via `OE = 0` rather than driving high.
+- Required only when testing **I2C open-drain** programs on physical hardware: external pull-up resistors (typically `2.2 kOhm`–`4.7 kOhm` to the I/O rail, sized so `R_p * C_bus <= 300 ns` for `400 kHz` or `<= 1000 ns` for `100 kHz` @ `50 MHz` `clock_hz`) on `uio[0]` (`SCL`) and `uio[1]` (`SDA`), because open-drain mode releases pins via `OE = 0` (`OUT = 0`) rather than driving high.
 - Standard push-pull UART/SPI targets and logic-analyzer probes can attach directly to `uio[7:0]`. Note: all current timing sweeps, contract checks, and fuzzing studies were executed in RTL/software simulation against behavioral target models (`sim_explorer_tb.v`); no physical hardware bench measurements or fabricated CMOS5L silicon/pad characterizations exist yet.
 
 ## AI tool usage disclosure

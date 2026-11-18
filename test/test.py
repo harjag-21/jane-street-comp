@@ -13,6 +13,7 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 from tools.protocol_asm import (
+    PROG_DEPTH,
     UART_OP_BEGIN_LOAD,
     UART_OP_CFG_SCAN,
     UART_OP_COMMIT_LOAD,
@@ -30,6 +31,8 @@ from tools.protocol_asm import (
     assemble,
     build_i2c_write_byte_program,
     build_spi_mode0_program,
+    build_spi_program,
+    build_spi_target_responder_program,
     build_uart_tx_program,
     crc8_07,
     make_uart_request,
@@ -582,3 +585,209 @@ async def test_autonomous_scan_controller(dut):
     assert st0[4] == 2 and st0[5] == 0 and st0[6] == 2
     assert (f0[3] >> 7) == 1 and (f0[3] & 0x3F) == 0
     assert (f0[5] >> 6) == 3  # ENG_FAULT recorded despite sample_reg == 0x00
+
+
+@cocotb.test()
+async def test_spi_modes_1_to_3_programs(dut):
+    cocotb.start_soon(Clock(dut.clk, 10, unit="ns").start())
+    await reset_dut(dut)
+
+    for mode in (1, 2, 3):
+        cpol = (mode >> 1) & 1
+        cpha = mode & 1
+        prog = build_spi_program(0x55, mode=mode)
+        assert len(prog) <= PROG_DEPTH
+        assert (await load_program(dut, prog))[2] == 0
+
+        async def spi_target_mode_delayed():
+            mosi_bits = 0
+            miso_bits = [(0xAA >> b) & 1 for b in range(7, -1, -1)]
+            dut.uio_in.value = 0 if cpha else (miso_bits[0] << 3)
+            await wait_falling_bit(dut.uio_out, 0)  # CS_N low
+            for bit_idx in range(8):
+                # Wait for leading SCLK transition
+                if cpol == 0:
+                    await wait_rising_bit(dut.uio_out, 1)
+                else:
+                    await wait_falling_bit(dut.uio_out, 1)
+
+                if cpha == 0:
+                    mosi_bits = (mosi_bits << 1) | ((int(dut.uio_out.value) >> 2) & 1)
+                else:
+                    async def update_miso_lead(val):
+                        await Timer(23, unit="ns")
+                        dut.uio_in.value = val << 3
+                    cocotb.start_soon(update_miso_lead(miso_bits[bit_idx]))
+
+                # Wait for trailing SCLK transition
+                if cpol == 0:
+                    await wait_falling_bit(dut.uio_out, 1)
+                else:
+                    await wait_rising_bit(dut.uio_out, 1)
+
+                if cpha == 1:
+                    mosi_bits = (mosi_bits << 1) | ((int(dut.uio_out.value) >> 2) & 1)
+                elif bit_idx < 7:
+                    async def update_miso_trail(val):
+                        await Timer(23, unit="ns")
+                        dut.uio_in.value = val << 3
+                    cocotb.start_soon(update_miso_trail(miso_bits[bit_idx + 1]))
+            return mosi_bits
+
+        results = {}
+        for low_cycles in (2, 3, 4):
+            target = cocotb.start_soon(spi_target_mode_delayed())
+            resp = await send_cmd(dut, UART_OP_START, req_id=60 + mode * 10 + low_cycles, arg0=low_cycles - 2)
+            assert resp[2] == 0
+            assert await wait_halted_or_fault(dut) == 2
+            assert await target == 0x55
+            st = await send_cmd(dut, UART_OP_READ_STATUS, req_id=70 + mode * 10 + low_cycles)
+            assert st[2] == 0
+            results[low_cycles] = st[5]
+
+        assert results[2] != 0xAA, f"SPI mode {mode} L=2 should fail 23ns boundary"
+        assert results[3] == 0xAA, f"SPI mode {mode} L=3 should pass 23ns boundary, got 0x{results[3]:02x}"
+        assert results[4] == 0xAA, f"SPI mode {mode} L=4 should pass, got 0x{results[4]:02x}"
+
+
+@cocotb.test()
+async def test_spi_target_responder_end_to_end(dut):
+    cocotb.start_soon(Clock(dut.clk, 10, unit="ns").start())
+    await reset_dut(dut)
+
+    prog = build_spi_target_responder_program(0x5A, max_wait=0)
+    assert len(prog) <= PROG_DEPTH
+    assert (await load_program(dut, prog))[2] == 0
+
+    async def external_spi_master(mosi_byte: int, half_clks: int = 6):
+        dut.uio_in.value = 0xF9  # CS_N=1, SCLK=0, MOSI=0
+        for _ in range(2500):
+            await ClockCycles(dut.clk, 1)
+            if (int(dut.uio_oe.value) >> 3) & 1:
+                break
+        else:
+            raise AssertionError("Responder never asserted MISO OE")
+
+        await ClockCycles(dut.clk, 2)
+        miso_rx = 0
+        mosi_bit = (mosi_byte >> 7) & 1
+        dut.uio_in.value = 0xF8 | (mosi_bit << 2)  # CS_N=0, SCLK=0
+        await ClockCycles(dut.clk, half_clks)
+        for bit_idx in range(8):
+            cur_mosi = (mosi_byte >> (7 - bit_idx)) & 1
+            dut.uio_in.value = 0xF8 | (cur_mosi << 2) | 0x2  # SCLK=1
+            miso_rx = (miso_rx << 1) | ((int(dut.uio_out.value) >> 3) & 1)
+            await ClockCycles(dut.clk, half_clks)
+            next_mosi = (mosi_byte >> (6 - bit_idx)) & 1 if bit_idx < 7 else 0
+            dut.uio_in.value = 0xF8 | (next_mosi << 2)  # SCLK=0
+            await ClockCycles(dut.clk, half_clks)
+        dut.uio_in.value = 0xF9  # CS_N=1
+        return miso_rx
+
+    ext_task = cocotb.start_soon(external_spi_master(0xA5, half_clks=6))
+    assert (await send_cmd(dut, UART_OP_START, req_id=101, arg0=120))[2] == 0
+    assert await wait_halted_or_fault(dut) == 2
+    ext_got_miso = await ext_task
+    assert ext_got_miso == 0x5A, f"External controller expected MISO 0x5A, got 0x{ext_got_miso:02x}"
+    st = await send_cmd(dut, UART_OP_READ_STATUS, req_id=102)
+    assert st[5] == 0xA5
+    ev = await send_cmd(dut, UART_OP_POP_EVENT, req_id=103)
+    assert ev[3] == 1 and ev[4] == 0xA5
+
+    # Timeout when external controller keeps CS_N=1 beyond run_param=16
+    dut.uio_in.value = 0xFF
+    assert (await send_cmd(dut, UART_OP_START, req_id=104, arg0=16))[2] == 0
+    assert await wait_halted_or_fault(dut) == 2
+    ev_to = await send_cmd(dut, UART_OP_POP_EVENT, req_id=105)
+    assert ev_to[3] == 1 and ev_to[4] == 0xEE
+
+
+@cocotb.test()
+async def test_i2c_100khz_and_400khz_at_50mhz(dut):
+    # Nominal 50 MHz ASIC clock (T = 20 ns per info.yaml clock_hz=50000000)
+    cocotb.start_soon(Clock(dut.clk, 20, unit="ns").start())
+    await reset_dut(dut)
+
+    async def run_rate_check(half_cycles: int, expected_period_cycles: int):
+        prog = build_i2c_write_byte_program(0xA0, half_cycles=half_cycles, ack_tag=0xAC, nack_tag=0xDE)
+        assert len(prog) <= PROG_DEPTH
+        assert (await load_program(dut, prog))[2] == 0
+
+        target_drive_sda_low = False
+        done = False
+        scl_low_lens = []
+        scl_high_lens = []
+
+        def pin_state(idx):
+            oe = (int(dut.uio_oe.value) >> idx) & 1
+            out = (int(dut.uio_out.value) >> idx) & 1
+            if idx == 1 and target_drive_sda_low:
+                return 0
+            return out if oe else 1
+
+        async def open_drain_and_scl_monitor():
+            started = False
+            prev_scl = 1
+            run_len = 0
+            while not done:
+                oe = int(dut.uio_oe.value) & 0x3
+                out = int(dut.uio_out.value) & 0x3
+                assert (oe & out) == 0, f"I2C drove pin high! oe={oe:02x} out={out:02x}"
+                scl = pin_state(0)
+                sda = pin_state(1)
+                dut.uio_in.value = (sda << 1) | scl | 0xFC
+                if not started and scl == 0:
+                    started = True
+                    prev_scl = 0
+                    run_len = 1
+                elif started:
+                    if scl == prev_scl:
+                        run_len += 1
+                    else:
+                        if prev_scl == 0:
+                            scl_low_lens.append(run_len)
+                        else:
+                            scl_high_lens.append(run_len)
+                        prev_scl = scl
+                        run_len = 1
+                await ClockCycles(dut.clk, 1)
+
+        async def i2c_target():
+            nonlocal target_drive_sda_low
+            while not (pin_state(0) == 1 and pin_state(1) == 0):
+                await ClockCycles(dut.clk, 1)
+            while pin_state(0) == 1:
+                await ClockCycles(dut.clk, 1)
+            rx = 0
+            for _ in range(8):
+                while pin_state(0) == 0:
+                    await ClockCycles(dut.clk, 1)
+                rx = (rx << 1) | pin_state(1)
+                while pin_state(0) == 1:
+                    await ClockCycles(dut.clk, 1)
+            target_drive_sda_low = True
+            while pin_state(0) == 0:
+                await ClockCycles(dut.clk, 1)
+            while pin_state(0) == 1:
+                await ClockCycles(dut.clk, 1)
+            target_drive_sda_low = False
+            return rx
+
+        mon = cocotb.start_soon(open_drain_and_scl_monitor())
+        tgt = cocotb.start_soon(i2c_target())
+        assert (await send_cmd(dut, UART_OP_START, req_id=110 + half_cycles))[2] == 0
+        assert await wait_halted_or_fault(dut, max_cycles=10000) == 2
+        done = True
+        await mon
+        rx = await tgt
+        assert rx == 0xA0
+        ev = await send_cmd(dut, UART_OP_POP_EVENT, req_id=120 + half_cycles)
+        assert ev[3] == 1 and ev[4] == 0xAC
+        # Steady-state data bits 1..7 must match exact period = half_cycles*2 + 1 cycles
+        steady_periods = [scl_low_lens[i] + scl_high_lens[i] for i in range(1, 8)]
+        assert all(p == expected_period_cycles for p in steady_periods), f"half={half_cycles} periods={steady_periods}"
+
+    # 400.000 kHz at 50 MHz: 125 cycles/bit (63 low + 62 high)
+    await run_rate_check(half_cycles=62, expected_period_cycles=125)
+    # 99.800 kHz Standard-mode <= 100 kHz at 50 MHz: 501 cycles/bit (251 low + 250 high)
+    await run_rate_check(half_cycles=250, expected_period_cycles=501)
