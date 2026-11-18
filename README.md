@@ -28,11 +28,15 @@ A **runtime-reprogrammable protocol emulator and autonomous timing-boundary expl
 # 1. Autonomous scan API vs host-driven sweep benchmark (1D 32-pt + 2D 192-pt surfaces)
 python experiments/autonomous_scan_eval.py
 
-# 2. Explorer CLI + live-RTL multi-protocol, SPI modes 0-3, responder, I2C 100k/400k, JTAG, autonomous scan, & minimizer tests (9/9)
+# 2. Explorer CLI + live-RTL multi-protocol, SPI modes 0-3, responder, I2C Fast/Standard, JTAG, autonomous scan, & Phase 4 audits (10/10)
 python -m unittest discover -s tools -v
 
-# 3. Dynamic cycle-contract audit (13/13) & software timing oracle tests (15/15)
+# 3. Dynamic cycle-contract audit (13/13), 50 MHz I2C pulse audit, independent target, randomized ISA diff, & responder characterization
 python tools/contract_audit.py
+python tools/i2c_timing_audit.py --md-out docs/evidence/rtl-phase4-i2c-timing-audit.md
+python tools/independent_target_eval.py --md-out docs/evidence/rtl-phase4-independent-target-report.md
+python tools/isa_diff_fuzz.py --seeds 120 --md-out docs/evidence/rtl-phase4-isa-diff-report.md
+python tools/spi_responder_char.py --md-out docs/evidence/rtl-phase4-spi-responder-limits.md
 python -m unittest discover -s experiments -v
 
 # 4. Standalone sequencer & JTAG TAP RTL testbenches (Icarus Verilog)
@@ -43,7 +47,7 @@ iverilog -g2012 -Wall -s tb_jtag_tap -o sim_jtag.vvp src/project.v src/protocol_
 python tools/timing_explorer.py run-example --sim --example uart
 python tools/timing_explorer.py run-example --sim --example spi-mode1
 python tools/timing_explorer.py run-example --sim --example spi-responder
-python tools/timing_explorer.py run-example --sim --example i2c-400k --i2c-ack 1
+python tools/timing_explorer.py run-example --sim --example i2c-fast-compliant --i2c-ack 1
 python tools/timing_explorer.py run-example --sim --example i2c-100k --i2c-ack 1
 python tools/timing_explorer.py run-example --sim --example jtag
 python tools/timing_explorer.py scan --sim --delay-ns 37 --start 0 --step 1 --steps 16 --expect 0xAA

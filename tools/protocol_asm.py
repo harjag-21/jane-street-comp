@@ -1006,7 +1006,8 @@ if __name__ == "__main__":
             "spi_mode3",
             "i2c",
             "i2c_100k",
-            "i2c_400k",
+            "i2c_400k_nominal",
+            "i2c_fast_compliant",
             "i2c_stretch",
             "spi_target",
             "jtag_idcode",
@@ -1028,8 +1029,10 @@ if __name__ == "__main__":
         prog = build_i2c_write_byte_program(0xA0)
     elif args.example == "i2c_100k":
         prog = build_i2c_write_byte_program(0xA0, half_cycles=250)
-    elif args.example == "i2c_400k":
+    elif args.example == "i2c_400k_nominal":
         prog = build_i2c_write_byte_program(0xA0, half_cycles=62)
+    elif args.example == "i2c_fast_compliant":
+        prog = build_i2c_write_byte_program(0xA0, half_cycles=64)
     elif args.example == "i2c_stretch":
         prog = build_i2c_stretch_probe_program()
     elif args.example == "spi_target":

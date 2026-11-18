@@ -577,13 +577,87 @@ class ProtocolClient:
         return res
 
 
+def extract_contiguous_regions(observations: Dict[int, bool], target_state: bool = True) -> List[List[int]]:
+    """Return inclusive [start, end] intervals of contiguous parameters matching `target_state`."""
+    ordered = sorted(observations.items())
+    regions: List[List[int]] = []
+    cur_start: Optional[int] = None
+    cur_end: Optional[int] = None
+    for x, ok in ordered:
+        if bool(ok) == target_state:
+            if cur_start is None:
+                cur_start = x
+                cur_end = x
+            elif cur_end is not None and x == cur_end + 1:
+                cur_end = x
+            else:
+                regions.append([cur_start, cur_end])
+                cur_start = x
+                cur_end = x
+        else:
+            if cur_start is not None and cur_end is not None:
+                regions.append([cur_start, cur_end])
+                cur_start = None
+                cur_end = None
+    if cur_start is not None and cur_end is not None:
+        regions.append([cur_start, cur_end])
+    return regions
+
+
+def summarize_repeated_trials(param_outcomes: Dict[int, Sequence[bool]]) -> Dict[str, Any]:
+    """Summarize repeated binary trials per parameter with Wilson 95% intervals without forcing a hard boundary."""
+    if not param_outcomes:
+        return {"status": "empty", "boundary_low_cycles": None, "per_param": [], "uncertain_params": []}
+    z = 1.96
+    per_param: List[Dict[str, Any]] = []
+    uncertain: List[int] = []
+    for x in sorted(param_outcomes):
+        vals = [bool(v) for v in param_outcomes[x]]
+        n = len(vals)
+        k = sum(vals)
+        p = k / n if n else 0.0
+        denom = 1.0 + (z * z) / n if n else 1.0
+        center = (p + (z * z) / (2.0 * n)) / denom if n else 0.0
+        margin = (z * ((p * (1.0 - p) + (z * z) / (4.0 * n)) / n) ** 0.5) / denom if n else 0.0
+        lo = max(0.0, center - margin)
+        hi = min(1.0, center + margin)
+        if 0 < k < n:
+            uncertain.append(x)
+        per_param.append(
+            {
+                "param": x,
+                "passes": k,
+                "trials": n,
+                "pass_rate": round(p, 4),
+                "wilson_lo": round(lo, 4),
+                "wilson_hi": round(hi, 4),
+            }
+        )
+    if uncertain:
+        return {
+            "status": "probabilistic_transition",
+            "boundary_low_cycles": None,
+            "uncertain_params": uncertain,
+            "transition_region": [uncertain[0], uncertain[-1]],
+            "per_param": per_param,
+            "note": f"Observed stochastic pass/fail disagreement at {uncertain}; cannot report a single deterministic boundary.",
+        }
+    deterministic = {row["param"]: (row["passes"] == row["trials"]) for row in per_param}
+    det = classify_boundary(deterministic)
+    det["per_param"] = per_param
+    det["uncertain_params"] = []
+    return det
+
+
 def classify_boundary(observations: Dict[int, bool]) -> Dict[str, Any]:
-    """Classify boundary strictly: censored outcomes are never turned into fake bounds."""
+    """Classify boundary strictly: censored or non-monotonic outcomes are never collapsed into fake bounds."""
     if not observations:
         return {"status": "empty", "boundary_low_cycles": None, "note": "No observations."}
     ordered = sorted(observations.items())
     first_x, first_ok = ordered[0]
     last_x, last_ok = ordered[-1]
+    pass_regions = extract_contiguous_regions(observations, True)
+    fail_regions = extract_contiguous_regions(observations, False)
 
     # Check monotonicity across evaluated points
     seen_pass = False
@@ -599,19 +673,25 @@ def classify_boundary(observations: Dict[int, bool]) -> Dict[str, Any]:
         return {
             "status": "censored_all_pass",
             "boundary_low_cycles": None,
+            "pass_regions": pass_regions,
+            "fail_regions": fail_regions,
             "note": f"Lowest tested low_cycles={first_x} already passed; true boundary <= {first_x}.",
         }
     if all(not ok for _, ok in ordered):
         return {
             "status": "all_fail_unbracketed",
             "boundary_low_cycles": None,
+            "pass_regions": pass_regions,
+            "fail_regions": fail_regions,
             "note": f"All tested values up to low_cycles={last_x} failed; true boundary > {last_x}.",
         }
     if not monotone:
         return {
             "status": "non_monotone",
             "boundary_low_cycles": None,
-            "note": "Observed pass->fail reversal inside tested range.",
+            "pass_regions": pass_regions,
+            "fail_regions": fail_regions,
+            "note": f"Observed non-monotonic response across pass regions {pass_regions} and fail regions {fail_regions}.",
         }
 
     # Find exact interior fail -> pass transition among contiguous or sampled points
@@ -625,6 +705,8 @@ def classify_boundary(observations: Dict[int, bool]) -> Dict[str, Any]:
                     "boundary_low_cycles": cur_x,
                     "highest_fail_low_cycles": prev_x,
                     "lowest_pass_low_cycles": cur_x,
+                    "pass_regions": pass_regions,
+                    "fail_regions": fail_regions,
                     "note": f"Exact unit-step transition: fail at {prev_x}, pass at {cur_x}.",
                 }
             return {
@@ -632,9 +714,17 @@ def classify_boundary(observations: Dict[int, bool]) -> Dict[str, Any]:
                 "boundary_low_cycles": None,
                 "highest_fail_low_cycles": prev_x,
                 "lowest_pass_low_cycles": cur_x,
+                "pass_regions": pass_regions,
+                "fail_regions": fail_regions,
                 "note": f"Unrefined gap between fail at {prev_x} and pass at {cur_x}.",
             }
-    return {"status": "unknown", "boundary_low_cycles": None, "note": "Unclassified."}
+    return {
+        "status": "unknown",
+        "boundary_low_cycles": None,
+        "pass_regions": pass_regions,
+        "fail_regions": fail_regions,
+        "note": "Unclassified.",
+    }
 
 
 def _git_revision() -> Optional[str]:
@@ -1043,7 +1133,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     p_ex.add_argument("--baud", type=int, default=115200)
     p_ex.add_argument(
         "--example",
-        choices=["uart", "spi", "spi-mode1", "spi-mode2", "spi-mode3", "spi-responder", "i2c", "i2c-100k", "i2c-400k", "jtag"],
+        choices=[
+            "uart",
+            "spi",
+            "spi-mode1",
+            "spi-mode2",
+            "spi-mode3",
+            "spi-responder",
+            "i2c",
+            "i2c-100k",
+            "i2c-400k-nominal",
+            "i2c-fast-compliant",
+            "jtag",
+        ],
         required=True,
     )
     p_ex.add_argument("--param", type=int, default=2)
@@ -1150,10 +1252,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 if args.sim:
                     transport.configure_target(2, i2c_ack=args.i2c_ack)
                 words = build_i2c_write_byte_program(0xA0, half_cycles=250)
-            elif args.example == "i2c-400k":
+            elif args.example == "i2c-400k-nominal":
                 if args.sim:
                     transport.configure_target(2, i2c_ack=args.i2c_ack)
                 words = build_i2c_write_byte_program(0xA0, half_cycles=62)
+            elif args.example == "i2c-fast-compliant":
+                if args.sim:
+                    transport.configure_target(2, i2c_ack=args.i2c_ack)
+                words = build_i2c_write_byte_program(0xA0, half_cycles=64)
             else:
                 if args.sim:
                     transport.configure_target(11, delay_ns=0)

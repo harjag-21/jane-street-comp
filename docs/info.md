@@ -24,7 +24,7 @@ By loading a protocol program (such as SPI mode-0) once and sweeping the 12-bit 
 1. **Assemble and run protocol programs against the RTL simulation bridge** (`tools/timing_explorer.py`, `tools/protocol_asm.py`):
    - `python tools/timing_explorer.py run-example --sim --example uart` (8N1 UART TX driving `uio[0]`)
    - `python tools/timing_explorer.py run-example --sim --example spi-mode1` (`spi`, `spi-mode1`, `spi-mode2`, `spi-mode3`, or `spi-responder` for external-controller SPI target mode)
-   - `python tools/timing_explorer.py run-example --sim --example i2c-400k --i2c-ack 1` (open-drain START/byte/ACK/NACK/STOP on `uio[0]=SCL`, `uio[1]=SDA` at `400 kHz` / `100 kHz` for `50 MHz` core clock)
+   - `python tools/timing_explorer.py run-example --sim --example i2c-fast-compliant --i2c-ack 1` (Fast-mode compliant `387.6 kHz` w/ `t_LOW=1.30 us`; `i2c-400k-nominal` for steady `400 kHz` / `t_LOW=1.26 us`; `i2c-100k` for `99.8 kHz` @ `50 MHz`)
    - `python tools/timing_explorer.py run-example --sim --example jtag` (IEEE 1149.1 JTAG TAP `IDCODE` read)
    - `python tools/timing_explorer.py sweep --sim --delay-ns 23 --min-low 2 --max-low 8 --method sweep --out trace.jsonl --report report.md` (sweeps SPI mode-0 `WAIT_PARAM` across a delayed target and writes a replayable trace)
    - `python tools/timing_explorer.py replay trace.jsonl` (verifies program CRC-8 and recomputes the boundary summary)

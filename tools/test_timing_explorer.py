@@ -600,8 +600,8 @@ class TimingExplorerTests(unittest.TestCase):
             self.assertEqual([e["tag"] for e in resp_to["events"]], [0xEE])
             self.assertFalse(resp_to["sim_observations"]["i2c_seen"])
 
-            # 3) I2C 400 kHz (half_cycles=62 -> 125 cyc/bit @ 50 MHz) & 100 kHz (half_cycles=250 -> 501 cyc/bit)
-            for label, half_cycles in (("400k", 62), ("100k", 250)):
+            # 3) I2C 400k-nominal (62 -> 125 cyc), fast-compliant (64 -> 129 cyc), & 100k (250 -> 501 cyc)
+            for label, half_cycles in (("400k-nominal", 62), ("fast-compliant", 64), ("100k", 250)):
                 i2c_words = build_i2c_write_byte_program(0xA0, half_cycles=half_cycles, ack_tag=0xAC, nack_tag=0xDE)
                 self.assertEqual(len(i2c_words), 62)
                 client.load_program(i2c_words)
@@ -627,14 +627,53 @@ class TimingExplorerTests(unittest.TestCase):
                 self.assertEqual([e["tag"] for e in nack_r["events"]], [0xDE])
                 self.assertEqual(nack_r["cycle_cnt"], ack_r["cycle_cnt"] + 1)
 
-        # CLI run-example check for Phase 3 examples
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            rc = cli_main(["run-example", "--sim", "--example", "spi-responder"])
-        self.assertEqual(rc, 0)
-        ex_payload = json.loads(buf.getvalue())
-        self.assertEqual(ex_payload["sample_reg"], 0xA5)
-        self.assertEqual(ex_payload["sim_observations"]["i2c_rx_byte"], 0x5A)
+        # CLI run-example check for Phase 3/4 examples
+        for ex_name, check_fn in (
+            ("spi-responder", lambda p: p["sample_reg"] == 0xA5 and p["sim_observations"]["i2c_rx_byte"] == 0x5A),
+            ("i2c-fast-compliant", lambda p: p["eng_state"] == "ENG_HALTED" and p["events"][0]["tag"] == 0xA0),
+        ):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = cli_main(["run-example", "--sim", "--example", ex_name])
+            self.assertEqual(rc, 0)
+            self.assertTrue(check_fn(json.loads(buf.getvalue())), ex_name)
+
+    def test_phase4_i2c_audit_independent_target_isa_diff_and_responder_limits(self) -> None:
+        from tools.i2c_timing_audit import run_i2c_audit
+        from tools.independent_target_eval import run_independent_validation
+        from tools.isa_diff_fuzz import run_differential_suite
+        from tools.spi_responder_char import run_characterization
+
+        # 1) 50 MHz pulse-by-pulse I2C audit
+        i2c_rep = {r["mode_name"]: r for r in run_i2c_audit()["runs"]}
+        self.assertFalse(i2c_rep["i2c-400k-nominal"]["compliant"])
+        self.assertEqual(i2c_rep["i2c-400k-nominal"]["min_low_ns"], 1260)
+        self.assertTrue(i2c_rep["i2c-fast-compliant"]["compliant"])
+        self.assertEqual(i2c_rep["i2c-fast-compliant"]["min_low_ns"], 1300)
+        self.assertTrue(i2c_rep["i2c-fast-compliant-nack"]["compliant"])
+        self.assertTrue(i2c_rep["i2c-100k"]["compliant"])
+        self.assertTrue(i2c_rep["i2c-100k-nack"]["compliant"])
+
+        # 2) Independent target validation (sharp, pass-fail-pass non-monotonic, noisy repeats)
+        indep = run_independent_validation()
+        self.assertEqual(indep["sharp"]["error_cycles"], 0)
+        self.assertEqual(indep["non_monotonic"]["sweep_pass_regions"], [[2, 4], [8, 13]])
+        self.assertEqual(indep["probabilistic"]["status"], "probabilistic_transition")
+        self.assertIsNone(indep["probabilistic"]["boundary_low_cycles"])
+
+        # 3) Randomized ISA differential suite (0 mismatches across 16/16 opcodes & boundaries)
+        diff = run_differential_suite(num_seeds=30)
+        self.assertEqual(diff["mismatch_count"], 0, diff["mismatches"])
+        self.assertEqual(len(diff["coverage"]["opcodes_executed"]), 16)
+
+        # 4) SPI target-responder operating limits
+        char_rows = {r["case_id"]: r for r in run_characterization()["rows"]}
+        self.assertFalse(char_rows[1]["exact_xfer"])  # half_clks=2 fails
+        self.assertTrue(char_rows[3]["exact_xfer"])   # half_clks=4 passes
+        self.assertEqual(char_rows[13]["ev_tag"], "0xee")  # CS_N timeout
+        self.assertFalse(char_rows[14]["exact_xfer"])      # truncated 4-bit partial capture
+        self.assertFalse(char_rows[16]["exact_xfer"])      # CS_N glitch + long gap misframes without 0xEE
+        self.assertEqual(char_rows[17]["responder_sample_reg"], "0x3c")  # CS_N glitch + shared SCLK
 
 
 if __name__ == "__main__":

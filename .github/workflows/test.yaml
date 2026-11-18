@@ -117,8 +117,13 @@ jobs:
           python tools/timing_explorer.py run-example --sim --example spi-mode2 > ci_artifacts/spi_mode2.json
           python tools/timing_explorer.py run-example --sim --example spi-mode3 > ci_artifacts/spi_mode3.json
           python tools/timing_explorer.py run-example --sim --example spi-responder > ci_artifacts/spi_responder.json
-          python tools/timing_explorer.py run-example --sim --example i2c-400k --i2c-ack 1 > ci_artifacts/i2c_400k.json
+          python tools/timing_explorer.py run-example --sim --example i2c-400k-nominal --i2c-ack 1 > ci_artifacts/i2c_400k_nominal.json
+          python tools/timing_explorer.py run-example --sim --example i2c-fast-compliant --i2c-ack 1 > ci_artifacts/i2c_fast_compliant.json
           python tools/timing_explorer.py run-example --sim --example i2c-100k --i2c-ack 1 > ci_artifacts/i2c_100k.json
+          python tools/i2c_timing_audit.py --md-out ci_artifacts/i2c_timing_audit.md --json-out ci_artifacts/i2c_timing_audit.json
+          python tools/independent_target_eval.py --md-out ci_artifacts/independent_target_report.md --json-out ci_artifacts/independent_target_report.json
+          python tools/isa_diff_fuzz.py --seeds 120 --md-out ci_artifacts/isa_diff_report.md --json-out ci_artifacts/isa_diff_report.json
+          python tools/spi_responder_char.py --md-out ci_artifacts/spi_responder_limits.md --json-out ci_artifacts/spi_responder_limits.json
           python tools/timing_explorer.py scan --sim --delay-ns 37 --start 0 --step 1 --steps 16 --expect 0xAA > ci_artifacts/scan_cli.json
           python tools/timing_explorer.py sweep --sim --delay-ns 23 --min-low 2 --max-low 8 --method sweep --out ci_artifacts/ci_trace.jsonl --report ci_artifacts/ci_report.md
           python tools/timing_explorer.py replay ci_artifacts/ci_trace.jsonl --sim --exec --trials 2 | tee ci_artifacts/ci_replay.json

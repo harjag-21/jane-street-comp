@@ -787,7 +787,9 @@ async def test_i2c_100khz_and_400khz_at_50mhz(dut):
         steady_periods = [scl_low_lens[i] + scl_high_lens[i] for i in range(1, 8)]
         assert all(p == expected_period_cycles for p in steady_periods), f"half={half_cycles} periods={steady_periods}"
 
-    # 400.000 kHz at 50 MHz: 125 cycles/bit (63 low + 62 high)
+    # Nominal 400.000 kHz at 50 MHz: 125 cycles/bit (63 low = 1.26 us < 1.30 us Fast-mode min, 62 high)
     await run_rate_check(half_cycles=62, expected_period_cycles=125)
+    # Fast-mode compliant 387.597 kHz at 50 MHz: 129 cycles/bit (65 low = 1.30 us >= 1.30 us, 64 high = 1.28 us)
+    await run_rate_check(half_cycles=64, expected_period_cycles=129)
     # 99.800 kHz Standard-mode <= 100 kHz at 50 MHz: 501 cycles/bit (251 low + 250 high)
     await run_rate_check(half_cycles=250, expected_period_cycles=501)
