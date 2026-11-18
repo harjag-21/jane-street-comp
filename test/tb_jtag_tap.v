@@ -60,23 +60,29 @@ module tb_jtag_tap;
       .update_dr_count_o(udr_cnt)
   );
 
-  // Track whether all key IEEE 1149.1 milestones occurred in order during the run
-  reg saw_tlr, saw_rti, saw_sel_ir, saw_cap_ir, saw_shift_ir, saw_upd_ir;
-  reg saw_sel_dr, saw_cap_dr, saw_shift_dr, saw_upd_dr;
-  reg trace_en = 1'b0;
+  // Track ordered IEEE 1149.1 state milestones monotonically on posedge jtag_tck
+  reg [3:0] milestone_stage = 4'd0;
+  reg       trace_en = 1'b0;
 
-  always @(posedge clk) begin
+  always @(posedge jtag_tck) begin
     if (trace_en) begin
-      if (tap_state == 4'hF) saw_tlr      <= 1'b1;
-      if (tap_state == 4'hC) saw_rti      <= 1'b1;
-      if (tap_state == 4'h4) saw_sel_ir   <= 1'b1;
-      if (tap_state == 4'hE) saw_cap_ir   <= 1'b1;
-      if (tap_state == 4'hA) saw_shift_ir <= 1'b1;
-      if (tap_state == 4'hD) saw_upd_ir   <= 1'b1;
-      if (tap_state == 4'h7) saw_sel_dr   <= 1'b1;
-      if (tap_state == 4'h6) saw_cap_dr   <= 1'b1;
-      if (tap_state == 4'h2) saw_shift_dr <= 1'b1;
-      if (tap_state == 4'h5) saw_upd_dr   <= 1'b1;
+      // Wait for initial PAUSE_DR(3) -> 5x TMS=1 -> TLR(F) -> RTI(C) -> SEL_DR(7)
+      // -> SEL_IR(4) -> CAP_IR(E) -> SHIFT_IR(A) -> EXIT1_IR(9) -> UPDATE_IR(D)
+      // -> SEL_DR(7) -> CAP_DR(6) -> SHIFT_DR(2) -> EXIT1_DR(1) -> UPDATE_DR(5) -> RTI(C)
+      case (milestone_stage)
+        4'd0:  if (tap_state == 4'hF) milestone_stage <= 4'd1;  // TLR reached
+        4'd1:  if (tap_state == 4'hC) milestone_stage <= 4'd2;  // RTI
+        4'd2:  if (tap_state == 4'h7) milestone_stage <= 4'd3;  // SEL_DR
+        4'd3:  if (tap_state == 4'h4) milestone_stage <= 4'd4;  // SEL_IR
+        4'd4:  if (tap_state == 4'hE) milestone_stage <= 4'd5;  // CAP_IR
+        4'd5:  if (tap_state == 4'hA) milestone_stage <= 4'd6;  // SHIFT_IR
+        4'd6:  if (tap_state == 4'hD) milestone_stage <= 4'd7;  // UPDATE_IR
+        4'd7:  if (tap_state == 4'h6) milestone_stage <= 4'd8;  // CAP_DR
+        4'd8:  if (tap_state == 4'h2) milestone_stage <= 4'd9;  // SHIFT_DR
+        4'd9:  if (tap_state == 4'h5) milestone_stage <= 4'd10; // UPDATE_DR
+        4'd10: if (tap_state == 4'hC) milestone_stage <= 4'd11; // Final RTI
+        default: ;
+      endcase
     end
   end
 
@@ -232,8 +238,7 @@ module tb_jtag_tap;
     u_tap.tap_state_o = 4'h3;
     u_tap.ir_o        = 4'hF;
 
-    saw_tlr = 0; saw_rti = 0; saw_sel_ir = 0; saw_cap_ir = 0; saw_shift_ir = 0; saw_upd_ir = 0;
-    saw_sel_dr = 0; saw_cap_dr = 0; saw_shift_dr = 0; saw_upd_dr = 0;
+    milestone_stage = 4'd0;
     trace_en = 1'b1;
 
     tdo_delay_ns = 0;
@@ -241,9 +246,8 @@ module tb_jtag_tap;
     while (uo_out[4:3] != 2'd2) @(posedge clk);
     trace_en = 1'b0;
 
-    if (!saw_tlr || !saw_rti || !saw_sel_ir || !saw_cap_ir || !saw_shift_ir || !saw_upd_ir ||
-        !saw_sel_dr || !saw_cap_dr || !saw_shift_dr || !saw_upd_dr) begin
-      $display("FAIL: Missing IEEE 1149.1 TAP state transitions");
+    if (milestone_stage !== 4'd11) begin
+      $display("FAIL: Out-of-order/incomplete IEEE 1149.1 TAP progression (stage=%0d)", milestone_stage);
       $finish_and_return(1);
     end
     if (tap_state !== 4'hC || tap_ir !== 4'h1 || uir_cnt < 1 || udr_cnt < 1) begin

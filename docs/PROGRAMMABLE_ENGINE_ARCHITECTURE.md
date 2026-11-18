@@ -80,12 +80,12 @@ If `CMD_BODY` or `CMD_CRC` stalls for `64 × CLKS_PER_BIT` cycles, the loader pa
    - Wait for `uo_out[7]` (`scan_done`) or poll `READ_SCAN_STATUS(arg0=0)` until `scan_active == 0 && scan_done == 1`.
    - Read `READ_SCAN_STATUS(arg0=1)` for the 32-bit pass/fail bitmap, and if `fail_cnt > 0`, read `READ_SCAN_FAIL(arg0=0)` and `READ_SCAN_FAIL(arg0=1)` for the first failing snapshot.
 2. **Configuration validation & stepping:**
-   - `CFG_SCAN` rejects `num_steps == 0` or `num_steps > 32` (low 6 bits `arg2[5:0]`) with `ST_BAD_ARG`, and returns `ST_BAD_STATE` if `eng_state == ENG_RUN` or `scan_active == 1`. Valid `CFG_SCAN` clears prior `scan_done`.
-   - `START_SCAN` returns `ST_BAD_STATE` unless `prog_valid == 1`, `eng_state != ENG_RUN`, `scan_active == 0`, and `scan_num_steps != 0`.
+   - `CFG_SCAN` rejects `num_steps == 0` or `num_steps > 32` (low 6 bits `arg2[5:0]`) with `ST_BAD_ARG`, and returns `ST_BAD_STATE` if `eng_state == ENG_RUN` or `scan_active == 1`. Reserved bit `arg2[7]` is ignored. Valid `CFG_SCAN` clears prior `scan_done`.
+   - `START_SCAN` returns `ST_BAD_STATE` unless `prog_valid == 1`, `eng_state != ENG_RUN`, `scan_active == 0`, and `scan_num_steps != 0`. Reserved bits `arg0[7:4]` are ignored.
    - Each step `i` (`0 .. scan_num_steps - 1`) sets `run_param` to `scan_cur_param` and advances `scan_cur_param <= scan_cur_param + param_step` (12-bit modular arithmetic).
 3. **Pass classification & bitmap encoding:**
    - `pass_mode == 0`: trial `i` passes iff `eng_state == ENG_HALTED && sample_reg == expected_val`.
-   - `pass_mode == 1`: trial `i` passes iff `eng_state == ENG_HALTED && event_count != 0 && last_mark_tag == expected_val` (`event_count == 0` always fails even if `expected_val == 0`).
+   - `pass_mode == 1`: trial `i` passes iff `eng_state == ENG_HALTED && event_count != 0 && last_mark_tag == expected_val` (`event_count == 0` always fails even if `expected_val == 0`; if `>8` `MARK`s occur in one trial, `last_mark_tag` still reflects the final `MARK` payload while `event_count == 8 != 0`).
    - `scan_pass_bitmap[i]` is `1` if step `i` passed (`0` if failed or `i >= steps_done`), packed LSB-first (`bit 0` = step `0`, ..., `bit 31` = step `31`). Always `pass_cnt + fail_cnt == steps_done`.
 4. **First-failure snapshot:**
    - Cleared on `OP_START_SCAN` (`first_fail_valid = 0`). Latched permanently on the earliest failing step `i` (`!first_fail_valid`) and preserved across any subsequent failures: `{first_fail_valid, first_fail_idx}`, `first_fail_param[11:0]`, `first_fail_state` (`ENG_HALTED`/`ENG_FAULT`), `first_fail_sample`, `first_fail_cycles[15:0]`, `first_fail_tag`, and `first_fail_evcnt[3:0]`.

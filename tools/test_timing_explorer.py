@@ -503,6 +503,14 @@ class TimingExplorerTests(unittest.TestCase):
             self.assertEqual([pt["passed"] for pt in auto_jtag["results"]], [False, True, True, True])
             self.assertEqual(auto_jtag["first_fail"]["fail_param"], 0)
 
+            # 4) Prove Shift-IR actually controls DR selection: shift IR=0xF (BYPASS) instead of 0x1 (IDCODE)
+            bypass_words = build_jtag_idcode_program(ir_opcode=0xF, dr_bytes=4)
+            client.load_program(bypass_words)
+            transport.configure_target(11, delay_ns=0)
+            res_bp = client.run_trial(1)
+            self.assertEqual(res_bp["eng_state"], "ENG_HALTED")
+            self.assertEqual(decode_jtag_idcode_events(res_bp["events"]), 0x00000000)
+
 
 if __name__ == "__main__":
     unittest.main()

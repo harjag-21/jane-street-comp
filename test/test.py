@@ -566,3 +566,19 @@ async def test_autonomous_scan_controller(dut):
     assert st0[3] == 0 and st0[4] == 0 and st0[5] == 0 and st0[6] == 0
     bad = await send_cmd(dut, UART_OP_START_SCAN, req_id=49, arg0=0x00)
     assert bad[2] == 0x04
+
+    # Verify ENG_FAULT fails cleanly inside scan even if sample_reg == expected_val == 0x00
+    assert (await load_program(dut, [0xF000]))[2] == 0
+    assert (await send_cmd(dut, UART_OP_CFG_SCAN, req_id=50, arg0=0, arg1=1, arg2=2, arg3=0x00))[2] == 0
+    assert (await send_cmd(dut, UART_OP_START_SCAN, req_id=51, arg0=0))[2] == 0
+    for _ in range(1000):
+        await ClockCycles(dut.clk, 1)
+        if ((int(dut.uo_out.value) >> 7) & 1) == 1:
+            break
+    else:
+        raise AssertionError("ENG_FAULT scan did not complete")
+    st0 = await send_cmd(dut, UART_OP_READ_SCAN_STATUS, req_id=52, arg0=0)
+    f0 = await send_cmd(dut, UART_OP_READ_SCAN_FAIL, req_id=53, arg0=0)
+    assert st0[4] == 2 and st0[5] == 0 and st0[6] == 2
+    assert (f0[3] >> 7) == 1 and (f0[3] & 0x3F) == 0
+    assert (f0[5] >> 6) == 3  # ENG_FAULT recorded despite sample_reg == 0x00

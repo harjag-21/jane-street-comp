@@ -64,12 +64,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ci_artifacts
-          iverilog -g2012 -Wall -s tb_v1_sequencer -o ci_artifacts/seq.vvp src/protocol_sequencer.v test/tb_v1_sequencer.v 2> ci_artifacts/seq_compile.log
+          iverilog -g2012 -Wall -s tb_v1_sequencer -o ci_artifacts/seq.vvp src/protocol_sequencer.v test/tb_v1_sequencer.v > ci_artifacts/seq_compile.log 2>&1
           if [ -s ci_artifacts/seq_compile.log ]; then cat ci_artifacts/seq_compile.log; exit 1; fi
           vvp ci_artifacts/seq.vvp | tee ci_artifacts/tb_v1_sequencer.log
           grep -q "^PASS:" ci_artifacts/tb_v1_sequencer.log
 
-          iverilog -g2012 -Wall -s tb_jtag_tap -o ci_artifacts/jtag.vvp src/project.v src/protocol_sequencer.v test/jtag_tap_model.v test/tb_jtag_tap.v 2> ci_artifacts/jtag_compile.log
+          iverilog -g2012 -Wall -s tb_jtag_tap -o ci_artifacts/jtag.vvp src/project.v src/protocol_sequencer.v test/jtag_tap_model.v test/tb_jtag_tap.v > ci_artifacts/jtag_compile.log 2>&1
           if [ -s ci_artifacts/jtag_compile.log ]; then cat ci_artifacts/jtag_compile.log; exit 1; fi
           vvp ci_artifacts/jtag.vvp | tee ci_artifacts/tb_jtag_tap.log
           grep -q "^PASS:" ci_artifacts/tb_jtag_tap.log
@@ -110,6 +110,9 @@ jobs:
           python -m unittest discover -s tools -v 2>&1 | tee ci_artifacts/tools_unittest.log
           python tools/contract_audit.py | tee ci_artifacts/contract_audit.md
           python experiments/autonomous_scan_eval.py | tee ci_artifacts/autonomous_scan_eval.json
+          python tools/protocol_asm.py --example jtag_idcode > ci_artifacts/jtag_prog.json
+          python tools/timing_explorer.py sweep --sim --delay-ns 23 --min-low 2 --max-low 8 --method sweep --out ci_artifacts/ci_trace.jsonl --report ci_artifacts/ci_report.md
+          python tools/timing_explorer.py replay ci_artifacts/ci_trace.jsonl --sim --exec --trials 2 | tee ci_artifacts/ci_replay.json
 
       - name: Upload host verification artifacts
         if: always()
@@ -120,3 +123,4 @@ jobs:
             ci_artifacts/*.log
             ci_artifacts/*.md
             ci_artifacts/*.json
+            ci_artifacts/*.jsonl
