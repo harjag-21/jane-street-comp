@@ -39,9 +39,11 @@ python -m unittest discover -s experiments -v
 iverilog -g2012 -Wall -s tb_v1_sequencer -o sim_seq.vvp src/protocol_sequencer.v test/tb_v1_sequencer.v && vvp sim_seq.vvp
 iverilog -g2012 -Wall -s tb_jtag_tap -o sim_jtag.vvp src/project.v src/protocol_sequencer.v test/jtag_tap_model.v test/tb_jtag_tap.v && vvp sim_jtag.vvp
 
-# 5. Live protocol sweeps, replay, & differential fuzzing
+# 5. Live protocol sweeps, autonomous scan CLI, replay, & differential fuzzing
 python tools/timing_explorer.py run-example --sim --example uart
 python tools/timing_explorer.py run-example --sim --example i2c --i2c-ack 1
+python tools/timing_explorer.py run-example --sim --example jtag
+python tools/timing_explorer.py scan --sim --delay-ns 37 --start 0 --step 1 --steps 16 --expect 0xAA
 python tools/timing_explorer.py sweep --sim --delay-ns 23 --min-low 2 --max-low 8 --method sweep --out trace.jsonl --report report.md
 python tools/timing_explorer.py replay trace.jsonl --sim --exec --trials 5
 python tools/diff_minimizer.py --budget 30 --seed 20261116 --repeats 10

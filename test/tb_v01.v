@@ -1,7 +1,9 @@
 `timescale 1ns/1ps
 `default_nettype none
 
-// Self-checking Icarus testbench for environments without Cocotb/Make.
+// Historical v0.1 (`master` @ `67f63ab`) self-checking testbench for the fixed-SPI bring-up slice (`tt_um_example`).
+// For the reprogrammable engine (`tt_um_harjag_21_timing_explorer`), see `test/tb.v`, `test/test.py`,
+// `test/tb_v1_sequencer.v`, and `test/tb_jtag_tap.v`.
 module tb_v01;
   reg clk = 0, rst_n = 0, ena = 1;
   reg [7:0] ui_in = 8'h01, uio_in = 0;

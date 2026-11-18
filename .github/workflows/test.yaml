@@ -111,6 +111,8 @@ jobs:
           python tools/contract_audit.py | tee ci_artifacts/contract_audit.md
           python experiments/autonomous_scan_eval.py | tee ci_artifacts/autonomous_scan_eval.json
           python tools/protocol_asm.py --example jtag_idcode > ci_artifacts/jtag_prog.json
+          python tools/timing_explorer.py run-example --sim --example jtag > ci_artifacts/jtag_example.json
+          python tools/timing_explorer.py scan --sim --delay-ns 37 --start 0 --step 1 --steps 16 --expect 0xAA > ci_artifacts/scan_cli.json
           python tools/timing_explorer.py sweep --sim --delay-ns 23 --min-low 2 --max-low 8 --method sweep --out ci_artifacts/ci_trace.jsonl --report ci_artifacts/ci_report.md
           python tools/timing_explorer.py replay ci_artifacts/ci_trace.jsonl --sim --exec --trials 2 | tee ci_artifacts/ci_replay.json
 

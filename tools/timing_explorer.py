@@ -39,10 +39,12 @@ from tools.protocol_asm import (  # noqa: E402
     assemble,
     build_i2c_stretch_probe_program,
     build_i2c_write_byte_program,
+    build_jtag_idcode_program,
     build_spi_mode0_program,
     build_uart_tx_program,
     check_timing_contract,
     crc8_07,
+    decode_jtag_idcode_events,
     make_uart_request,
     predict_straight_line_cycles,
     program_checksums,
@@ -1015,14 +1017,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     p_replay.add_argument("--trials", type=int, default=5)
     p_replay.add_argument("--all", dest="all_cases", action="store_true")
 
-    p_ex = sub.add_parser("run-example", help="Run built-in uart/spi/i2c example over UART")
+    p_ex = sub.add_parser("run-example", help="Run built-in uart/spi/i2c/jtag example over UART")
     p_ex.add_argument("--sim", action="store_true")
     p_ex.add_argument("--port")
     p_ex.add_argument("--baud", type=int, default=115200)
-    p_ex.add_argument("--example", choices=["uart", "spi", "i2c"], required=True)
+    p_ex.add_argument("--example", choices=["uart", "spi", "i2c", "jtag"], required=True)
     p_ex.add_argument("--param", type=int, default=2)
     p_ex.add_argument("--delay-ns", type=int, default=23)
     p_ex.add_argument("--i2c-ack", type=int, choices=[0, 1], default=1)
+
+    p_scan = sub.add_parser("scan", help="Run an on-chip autonomous SPI timing scan (0x1A-0x1D)")
+    p_scan.add_argument("--sim", action="store_true")
+    p_scan.add_argument("--port")
+    p_scan.add_argument("--baud", type=int, default=115200)
+    p_scan.add_argument("--delay-ns", type=int, default=37)
+    p_scan.add_argument("--start", type=int, default=0)
+    p_scan.add_argument("--step", type=int, default=1)
+    p_scan.add_argument("--steps", type=int, default=16)
+    p_scan.add_argument("--mosi", type=lambda x: int(x, 0), default=0x55)
+    p_scan.add_argument("--expect", type=lambda x: int(x, 0), default=0xAA)
+    p_scan.add_argument("--pass-mode", type=int, choices=[0, 1], default=0)
 
     args = parser.parse_args(argv)
     if args.cmd == "replay":
@@ -1068,6 +1082,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(md)
             return 0
 
+        if args.cmd == "scan":
+            if args.sim:
+                transport.configure_target(0, delay_ns=args.delay_ns, spi_resp=args.expect)
+            words = build_spi_mode0_program(args.mosi)
+            client.load_program(words)
+            res = client.run_autonomous_scan(
+                param_start=args.start,
+                param_step=args.step,
+                num_steps=args.steps,
+                expected_val=args.expect,
+                pass_mode=args.pass_mode,
+            )
+            print(json.dumps(res, indent=2, sort_keys=True))
+            return 0
+
         if args.cmd == "run-example":
             if args.example == "uart":
                 if args.sim:
@@ -1077,12 +1106,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 if args.sim:
                     transport.configure_target(0, delay_ns=args.delay_ns, spi_resp=0xAA)
                 words = build_spi_mode0_program(0x55)
-            else:
+            elif args.example == "i2c":
                 if args.sim:
                     transport.configure_target(2, i2c_ack=args.i2c_ack)
                 words = build_i2c_write_byte_program(0xA0, half_cycles=4)
+            else:
+                if args.sim:
+                    transport.configure_target(11, delay_ns=0)
+                words = build_jtag_idcode_program()
             client.load_program(words)
             result = client.run_trial(args.param)
+            if args.example == "jtag":
+                result["decoded_idcode_hex"] = f"0x{decode_jtag_idcode_events(result['events']):08x}"
             print(json.dumps(result, indent=2, sort_keys=True))
             return 0
 
