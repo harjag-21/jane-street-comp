@@ -60,11 +60,11 @@ module tb_jtag_tap;
       .update_dr_count_o(udr_cnt)
   );
 
-  // Track ordered IEEE 1149.1 state milestones monotonically on posedge jtag_tck
+  // Track ordered IEEE 1149.1 state milestones monotonically on core clock (sees settled NBA tap_state)
   reg [3:0] milestone_stage = 4'd0;
   reg       trace_en = 1'b0;
 
-  always @(posedge jtag_tck) begin
+  always @(posedge clk) begin
     if (trace_en) begin
       // Wait for initial PAUSE_DR(3) -> 5x TMS=1 -> TLR(F) -> RTI(C) -> SEL_DR(7)
       // -> SEL_IR(4) -> CAP_IR(E) -> SHIFT_IR(A) -> EXIT1_IR(9) -> UPDATE_IR(D)
