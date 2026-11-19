@@ -63,6 +63,7 @@ module tb_diff_sequencer;
       .prog_addr       (prog_addr),
       .prog_wdata      (prog_wdata),
       .prog_valid      (prog_valid),
+      .prog_clear      (1'b0),
       .cmd_start       (cmd_start),
       .cmd_param       (cmd_param),
       .cmd_halt        (cmd_halt),
@@ -489,6 +490,15 @@ def generate_test_case(seed: int) -> Tuple[List[int], int, List[Tuple[int, int]]
             insn("HALT", 0),
         ]
         run_param = 0
+    elif seed == 5:
+        # Directed cmd_halt colliding directly with OP_MARK on pc==2
+        words = [
+            insn("OE", 0xFF),
+            insn("MARK", 0x11),
+            insn("MARK", 0x77),
+            insn("HALT", 0),
+        ]
+        run_param = 0
     else:
         run_param = rng.choice([0, 1, 3, 7, 15, 250, 4092])
         # Build 48..62 words with forward JZ/JMP and optional bounded SETCOUNT/LOOP
@@ -589,7 +599,7 @@ def generate_test_case(seed: int) -> Tuple[List[int], int, List[Tuple[int, int]]
     # Pre-simulate to determine exact step count and generate matching random pin schedule + optional cmd_halt test
     max_steps = 30000
     schedule: List[Tuple[int, int]] = []
-    inject_halt_at: Optional[int] = 12 if seed == 7 else None
+    inject_halt_at: Optional[int] = 2 if seed == 5 else (12 if seed == 7 else None)
     for t in range(max_steps):
         pin_v = rng.randint(0, 255)
         do_h = 1 if (inject_halt_at is not None and t == inject_halt_at) else 0
@@ -632,6 +642,7 @@ def run_differential_suite(num_seeds: int = 120) -> Dict[str, Any]:
         "halt_keep_oe_1": 0,
         "illegal_fault_hiz": 0,
         "cmd_halt_abort": 0,
+        "cmd_halt_on_mark": 0,
     }
 
     with tempfile.TemporaryDirectory(prefix="isa_diff_") as tmp:
@@ -763,6 +774,8 @@ def run_differential_suite(num_seeds: int = 120) -> Dict[str, Any]:
                         coverage["wait_edge_timeout"] += 1
                 if do_h:
                     coverage["cmd_halt_abort"] += 1
+                    if ref.wait_cnt == 0 and ((ref.imem[ref.pc] >> 12) & 0xF) == 0x9:
+                        coverage["cmd_halt_on_mark"] += 1
 
                 ref.step(pin_v, cmd_halt=bool(do_h))
                 if ref.event_overflow:
@@ -865,7 +878,7 @@ def format_markdown(rep: Dict[str, Any]) -> str:
         f"| Event FIFO overflow cycles (`>8` `MARK`s) | {cov['mark_overflow']} |",
         f"| `HALT(keep_oe=0)` / `HALT(keep_oe=1)` | {cov['halt_keep_oe_0']} / {cov['halt_keep_oe_1']} |",
         f"| Illegal opcode (`0xF` + reserved `0xE`) `ENG_FAULT` + Hi-Z (`uio_oe=0`) | {cov['illegal_fault_hiz']} (reserved `0xE`: {cov['tx_reserved_fault']}) |",
-        f"| `cmd_halt` mid-run abort | {cov['cmd_halt_abort']} |",
+        f"| `cmd_halt` mid-run abort (on `OP_MARK`) | {cov['cmd_halt_abort']} ({cov['cmd_halt_on_mark']}) |",
     ]
     return "\n".join(lines) + "\n"
 
@@ -903,6 +916,7 @@ def main() -> int:
     assert cov["halt_keep_oe_0"] > 0 and cov["halt_keep_oe_1"] > 0
     assert cov["illegal_fault_hiz"] > 0
     assert cov["cmd_halt_abort"] > 0
+    assert cov["cmd_halt_on_mark"] > 0
     return 0
 
 

@@ -8,6 +8,7 @@ module tb_v1_sequencer;
   reg [5:0] prog_addr = 0;
   reg [15:0] prog_wdata = 0;
   reg prog_valid = 0;
+  reg prog_clear = 0;
   reg cmd_start = 0;
   reg [11:0] cmd_param = 0;
   reg cmd_halt = 0;
@@ -45,6 +46,7 @@ module tb_v1_sequencer;
     .prog_addr(prog_addr),
     .prog_wdata(prog_wdata),
     .prog_valid(prog_valid),
+    .prog_clear(prog_clear),
     .cmd_start(cmd_start),
     .cmd_param(cmd_param),
     .cmd_halt(cmd_halt),
@@ -705,6 +707,88 @@ module tb_v1_sequencer;
     end
   endtask
 
+  task test_rtl_loophole_regressions;
+    integer k;
+    reg [7:0] tag;
+    reg [15:0] ts;
+    begin
+      // (1) cmd_halt colliding directly with OP_MARK must suppress push, last_mark_tag_o, and overflow
+      clear_imem;
+      load_word(6'd0, insn(OP_OE, 12'h0FF));
+      load_word(6'd1, insn(OP_MARK, 12'h011));
+      load_word(6'd2, insn(OP_MARK, 12'h077));
+      load_word(6'd3, insn(OP_HALT, 12'h000));
+      prog_valid = 1;
+      @(negedge clk); cmd_param = 12'd0; cmd_start = 1;
+      @(posedge clk); #1; cmd_start = 0;
+      @(posedge clk); #1; // executes imem[0] (OE 0xFF)
+      @(posedge clk); #1; // executes imem[1] (MARK 0x11) -> pc is now 2 (MARK 0x77)
+      check(pc == 6'd2 && event_count == 4'd1 && last_mark_tag == 8'h11,
+            "cmd_halt-on-MARK precondition reached pc=2");
+      @(negedge clk);
+      cmd_halt = 1;
+      @(posedge clk); #1; // cmd_halt collides with imem[2] (MARK 0x77)
+      cmd_halt = 0;
+      check(eng_state == 2'd2, "cmd_halt-on-MARK halted engine");
+      check(uio_oe == 8'h00, "cmd_halt-on-MARK forced uio_oe=0");
+      check(event_count == 4'd1, "cmd_halt-on-MARK did not push event");
+      check(last_mark_tag == 8'h11, "cmd_halt-on-MARK preserved last_mark_tag");
+      check(event_overflow == 1'b0, "cmd_halt-on-MARK did not set event_overflow");
+
+      // Also verify overflow flag stays 0 when FIFO is full (8 entries) and cmd_halt hits MARK #9
+      clear_imem;
+      for (k = 0; k < 8; k = k + 1) load_word(k[5:0], insn(OP_MARK, {4'h0, k[7:0]}));
+      load_word(6'd8, insn(OP_MARK, 12'h099));
+      load_word(6'd9, insn(OP_HALT, 12'h000));
+      prog_valid = 1;
+      @(negedge clk); cmd_start = 1;
+      @(posedge clk); #1; cmd_start = 0;
+      for (k = 0; k < 8; k = k + 1) begin
+        @(posedge clk); #1;
+      end
+      check(pc == 6'd8 && event_count == 4'd8 && event_overflow == 1'b0,
+            "FIFO full before MARK #9 with no overflow yet");
+      @(negedge clk); cmd_halt = 1;
+      @(posedge clk); #1; cmd_halt = 0;
+      check(event_count == 4'd8 && event_overflow == 1'b0 && last_mark_tag == 8'h07,
+            "cmd_halt-on-MARK suppressed FIFO overflow");
+      for (k = 0; k < 8; k = k + 1) pop_event(tag, ts);
+
+      // (2) prog_clear wipes high imem words when not running and is ignored during ENG_RUN
+      clear_imem;
+      load_word(6'd10, insn(OP_OUT, 12'h05A));
+      load_word(6'd11, insn(OP_OE,  12'h0AA));
+      load_word(6'd12, insn(OP_MARK, 12'h0EE));
+      @(negedge clk); prog_clear = 1;
+      @(posedge clk); #1; prog_clear = 0;
+      load_word(6'd0, insn(OP_JMP, 12'd10));
+      load_word(6'd13, insn(OP_HALT, 12'h000));
+      prog_valid = 1;
+      start_and_wait(12'd0);
+      check(eng_state == 2'd2, "prog_clear wiped stale imem[10..12] to NOP before HALT at 13");
+      check(uio_out == 8'h00 && uio_oe == 8'h00 && event_count == 4'd0,
+            "prog_clear left no stale OUT/OE/MARK side effects");
+      check(cycle_cnt == 16'd5, "prog_clear JMP(1)+3xNOP(3)+HALT(1) took 5 cycles");
+
+      // Verify prog_clear ignored while ENG_RUN
+      clear_imem;
+      load_word(6'd0, insn(OP_WAIT, 12'd4));
+      load_word(6'd1, insn(OP_MARK, 12'h0C4));
+      load_word(6'd2, insn(OP_HALT, 12'h000));
+      prog_valid = 1;
+      @(negedge clk); cmd_start = 1;
+      @(posedge clk); #1; cmd_start = 0;
+      @(negedge clk); prog_clear = 1;
+      @(posedge clk); #1; prog_clear = 0;
+      k = 0;
+      while (eng_state == 2'd1 && k < 100) begin
+        @(posedge clk); #1; k = k + 1;
+      end
+      check(eng_state == 2'd2 && event_count == 4'd1 && last_mark_tag == 8'hC4,
+            "prog_clear ignored while ENG_RUN");
+    end
+  endtask
+
   initial begin
     #500000;
     $display("FAIL: global simulation timeout at time=%0t pc=%0d state=%0d", $time, pc, eng_state);
@@ -729,8 +813,10 @@ module tb_v1_sequencer;
     test_wait_edge_stretch;
     $display("Running test_tx_shifter_multibyte_and_faults");
     test_tx_shifter_multibyte_and_faults;
+    $display("Running test_rtl_loophole_regressions");
+    test_rtl_loophole_regressions;
 
-    if (errors == 0) $display("PASS: v1 protocol_sequencer ISA + UART + SPI sweep + I2C + WAIT_EDGE + OP_TX tests passed");
+    if (errors == 0) $display("PASS: v1 protocol_sequencer ISA + UART + SPI sweep + I2C + WAIT_EDGE + OP_TX + loophole regressions passed");
     else $display("FAIL: %0d checks failed", errors);
     $finish_and_return(errors != 0);
   end

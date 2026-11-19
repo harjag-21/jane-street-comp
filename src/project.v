@@ -30,8 +30,9 @@ module tt_um_harjag_21_timing_explorer #(
                          (ui_in[2:1] == 2'b10) ? 16'd217 :
                          (ui_in[2:1] == 2'b11) ? 16'd434 :
                                                  CLKS_PER_BIT[15:0];
-  wire [15:0] half_bit_clks     = (bit_clks < 16'd2) ? 16'd1 : {1'b0, bit_clks[15:1]};
-  wire [15:0] frame_timeout_lim = {bit_clks[9:0], 6'd0};
+  wire [15:0] bit_clks_safe     = (bit_clks < 16'd2) ? 16'd2 : bit_clks;
+  wire [15:0] half_bit_clks     = {1'b0, bit_clks_safe[15:1]};
+  wire [15:0] frame_timeout_lim = {bit_clks_safe[9:0], 6'd0};
 
   localparam [2:0] RX_IDLE = 3'd0, RX_START = 3'd1, RX_DATA = 3'd2, RX_STOP = 3'd3;
   localparam [1:0] TX_IDLE = 2'd0, TX_START = 2'd1, TX_DATA = 2'd2, TX_STOP = 2'd3;
@@ -101,7 +102,7 @@ module tt_um_harjag_21_timing_explorer #(
   reg [7:0]  cmd_status, resp_d0, resp_d1, resp_d2, resp_d3;
   reg [7:0]  response [0:6];
 
-  reg        prog_we, prog_valid, load_active;
+  reg        prog_we, prog_clear, prog_valid, load_active;
   reg [5:0]  prog_addr;
   reg [15:0] prog_wdata;
   reg [6:0]  load_len, load_idx;
@@ -176,6 +177,7 @@ module tt_um_harjag_21_timing_explorer #(
       .prog_addr(prog_addr),
       .prog_wdata(prog_wdata),
       .prog_valid(prog_valid),
+      .prog_clear(prog_clear),
       .cmd_start(cmd_start),
       .cmd_param(cmd_param),
       .cmd_halt(cmd_halt),
@@ -222,7 +224,7 @@ module tt_um_harjag_21_timing_explorer #(
           if (rx_count == 16'd0) begin
             if (!rx_d2) begin
               rx_state <= RX_DATA;
-              rx_count <= bit_clks - 16'd1;
+              rx_count <= bit_clks_safe - 16'd1;
               rx_bit   <= 3'd0;
             end else begin
               rx_state <= RX_IDLE;
@@ -233,7 +235,7 @@ module tt_um_harjag_21_timing_explorer #(
         end
         RX_DATA: begin
           if (rx_count == 16'd0) begin
-            rx_count         <= bit_clks - 16'd1;
+            rx_count         <= bit_clks_safe - 16'd1;
             rx_shift[rx_bit] <= rx_d2;
             if (rx_bit == 3'd7) begin
               rx_state <= RX_STOP;
@@ -275,7 +277,7 @@ module tt_um_harjag_21_timing_explorer #(
           if (tx_start) begin
             tx_shift <= tx_data;
             tx_bit   <= 3'd0;
-            tx_count <= bit_clks - 16'd1;
+            tx_count <= bit_clks_safe - 16'd1;
             tx_state <= TX_START;
             tx_busy  <= 1'b1;
           end
@@ -283,14 +285,14 @@ module tt_um_harjag_21_timing_explorer #(
         TX_START: begin
           if (tx_count == 16'd0) begin
             tx_state <= TX_DATA;
-            tx_count <= bit_clks - 16'd1;
+            tx_count <= bit_clks_safe - 16'd1;
           end else begin
             tx_count <= tx_count - 16'd1;
           end
         end
         TX_DATA: begin
           if (tx_count == 16'd0) begin
-            tx_count <= bit_clks - 16'd1;
+            tx_count <= bit_clks_safe - 16'd1;
             if (tx_bit == 3'd7) begin
               tx_state <= TX_STOP;
             end else begin
@@ -342,6 +344,7 @@ module tt_um_harjag_21_timing_explorer #(
       tx_start    <= 1'b0;
       tx_data     <= 8'hFF;
       prog_we     <= 1'b0;
+      prog_clear  <= 1'b0;
       prog_valid  <= 1'b0;
       load_active <= 1'b0;
       prog_addr   <= 6'd0;
@@ -378,9 +381,10 @@ module tt_um_harjag_21_timing_explorer #(
       first_fail_cycles <= 16'h0000;
       first_fail_evcnt  <= 4'd0;
     end else begin
-      tx_start  <= 1'b0;
-      prog_we   <= 1'b0;
-      cmd_start <= 1'b0;
+      tx_start   <= 1'b0;
+      prog_we    <= 1'b0;
+      prog_clear <= 1'b0;
+      cmd_start  <= 1'b0;
       cmd_halt  <= 1'b0;
       event_pop <= 1'b0;
 
@@ -512,6 +516,7 @@ module tt_um_harjag_21_timing_explorer #(
                 cmd_status <= ST_BAD_ARG;
               end else begin
                 cmd_status  <= ST_OK;
+                prog_clear  <= 1'b1;
                 prog_valid  <= 1'b0;
                 load_active <= 1'b1;
                 load_len    <= req_arg0[6:0];

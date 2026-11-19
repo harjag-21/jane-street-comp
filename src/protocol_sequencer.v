@@ -21,6 +21,7 @@ module protocol_sequencer #(
     input  wire [ADDR_W-1:0]      prog_addr,
     input  wire [15:0]            prog_wdata,
     input  wire                   prog_valid,
+    input  wire                   prog_clear,
 
     // Execution control
     input  wire                   cmd_start,
@@ -122,7 +123,7 @@ module protocol_sequencer #(
 
   wire [EVENT_PTR_W:0] ev_depth_max = EVENT_DEPTH[EVENT_PTR_W:0];
   wire                 do_pop       = event_pop && (ev_count != 0);
-  wire                 do_mark      = (eng_state_o == ENG_RUN) && (wait_cnt == 12'd0) && (op == OP_MARK);
+  wire                 do_mark      = (eng_state_o == ENG_RUN) && !cmd_halt && (wait_cnt == 12'd0) && (op == OP_MARK);
   wire                 do_push      = do_mark && ((ev_count < ev_depth_max) || do_pop);
   wire [7:0]           mark_payload = imm[8] ? sample_reg_o : imm[7:0];
 
@@ -163,8 +164,12 @@ module protocol_sequencer #(
       uio_out_o        <= 8'h00;
       uio_oe_o         <= 8'h00;
     end else begin
-      // Program write allowed only when not executing.
-      if (prog_we && (eng_state_o != ENG_RUN)) begin
+      // Program clear or write allowed only when not executing.
+      if (prog_clear && (eng_state_o != ENG_RUN)) begin
+        for (idx = 0; idx < PROG_DEPTH; idx = idx + 1) begin
+          imem[idx] <= 16'h0000;
+        end
+      end else if (prog_we && (eng_state_o != ENG_RUN)) begin
         imem[prog_addr] <= prog_wdata;
       end
 

@@ -199,6 +199,20 @@ async def test_loader_validation_recovery_and_deselect(dut):
     state = await wait_halted_or_fault(dut)
     assert state == 2
 
+    # 6c. OP_BEGIN_LOAD clears prior imem residue so shorter programs never inherit stale words
+    stale_prog = [0x20FF, 0x1055, 0x105A, 0x20AA, 0x90EE, 0xA000, 0xA000, 0xA000]
+    assert (await load_program(dut, stale_prog))[2] == 0
+    assert (await load_program(dut, [0x6002, 0x0000]))[2] == 0
+    assert (await send_cmd(dut, 0x19, req_id=12, arg0=6, arg1=0x00, arg2=0xA0))[2] == 0
+    assert (await send_cmd(dut, UART_OP_START, req_id=13))[2] == 0
+    assert (await wait_halted_or_fault(dut)) == 2
+    cnt_resp = await send_cmd(dut, UART_OP_READ_CYCLE_CNT, req_id=14)
+    assert cnt_resp[2] == 0
+    cycles = cnt_resp[3] | (cnt_resp[4] << 8)
+    assert cycles == 6, f"expected 6 cycles (JMP 2 + 4 NOPs + HALT at 6), got {cycles}"
+    assert cnt_resp[6] == 0, f"expected 0 stale MARK events after OP_BEGIN_LOAD clear, got {cnt_resp[6]}"
+    assert int(dut.uio_out.value) == 0 and int(dut.uio_oe.value) == 0
+
     # 7. Deselection (ena=0) clears prog_valid and forces reload
     assert ((int(dut.uo_out.value) >> 2) & 1) == 1
     dut.ena.value = 0
