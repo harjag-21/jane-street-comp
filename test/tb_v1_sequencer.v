@@ -595,7 +595,7 @@ module tb_v1_sequencer;
       check(eng_state == 2'd3, "Reserved 0xE400 enters ENG_FAULT");
       check(uio_oe == 8'h00, "Reserved 0xE400 drops uio_oe to 0x00");
 
-      // 3) Open-drain LD_TX_OD + SHIFT_TX 2-byte I2C write [0xA0, 0x55] (45 words <= 64) with ACK & NACK
+      // 3) Open-drain LD_TX_OD + SHIFT_TX 2-byte I2C write [0xA0, 0x55] (49 words <= 64, ACK path; NACK covered in test.py & i2c_timing_audit.py)
       clear_imem;
       a = 0;
       load_word(a[5:0], insn(OP_OUT, 12'h000));        a = a + 1; // 0

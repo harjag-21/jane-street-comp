@@ -1051,7 +1051,7 @@ async def test_i2c_multibyte_open_drain_100k_and_fast_compliant(dut):
         assert all(p == expected_steady_period for p in steady_periods), f"periods={steady_periods}"
         return scl_low_lens, scl_high_lens
 
-    # Load 45-word 2-byte I2C program once and test BOTH Fast-mode compliant (384.6 kHz) & 100 kHz (99.6 kHz)
+    # Load 49-word 2-byte I2C program once and test BOTH Fast-mode compliant (384.6 kHz) & 100 kHz (99.6 kHz)
     assert (await load_program(dut, prog2))[2] == 0
 
     # Fast-mode compliant (run_param=62 -> t_LOW=66 cyc=1320 ns >= 1300 ns, t_HIGH=64 cyc=1280 ns, period=130 cyc -> 384.615 kHz)

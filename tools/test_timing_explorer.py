@@ -659,9 +659,11 @@ class TimingExplorerTests(unittest.TestCase):
         self.assertTrue(i2c_rep["i2c-2byte-od-fast"]["compliant"])
         self.assertEqual(i2c_rep["i2c-2byte-od-fast"]["min_low_ns"], 1320)
         self.assertTrue(i2c_rep["i2c-2byte-od-fast-nack"]["compliant"])
+        self.assertTrue(i2c_rep["i2c-2byte-od-fast-nack1"]["compliant"])
         self.assertTrue(i2c_rep["i2c-2byte-od-100k"]["compliant"])
         self.assertEqual(i2c_rep["i2c-2byte-od-100k"]["min_low_ns"], 5040)
         self.assertTrue(i2c_rep["i2c-2byte-od-100k-nack"]["compliant"])
+        self.assertTrue(i2c_rep["i2c-2byte-od-100k-nack1"]["compliant"])
 
         # 2) Independent target validation (sharp, pass-fail-pass non-monotonic, noisy repeats)
         indep = run_independent_validation()
@@ -786,6 +788,15 @@ class TimingExplorerTests(unittest.TestCase):
             r_i2c_nack = client.run_trial(248)
             self.assertFalse(r_i2c_nack["sim_observations"]["i2c_od_fault"])
             self.assertEqual([e["tag"] for e in r_i2c_nack["events"]], [0xF0])
+            chk_i2c_nack = check_timing_contract(
+                i2c_2b_od,
+                248,
+                observed_cycles=r_i2c_nack["cycle_cnt"],
+                observed_events=r_i2c_nack["events"],
+                eng_state=r_i2c_nack["eng_state"],
+                sample_bits=[1],
+            )
+            self.assertTrue(chk_i2c_nack["contract_ok"], chk_i2c_nack["errors"])
 
             # OP_PATCH_WORD updates byte 1 from 0x55 to 0x3C in 1 command
             client.patch_word(ld_i2c_2[1], insn("LD_TX_OD", 0x3C))

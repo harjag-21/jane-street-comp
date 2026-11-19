@@ -64,7 +64,7 @@ module tb_i2c_audit;
   wire [7:0] uio_out;
   wire [7:0] uio_oe;
   reg        target_sda_low = 1'b0;
-  reg        do_ack = 1'b1;
+  reg  [1:0] ack_mode = 2'd1;
   integer    exp_bytes = 1;
 
   // Exact 50 MHz core clock (period = 20 ns matching info.yaml clock_hz=50000000)
@@ -160,7 +160,7 @@ module tb_i2c_audit;
       end
       if (!$value$plusargs("ACK=%d", ack_v)) ack_v = 1;
       if (!$value$plusargs("BYTES=%d", exp_bytes)) exp_bytes = 1;
-      do_ack = ack_v[0];
+      ack_mode = ack_v[1:0];
       fd = $fopen(cmd_path, "r");
       if (fd == 0) begin
         $display("ERR cannot open %0s", cmd_path);
@@ -179,9 +179,10 @@ module tb_i2c_audit;
     end
   end
 
-  // Behavioral open-drain ACK responder aligned to I2C START (supports 1..2 bytes)
+  // Behavioral open-drain ACK responder aligned to I2C START (ack_mode: 0=NACK b0, 1=ACK all, 2=ACK b0 / NACK b1)
   always @(negedge sda_bus) begin : ack_blk
     integer b, by;
+    reg ack_this;
     reg [7:0] rx_byte, rx_byte1;
     if (monitoring && scl_bus === 1'b1) begin
       rx_byte = 8'h00;
@@ -194,11 +195,12 @@ module tb_i2c_audit;
           else         rx_byte1 = {rx_byte1[6:0], sda_bus};
           while (scl_bus === 1'b1) @(posedge clk);
         end
-        if (do_ack) target_sda_low = 1'b1;
+        ack_this = (ack_mode == 2'd1) || ((ack_mode == 2'd2) && (by == 0));
+        if (ack_this) target_sda_low = 1'b1;
         while (scl_bus === 1'b0) @(posedge clk);
         while (scl_bus === 1'b1) @(posedge clk);
         target_sda_low = 1'b0;
-        if (!do_ack) by = exp_bytes;
+        if (!ack_this) by = exp_bytes;
       end
       while (uo_out[4:3] != 2'd2 && uo_out[4:3] != 2'd3) @(posedge clk);
       repeat (4) @(posedge clk);
@@ -428,8 +430,10 @@ def run_i2c_audit() -> Dict[str, Any]:
         ("i2c-100k-nack", 250, 0, "standard_100k", 0, False),
         ("i2c-2byte-od-fast", 64, 62, "fast_400k", 1, True),
         ("i2c-2byte-od-fast-nack", 64, 62, "fast_400k", 0, True),
+        ("i2c-2byte-od-fast-nack1", 64, 62, "fast_400k", 2, True),
         ("i2c-2byte-od-100k", 250, 248, "standard_100k", 1, True),
         ("i2c-2byte-od-100k-nack", 250, 248, "standard_100k", 0, True),
+        ("i2c-2byte-od-100k-nack1", 250, 248, "standard_100k", 2, True),
     ]
     results: List[Dict[str, Any]] = []
     with tempfile.TemporaryDirectory(prefix="i2c_audit_") as tmp:
@@ -438,7 +442,7 @@ def run_i2c_audit() -> Dict[str, Any]:
         for name, half_cycles, run_param, profile, ack, is_mb in configs:
             if is_mb:
                 words, _ = build_i2c_write_multibyte_program([0xA0, 0x55], half_cycles=None)
-                exp_bytes = (0xA0, 0x55) if ack else (0xA0,)
+                exp_bytes = (0xA0, 0x55) if ack in (1, 2) else (0xA0,)
             else:
                 words = build_i2c_write_byte_program(0xA0, half_cycles=half_cycles, ack_tag=0xAC, nack_tag=0xDE)
                 exp_bytes = (0xA0,)
@@ -463,7 +467,7 @@ def format_markdown(report: Dict[str, Any]) -> str:
     lines = [
         "# Phase 4 I2C Pulse-by-Pulse Timing Audit (50 MHz Core Clock)",
         "",
-        "Audited real `tt_um_harjag_21_timing_explorer` RTL at `clock_hz = 50,000,000` (`T = 20 ns`) under idealized `0 ns` pull-up rise time across `START`, bits `7..0`, `ACK/NACK`, and `STOP` (`(uio_oe & uio_out) == 0` verified at every cycle).",
+        "Audited real `tt_um_harjag_21_timing_explorer` RTL at `clock_hz = 50,000,000` (`T = 20 ns`) under idealized `0 ns` pull-up rise time across `START`, single-byte (`bits 7..0 + ACK/NACK`) and 2-byte `LD_TX_OD` (`b0/b1 + ACK/NACK`) transfers, and `STOP` (`ACK=0`: NACK b0, `1`: ACK all, `2`: ACK b0 / NACK b1; `(uio_oe & uio_out) == 0` verified at every cycle).",
         "",
         "| Profile | `half_cycles` | ACK | Rx | `t_BUF` (ns) | `t_HD;STA` (ns) | Min `t_LOW` (ns) | Min `t_HIGH` (ns) | Min `t_SU;DAT` (ns) | Min `t_HD;DAT` (ns) | `t_SU;STO` (ns) | Steady Rate (kHz) | Spec Result |",
         "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
@@ -511,8 +515,10 @@ def main() -> int:
     assert by_name["i2c-100k-nack"]["compliant"]
     assert by_name["i2c-2byte-od-fast"]["compliant"]
     assert by_name["i2c-2byte-od-fast-nack"]["compliant"]
+    assert by_name["i2c-2byte-od-fast-nack1"]["compliant"]
     assert by_name["i2c-2byte-od-100k"]["compliant"]
     assert by_name["i2c-2byte-od-100k-nack"]["compliant"]
+    assert by_name["i2c-2byte-od-100k-nack1"]["compliant"]
     return 0
 
 

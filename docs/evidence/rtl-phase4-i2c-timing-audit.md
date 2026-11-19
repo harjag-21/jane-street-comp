@@ -1,6 +1,6 @@
 # Phase 4 I2C Pulse-by-Pulse Timing Audit (50 MHz Core Clock)
 
-Audited real `tt_um_harjag_21_timing_explorer` RTL at `clock_hz = 50,000,000` (`T = 20 ns`) under idealized `0 ns` pull-up rise time across `START`, bits `7..0`, `ACK/NACK`, and `STOP` (`(uio_oe & uio_out) == 0` verified at every cycle).
+Audited real `tt_um_harjag_21_timing_explorer` RTL at `clock_hz = 50,000,000` (`T = 20 ns`) under idealized `0 ns` pull-up rise time across `START`, single-byte (`bits 7..0 + ACK/NACK`) and 2-byte `LD_TX_OD` (`b0/b1 + ACK/NACK`) transfers, and `STOP` (`ACK=0`: NACK b0, `1`: ACK all, `2`: ACK b0 / NACK b1; `(uio_oe & uio_out) == 0` verified at every cycle).
 
 | Profile | `half_cycles` | ACK | Rx | `t_BUF` (ns) | `t_HD;STA` (ns) | Min `t_LOW` (ns) | Min `t_HIGH` (ns) | Min `t_SU;DAT` (ns) | Min `t_HD;DAT` (ns) | `t_SU;STO` (ns) | Steady Rate (kHz) | Spec Result |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -12,8 +12,10 @@ Audited real `tt_um_harjag_21_timing_explorer` RTL at `clock_hz = 50,000,000` (`
 | `i2c-100k-nack` | 250 | 0 | `0xa0` | 5060 | 5000 | 5020 | 5000 | 5000 | 0 | 5000 | 99.800 | PASS |
 | `i2c-2byte-od-fast` | 64 | 1 | `0xa0,0x55` | 1340 | 1280 | 1320 | 1280 | 1280 | 20 | 1280 | 384.615 | PASS |
 | `i2c-2byte-od-fast-nack` | 64 | 0 | `0xa0` | 1340 | 1280 | 1320 | 1280 | 1280 | 0 | 1280 | 384.615 | PASS |
+| `i2c-2byte-od-fast-nack1` | 64 | 2 | `0xa0,0x55` | 1340 | 1280 | 1320 | 1280 | 1280 | 0 | 1280 | 384.615 | PASS |
 | `i2c-2byte-od-100k` | 250 | 1 | `0xa0,0x55` | 5060 | 5000 | 5040 | 5000 | 5000 | 20 | 5000 | 99.602 | PASS |
 | `i2c-2byte-od-100k-nack` | 250 | 0 | `0xa0` | 5060 | 5000 | 5040 | 5000 | 5000 | 0 | 5000 | 99.602 | PASS |
+| `i2c-2byte-od-100k-nack1` | 250 | 2 | `0xa0,0x55` | 5060 | 5000 | 5040 | 5000 | 5000 | 0 | 5000 | 99.602 | PASS |
 
 ## Per-Pulse Detail (`i2c-fast-compliant`, `half_cycles=64`, ACK)
 
