@@ -16,6 +16,7 @@ from tools.protocol_asm import (
     bitrev8,
     build_i2c_stretch_probe_program,
     build_i2c_write_byte_program,
+    build_i2c_write_multibyte_program,
     build_jtag_idcode_program,
     build_spi_mode0_program,
     build_spi_multibyte_program,
@@ -646,7 +647,7 @@ class TimingExplorerTests(unittest.TestCase):
         from tools.isa_diff_fuzz import run_differential_suite
         from tools.spi_responder_char import run_characterization
 
-        # 1) 50 MHz pulse-by-pulse I2C audit
+        # 1) 50 MHz pulse-by-pulse I2C audit (single-byte + 2-byte LD_TX_OD open-drain)
         i2c_rep = {r["mode_name"]: r for r in run_i2c_audit()["runs"]}
         self.assertFalse(i2c_rep["i2c-400k-nominal"]["compliant"])
         self.assertEqual(i2c_rep["i2c-400k-nominal"]["min_low_ns"], 1260)
@@ -655,6 +656,12 @@ class TimingExplorerTests(unittest.TestCase):
         self.assertTrue(i2c_rep["i2c-fast-compliant-nack"]["compliant"])
         self.assertTrue(i2c_rep["i2c-100k"]["compliant"])
         self.assertTrue(i2c_rep["i2c-100k-nack"]["compliant"])
+        self.assertTrue(i2c_rep["i2c-2byte-od-fast"]["compliant"])
+        self.assertEqual(i2c_rep["i2c-2byte-od-fast"]["min_low_ns"], 1320)
+        self.assertTrue(i2c_rep["i2c-2byte-od-fast-nack"]["compliant"])
+        self.assertTrue(i2c_rep["i2c-2byte-od-100k"]["compliant"])
+        self.assertEqual(i2c_rep["i2c-2byte-od-100k"]["min_low_ns"], 5040)
+        self.assertTrue(i2c_rep["i2c-2byte-od-100k-nack"]["compliant"])
 
         # 2) Independent target validation (sharp, pass-fail-pass non-monotonic, noisy repeats)
         indep = run_independent_validation()
@@ -750,6 +757,43 @@ class TimingExplorerTests(unittest.TestCase):
             client.load_program(spi_2b_lsb)
             r_spi_lsb = client.run_trial(2)
             self.assertEqual(r_spi_lsb["sim_observations"]["spi_mosi_rx"], bitrev8(0x3C))
+
+            # 4) Open-drain multi-byte I2C via LD_TX_OD + SHIFT_TX (30 words for 1B, 49 words for 2B vs 62 unrolled 1B)
+            i2c_1b_od, ld_i2c_1 = build_i2c_write_multibyte_program([0xA0], half_cycles=None)
+            i2c_2b_od, ld_i2c_2 = build_i2c_write_multibyte_program([0xA0, 0x55], half_cycles=None)
+            self.assertEqual(len(i2c_1b_od), 30)
+            self.assertEqual(len(i2c_2b_od), 49)
+            self.assertEqual(ld_i2c_2, [7, 26])
+            client.load_program(i2c_2b_od)
+            transport.configure_target(2, i2c_ack=1)
+            r_i2c_ack = client.run_trial(62)
+            self.assertFalse(r_i2c_ack["sim_observations"]["i2c_od_fault"])
+            self.assertTrue(r_i2c_ack["sim_observations"]["i2c_seen"])
+            self.assertEqual(r_i2c_ack["sim_observations"]["i2c_rx_byte"], 0x55)
+            self.assertEqual([e["tag"] for e in r_i2c_ack["events"]], [0xA0, 0xA1])
+            chk_i2c_ack = check_timing_contract(
+                i2c_2b_od,
+                62,
+                observed_cycles=r_i2c_ack["cycle_cnt"],
+                observed_events=r_i2c_ack["events"],
+                eng_state=r_i2c_ack["eng_state"],
+                sample_bits=[0, 0],
+            )
+            self.assertTrue(chk_i2c_ack["contract_ok"], chk_i2c_ack["errors"])
+
+            # Same 49-word program at run_param=248 (100 kHz Standard-mode) with NACK
+            transport.configure_target(2, i2c_ack=0)
+            r_i2c_nack = client.run_trial(248)
+            self.assertFalse(r_i2c_nack["sim_observations"]["i2c_od_fault"])
+            self.assertEqual([e["tag"] for e in r_i2c_nack["events"]], [0xF0])
+
+            # OP_PATCH_WORD updates byte 1 from 0x55 to 0x3C in 1 command
+            client.patch_word(ld_i2c_2[1], insn("LD_TX_OD", 0x3C))
+            transport.configure_target(2, i2c_ack=1)
+            r_i2c_patch = client.run_trial(62)
+            self.assertFalse(r_i2c_patch["sim_observations"]["i2c_od_fault"])
+            self.assertEqual(r_i2c_patch["sim_observations"]["i2c_rx_byte"], 0x3C)
+            self.assertEqual([e["tag"] for e in r_i2c_patch["events"]], [0xA0, 0xA1])
 
 
 if __name__ == "__main__":

@@ -31,6 +31,7 @@ from tools.protocol_asm import (
     assemble,
     bitrev8,
     build_i2c_write_byte_program,
+    build_i2c_write_multibyte_program,
     build_spi_mode0_program,
     build_spi_multibyte_program,
     build_spi_program,
@@ -939,10 +940,160 @@ async def test_tx_shifter_multibyte_uart_spi_and_patch(dut):
     assert (await tgt_lsb) == [0xA5, 0x3C]
     assert await wait_halted_or_fault(dut) == 2
 
-    # 3) Reserved OP_TX encoding (0xE200) must trap to ENG_FAULT (3) and drop uio_oe to 0x00
-    fault_prog = [insn("OE", 0xFF), 0xE200]
+    # 3) Reserved OP_TX encoding (0xE400) must trap to ENG_FAULT (3) and drop uio_oe to 0x00
+    fault_prog = [insn("OE", 0xFF), 0xE400]
     assert (await load_program(dut, fault_prog))[2] == 0
     assert (await send_cmd(dut, UART_OP_START, req_id=150))[2] == 0
     assert await wait_halted_or_fault(dut) == 3
     assert int(dut.uio_oe.value) == 0x00
+
+
+@cocotb.test()
+async def test_i2c_multibyte_open_drain_100k_and_fast_compliant(dut):
+    """Test 10: Open-drain LD_TX_OD + SHIFT_TX multi-byte I2C at 100k & compliant Fast-mode with ACK/NACK & cycle-level OD check."""
+    clock = Clock(dut.clk, 20, unit="ns")  # exact 50 MHz (20 ns/cycle)
+    cocotb.start_soon(clock.start())
+    await reset_dut(dut)
+
+    # 1-byte looped open-drain takes 30/64 words (vs 62 unrolled); 2-byte parameterized I2C write takes 49/64 words
+    prog1, ld_addrs1 = build_i2c_write_multibyte_program([0xA0], half_cycles=None)
+    assert len(prog1) == 30 and ld_addrs1 == [7]
+
+    prog2, ld_addrs2 = build_i2c_write_multibyte_program([0xA0, 0x55], half_cycles=None)
+    assert len(prog2) == 49 and len(prog2) <= PROG_DEPTH
+    assert ld_addrs2 == [7, 26]
+
+    async def run_i2c_mb(expected_bytes, ack_mask, run_param: int, expected_steady_period: int):
+        target_drive_sda_low = False
+        done = False
+        scl_low_lens = []
+        scl_high_lens = []
+
+        def pin_state(idx):
+            oe = (int(dut.uio_oe.value) >> idx) & 1
+            out = (int(dut.uio_out.value) >> idx) & 1
+            if idx == 1 and target_drive_sda_low:
+                return 0
+            return out if oe else 1
+
+        async def od_and_scl_monitor():
+            started = False
+            prev_scl = 1
+            run_len = 0
+            while not done:
+                oe = int(dut.uio_oe.value) & 0x3
+                out = int(dut.uio_out.value) & 0x3
+                assert (oe & out) == 0, f"Open-drain violation! oe={oe:02x} out={out:02x}"
+                scl = pin_state(0)
+                sda = pin_state(1)
+                dut.uio_in.value = (sda << 1) | scl | 0xFC
+                if not started and scl == 0:
+                    started = True
+                    prev_scl = 0
+                    run_len = 1
+                elif started:
+                    if scl == prev_scl:
+                        run_len += 1
+                    else:
+                        if prev_scl == 0:
+                            scl_low_lens.append(run_len)
+                        else:
+                            scl_high_lens.append(run_len)
+                        prev_scl = scl
+                        run_len = 1
+                await ClockCycles(dut.clk, 1)
+
+        async def i2c_target(n_expected: int):
+            nonlocal target_drive_sda_low
+            while not (pin_state(0) == 1 and pin_state(1) == 0):
+                await ClockCycles(dut.clk, 1)
+            while pin_state(0) == 1:
+                await ClockCycles(dut.clk, 1)
+            rx_bytes = []
+            for idx in range(n_expected):
+                rx = 0
+                for _ in range(8):
+                    while pin_state(0) == 0:
+                        await ClockCycles(dut.clk, 1)
+                    rx = (rx << 1) | pin_state(1)
+                    while pin_state(0) == 1:
+                        await ClockCycles(dut.clk, 1)
+                rx_bytes.append(rx)
+                do_ack = bool(ack_mask[idx])
+                target_drive_sda_low = do_ack
+                while pin_state(0) == 0:
+                    await ClockCycles(dut.clk, 1)
+                while pin_state(0) == 1:
+                    await ClockCycles(dut.clk, 1)
+                target_drive_sda_low = False
+                if not do_ack:
+                    break
+            return rx_bytes
+
+        mon = cocotb.start_soon(od_and_scl_monitor())
+        tgt = cocotb.start_soon(i2c_target(len(expected_bytes)))
+        assert (
+            await send_cmd(
+                dut,
+                UART_OP_START,
+                req_id=160 + run_param,
+                arg0=run_param & 0xFF,
+                arg1=(run_param >> 8) & 0xF,
+            )
+        )[2] == 0
+        assert await wait_halted_or_fault(dut, max_cycles=40000) == 2
+        done = True
+        await mon
+        rx = await tgt
+        assert rx == list(expected_bytes), f"rx={rx} expected={expected_bytes}"
+        # Steady bits 1..7 of byte 0 must have exact period and min t_LOW
+        steady_periods = [scl_low_lens[i] + scl_high_lens[i] for i in range(1, 8)]
+        assert all(p == expected_steady_period for p in steady_periods), f"periods={steady_periods}"
+        return scl_low_lens, scl_high_lens
+
+    # Load 45-word 2-byte I2C program once and test BOTH Fast-mode compliant (384.6 kHz) & 100 kHz (99.6 kHz)
+    assert (await load_program(dut, prog2))[2] == 0
+
+    # Fast-mode compliant (run_param=62 -> t_LOW=66 cyc=1320 ns >= 1300 ns, t_HIGH=64 cyc=1280 ns, period=130 cyc -> 384.615 kHz)
+    lows, highs = await run_i2c_mb([0xA0, 0x55], [True, True], run_param=62, expected_steady_period=130)
+    assert min(lows) >= 65 and min(highs) >= 64
+    ev0 = await send_cmd(dut, UART_OP_POP_EVENT, req_id=170)
+    ev1 = await send_cmd(dut, UART_OP_POP_EVENT, req_id=171)
+    assert ev0[3] == 2 and ev0[4] == 0xA0 and ev1[3] == 1 and ev1[4] == 0xA1
+
+    # NACK on byte 1 after ACK on byte 0 -> events [0xA0, 0xF1]
+    await run_i2c_mb([0xA0, 0x55], [True, False], run_param=62, expected_steady_period=130)
+    ev0 = await send_cmd(dut, UART_OP_POP_EVENT, req_id=172)
+    ev1 = await send_cmd(dut, UART_OP_POP_EVENT, req_id=173)
+    assert ev0[4] == 0xA0 and ev1[4] == 0xF1
+
+    # Standard-mode 100 kHz using the SAME loaded 45-word program (run_param=248 -> period=502 cyc -> 99.602 kHz)
+    lows100, highs100 = await run_i2c_mb([0xA0, 0x55], [True, True], run_param=248, expected_steady_period=502)
+    assert min(lows100) >= 252 and min(highs100) >= 250
+    ev0 = await send_cmd(dut, UART_OP_POP_EVENT, req_id=174)
+    ev1 = await send_cmd(dut, UART_OP_POP_EVENT, req_id=175)
+    assert ev0[4] == 0xA0 and ev1[4] == 0xA1
+
+    # NACK on byte 0 at 100 kHz -> aborts cleanly with STOP and [0xF0]
+    await run_i2c_mb([0xA0], [False], run_param=248, expected_steady_period=502)
+    ev0 = await send_cmd(dut, UART_OP_POP_EVENT, req_id=176)
+    assert ev0[3] == 1 and ev0[4] == 0xF0
+
+    # OP_PATCH_WORD updates byte 1 in 1 UART command from 0x55 to 0x3C
+    patch_od = insn("LD_TX_OD", 0x3C)
+    assert (
+        await send_cmd(
+            dut,
+            UART_OP_PATCH_WORD,
+            req_id=177,
+            arg0=ld_addrs2[1],
+            arg1=patch_od & 0xFF,
+            arg2=(patch_od >> 8) & 0xFF,
+        )
+    )[2] == 0
+    await run_i2c_mb([0xA0, 0x3C], [True, True], run_param=62, expected_steady_period=130)
+    ev0 = await send_cmd(dut, UART_OP_POP_EVENT, req_id=178)
+    ev1 = await send_cmd(dut, UART_OP_POP_EVENT, req_id=179)
+    assert ev0[4] == 0xA0 and ev1[4] == 0xA1
+
 

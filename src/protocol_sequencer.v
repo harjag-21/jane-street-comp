@@ -79,6 +79,7 @@ module protocol_sequencer #(
   reg [7:0]  loop_cnt0, loop_cnt1;
   reg [7:0]  tx_reg;
   reg        tx_lsb_first;
+  reg        tx_od;
 
   reg [7:0]  ev_tag [0:EVENT_DEPTH-1];
   reg [15:0] ev_ts  [0:EVENT_DEPTH-1];
@@ -109,10 +110,15 @@ module protocol_sequencer #(
   wire        tx_samp_bit   = uio_in[tx_rx_sel];
   wire [7:0]  tx_pin_mask   = (8'h01 << tx_pin_sel);
   wire [7:0]  tx_clk_mask   = (8'h01 << tx_clk_sel);
-  wire [7:0]  tx_out_step1  = tx_cur_bit ? (uio_out_o | tx_pin_mask) : (uio_out_o & ~tx_pin_mask);
-  wire [7:0]  tx_out_next   = (tx_clk_sel != tx_pin_sel)
-                            ? (tx_clk_val ? (tx_out_step1 | tx_clk_mask) : (tx_out_step1 & ~tx_clk_mask))
-                            : tx_out_step1;
+  wire [7:0]  tx_out_step1   = tx_cur_bit ? (uio_out_o | tx_pin_mask) : (uio_out_o & ~tx_pin_mask);
+  wire [7:0]  tx_out_next    = (tx_clk_sel != tx_pin_sel)
+                             ? (tx_clk_val ? (tx_out_step1 | tx_clk_mask) : (tx_out_step1 & ~tx_clk_mask))
+                             : tx_out_step1;
+  wire [7:0]  tx_od_clr_mask = tx_pin_mask | ((tx_clk_sel != tx_pin_sel) ? tx_clk_mask : 8'h00);
+  wire [7:0]  tx_oe_step1    = (!tx_cur_bit) ? (uio_oe_o | tx_pin_mask) : (uio_oe_o & ~tx_pin_mask);
+  wire [7:0]  tx_oe_next     = (tx_clk_sel != tx_pin_sel)
+                             ? ((!tx_clk_val) ? (tx_oe_step1 | tx_clk_mask) : (tx_oe_step1 & ~tx_clk_mask))
+                             : tx_oe_step1;
 
   wire [EVENT_PTR_W:0] ev_depth_max = EVENT_DEPTH[EVENT_PTR_W:0];
   wire                 do_pop       = event_pop && (ev_count != 0);
@@ -149,6 +155,7 @@ module protocol_sequencer #(
       loop_cnt1        <= 8'd0;
       tx_reg           <= 8'h00;
       tx_lsb_first     <= 1'b0;
+      tx_od            <= 1'b0;
       ev_wptr          <= {EVENT_PTR_W{1'b0}};
       ev_rptr          <= {EVENT_PTR_W{1'b0}};
       ev_count         <= {(EVENT_PTR_W+1){1'b0}};
@@ -204,6 +211,7 @@ module protocol_sequencer #(
           loop_cnt1        <= 8'd0;
           tx_reg           <= 8'h00;
           tx_lsb_first     <= 1'b0;
+          tx_od            <= 1'b0;
           ev_wptr          <= {EVENT_PTR_W{1'b0}};
           ev_rptr          <= {EVENT_PTR_W{1'b0}};
           ev_count         <= {(EVENT_PTR_W+1){1'b0}};
@@ -324,16 +332,22 @@ module protocol_sequencer #(
             end
             OP_TX: begin
               if (!imm[11]) begin
-                if (imm[10:9] == 2'b00) begin
+                if (!imm[10]) begin
                   tx_reg       <= imm[7:0];
                   tx_lsb_first <= imm[8];
+                  tx_od        <= imm[9];
                   pc_o         <= pc_o + {{(ADDR_W-1){1'b0}}, 1'b1};
                 end else begin
                   eng_state_o <= ENG_FAULT;
                   uio_oe_o    <= 8'h00;
                 end
               end else begin
-                uio_out_o <= tx_out_next;
+                if (tx_od) begin
+                  uio_out_o <= uio_out_o & ~tx_od_clr_mask;
+                  uio_oe_o  <= tx_oe_next;
+                end else begin
+                  uio_out_o <= tx_out_next;
+                end
                 if (tx_do_shift) begin
                   tx_reg <= tx_lsb_first ? {1'b0, tx_reg[7:1]} : {tx_reg[6:0], 1'b0};
                   if (tx_rx_sel != tx_pin_sel) begin

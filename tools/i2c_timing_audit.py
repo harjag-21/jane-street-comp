@@ -23,6 +23,7 @@ from tools.protocol_asm import (  # noqa: E402
     UART_OP_START,
     UART_OP_WRITE_WORD,
     build_i2c_write_byte_program,
+    build_i2c_write_multibyte_program,
     make_uart_request,
     program_checksums,
 )
@@ -64,6 +65,7 @@ module tb_i2c_audit;
   wire [7:0] uio_oe;
   reg        target_sda_low = 1'b0;
   reg        do_ack = 1'b1;
+  integer    exp_bytes = 1;
 
   // Exact 50 MHz core clock (period = 20 ns matching info.yaml clock_hz=50000000)
   always #10 clk = ~clk;
@@ -157,6 +159,7 @@ module tb_i2c_audit;
         $finish;
       end
       if (!$value$plusargs("ACK=%d", ack_v)) ack_v = 1;
+      if (!$value$plusargs("BYTES=%d", exp_bytes)) exp_bytes = 1;
       do_ack = ack_v[0];
       fd = $fopen(cmd_path, "r");
       if (fd == 0) begin
@@ -176,25 +179,30 @@ module tb_i2c_audit;
     end
   end
 
-  // Behavioral open-drain ACK responder aligned to I2C START
+  // Behavioral open-drain ACK responder aligned to I2C START (supports 1..2 bytes)
   always @(negedge sda_bus) begin : ack_blk
-    integer b;
-    reg [7:0] rx_byte;
+    integer b, by;
+    reg [7:0] rx_byte, rx_byte1;
     if (monitoring && scl_bus === 1'b1) begin
       rx_byte = 8'h00;
+      rx_byte1 = 8'h00;
       while (scl_bus === 1'b1) @(posedge clk);
-      for (b = 0; b < 8; b = b + 1) begin
+      for (by = 0; by < exp_bytes; by = by + 1) begin
+        for (b = 0; b < 8; b = b + 1) begin
+          while (scl_bus === 1'b0) @(posedge clk);
+          if (by == 0) rx_byte = {rx_byte[6:0], sda_bus};
+          else         rx_byte1 = {rx_byte1[6:0], sda_bus};
+          while (scl_bus === 1'b1) @(posedge clk);
+        end
+        if (do_ack) target_sda_low = 1'b1;
         while (scl_bus === 1'b0) @(posedge clk);
-        rx_byte = {rx_byte[6:0], sda_bus};
         while (scl_bus === 1'b1) @(posedge clk);
+        target_sda_low = 1'b0;
+        if (!do_ack) by = exp_bytes;
       end
-      if (do_ack) target_sda_low = 1'b1;
-      while (scl_bus === 1'b0) @(posedge clk);
-      while (scl_bus === 1'b1) @(posedge clk);
-      target_sda_low = 1'b0;
       while (uo_out[4:3] != 2'd2 && uo_out[4:3] != 2'd3) @(posedge clk);
       repeat (4) @(posedge clk);
-      $display("DONE %0t state=%0d od_fault=%0d rx=%02x", $time, uo_out[4:3], od_fault, rx_byte);
+      $display("DONE %0t state=%0d od_fault=%0d rx=%02x rx1=%02x", $time, uo_out[4:3], od_fault, rx_byte, rx_byte1);
       $finish;
     end
   end
@@ -226,22 +234,31 @@ def _compile_audit_vvp(build_dir: Path) -> Path:
     return vvp_path
 
 
-def _run_i2c_rtl_trace(vvp_path: Path, build_dir: Path, words: Sequence[int], do_ack: int) -> List[str]:
+def _run_i2c_rtl_trace(
+    vvp_path: Path,
+    build_dir: Path,
+    words: Sequence[int],
+    do_ack: int,
+    *,
+    run_param: int = 0,
+    exp_bytes: int = 1,
+    tag_name: str = "run",
+) -> List[str]:
     crc, sum8 = program_checksums(words)
     frames: List[List[int]] = [make_uart_request(UART_OP_BEGIN_LOAD, 1, len(words), crc, sum8)]
     for idx, w in enumerate(words):
         frames.append(make_uart_request(UART_OP_WRITE_WORD, 2 + idx, idx, w & 0xFF, (w >> 8) & 0xFF))
     frames.append(make_uart_request(UART_OP_COMMIT_LOAD, 99))
-    frames.append(make_uart_request(UART_OP_START, 100, 0))
+    frames.append(make_uart_request(UART_OP_START, 100, run_param & 0xFF, (run_param >> 8) & 0xF))
 
-    cmd_path = build_dir / f"cmds_ack{do_ack}.hex"
+    cmd_path = build_dir / f"cmds_{tag_name}_ack{do_ack}.hex"
     cmd_path.write_text("\n".join(" ".join(f"{b:02x}" for b in fr) for fr in frames) + "\n", encoding="utf-8")
     vvp = shutil.which("vvp") or "/usr/bin/vvp"
     res = subprocess.run(
-        [vvp, str(vvp_path), f"+CMDS={cmd_path}", f"+ACK={do_ack}"],
+        [vvp, str(vvp_path), f"+CMDS={cmd_path}", f"+ACK={do_ack}", f"+BYTES={exp_bytes}"],
         capture_output=True,
         text=True,
-        timeout=20,
+        timeout=30,
         check=False,
     )
     if res.returncode != 0:
@@ -254,13 +271,15 @@ def analyze_i2c_trace(
     *,
     mode_name: str,
     spec_profile: str,
+    expected_rx_bytes: Sequence[int] = (0xA0,),
 ) -> Dict[str, Any]:
-    """Analyze pulse-by-pulse START, bit 0..7, ACK/NACK, STOP intervals in nanoseconds (1ns/1ps -> ps/1000)."""
+    """Analyze pulse-by-pulse START, bytes (8 bits + ACK/NACK each), STOP intervals in ns."""
     edges: List[Dict[str, int]] = []
     start_ns: Optional[int] = None
     trial_start_ns: Optional[int] = None
     done_state: Optional[int] = None
     rx_byte: Optional[int] = None
+    rx_byte1: Optional[int] = None
     od_fault = 0
     for line in lines:
         parts = line.strip().split()
@@ -284,13 +303,17 @@ def analyze_i2c_trace(
             done_state = int(parts[2].split("=")[1])
             od_fault |= int(parts[3].split("=")[1])
             rx_byte = int(parts[4].split("=")[1], 16)
+            if len(parts) > 5 and parts[5].startswith("rx1="):
+                rx_byte1 = int(parts[5].split("=")[1], 16)
 
     if od_fault:
         raise AssertionError("Open-drain violation detected")
     if done_state != 2:
         raise AssertionError(f"Expected ENG_HALTED (2), got {done_state}; tail={list(lines)[-15:]}")
-    if rx_byte != 0xA0:
-        raise AssertionError(f"Expected I2C rx_byte=0xA0, got {rx_byte}")
+    if rx_byte != expected_rx_bytes[0]:
+        raise AssertionError(f"Expected I2C rx_byte=0x{expected_rx_bytes[0]:02x}, got {rx_byte}")
+    if len(expected_rx_bytes) > 1 and rx_byte1 != expected_rx_bytes[1]:
+        raise AssertionError(f"Expected I2C rx_byte1=0x{expected_rx_bytes[1]:02x}, got {rx_byte1}")
 
     # Find START (scl=1, sda: 1->0) and STOP (scl=1, sda: 0->1)
     start_evt: Optional[int] = None
@@ -311,19 +334,20 @@ def analyze_i2c_trace(
     # trial_start_ns is logged on the posedge after ENG_RUN asserts (1 cycle = 20 ns into pre-START idle hold)
     t_buf_pre_ns = (t_start_ns - trial_start_ns) + 20
 
-    # Trace exact alternating sequence:
-    # START -> scl_fall[0] .. scl_fall[8] (ACK) -> scl_fall[9] (STOP prep low) -> scl_rise[9] (STOP SCL high) -> STOP
+    # N bytes -> 9*N data/ACK pulses + 1 STOP prep SCL rise/fall pair = 9*N + 1 falls/rises
+    n_bytes = len(expected_rx_bytes)
+    n_pulses = 9 * n_bytes
     scl_falls_all = [e["t_ns"] for idx, e in enumerate(edges) if idx > start_evt and idx < stop_evt and edges[idx - 1]["scl"] == 1 and e["scl"] == 0]
     scl_rises = [e["t_ns"] for idx, e in enumerate(edges) if idx > start_evt and idx < stop_evt and edges[idx - 1]["scl"] == 0 and e["scl"] == 1]
-    assert len(scl_falls_all) == 10, f"Expected 10 SCL falls, got {len(scl_falls_all)}"
-    assert len(scl_rises) == 10, f"Expected 10 SCL rises, got {len(scl_rises)}"
+    assert len(scl_falls_all) == n_pulses + 1, f"Expected {n_pulses + 1} SCL falls, got {len(scl_falls_all)}"
+    assert len(scl_rises) == n_pulses + 1, f"Expected {n_pulses + 1} SCL rises, got {len(scl_rises)}"
 
     t_hd_sta_ns = scl_falls_all[0] - t_start_ns
-    t_su_sto_ns = t_stop_ns - scl_rises[9]
+    t_su_sto_ns = t_stop_ns - scl_rises[n_pulses]
     sda_changes = [e["t_ns"] for idx, e in enumerate(edges) if idx > 0 and e["sda"] != edges[idx - 1]["sda"]]
 
     pulses = []
-    for k in range(9):
+    for k in range(n_pulses):
         t_low_start = scl_falls_all[k]
         t_rise = scl_rises[k]
         t_low_end_next = scl_falls_all[k + 1]
@@ -335,10 +359,12 @@ def analyze_i2c_trace(
         later_sda = [t for t in sda_changes if t >= t_low_end_next]
         t_su_dat_ns = t_rise - (prior_sda[-1] if prior_sda else t_start_ns)
         t_hd_dat_ns = (later_sda[0] if later_sda else t_stop_ns) - t_low_end_next
+        bit_in_byte = k % 9
+        role_prefix = f"b{k // 9}." if n_bytes > 1 else ""
         pulses.append(
             {
                 "pulse_idx": k,
-                "role": "ACK/NACK" if k == 8 else f"bit_{7 - k}",
+                "role": f"{role_prefix}ACK/NACK" if bit_in_byte == 8 else f"{role_prefix}bit_{7 - bit_in_byte}",
                 "t_low_ns": low_ns,
                 "t_high_ns": high_ns,
                 "period_ns": period_ns,
@@ -348,7 +374,7 @@ def analyze_i2c_trace(
             }
         )
 
-    stop_prep_low_ns = scl_rises[9] - scl_falls_all[9]
+    stop_prep_low_ns = scl_rises[n_pulses] - scl_falls_all[n_pulses]
     limits = I2C_LIMITS_NS[spec_profile]
     violations: List[str] = []
     if t_buf_pre_ns < limits["min_buf_ns"]:
@@ -370,13 +396,14 @@ def analyze_i2c_trace(
             violations.append(f"{p['role']} t_HD;DAT {p['t_hd_dat_ns']}ns < {limits['min_hd_dat_ns']}ns")
 
     steady = pulses[1:]
+    rx_str = ",".join(f"0x{b:02x}" for b in expected_rx_bytes)
     return {
         "mode_name": mode_name,
         "spec_profile": spec_profile,
         "compliant": len(violations) == 0,
         "violations": violations,
         "od_fault": od_fault,
-        "rx_byte": f"0x{rx_byte:02x}",
+        "rx_byte": rx_str,
         "t_buf_ns": t_buf_pre_ns,
         "t_hd_sta_ns": t_hd_sta_ns,
         "stop_prep_low_ns": stop_prep_low_ns,
@@ -393,21 +420,38 @@ def analyze_i2c_trace(
 
 def run_i2c_audit() -> Dict[str, Any]:
     configs = [
-        ("i2c-400k-nominal", 62, "fast_400k", 1),
-        ("i2c-400k-nominal-nack", 62, "fast_400k", 0),
-        ("i2c-fast-compliant", 64, "fast_400k", 1),
-        ("i2c-fast-compliant-nack", 64, "fast_400k", 0),
-        ("i2c-100k", 250, "standard_100k", 1),
-        ("i2c-100k-nack", 250, "standard_100k", 0),
+        ("i2c-400k-nominal", 62, 0, "fast_400k", 1, False),
+        ("i2c-400k-nominal-nack", 62, 0, "fast_400k", 0, False),
+        ("i2c-fast-compliant", 64, 0, "fast_400k", 1, False),
+        ("i2c-fast-compliant-nack", 64, 0, "fast_400k", 0, False),
+        ("i2c-100k", 250, 0, "standard_100k", 1, False),
+        ("i2c-100k-nack", 250, 0, "standard_100k", 0, False),
+        ("i2c-2byte-od-fast", 64, 62, "fast_400k", 1, True),
+        ("i2c-2byte-od-fast-nack", 64, 62, "fast_400k", 0, True),
+        ("i2c-2byte-od-100k", 250, 248, "standard_100k", 1, True),
+        ("i2c-2byte-od-100k-nack", 250, 248, "standard_100k", 0, True),
     ]
     results: List[Dict[str, Any]] = []
     with tempfile.TemporaryDirectory(prefix="i2c_audit_") as tmp:
         build_dir = Path(tmp)
         vvp_path = _compile_audit_vvp(build_dir)
-        for name, half_cycles, profile, ack in configs:
-            words = build_i2c_write_byte_program(0xA0, half_cycles=half_cycles, ack_tag=0xAC, nack_tag=0xDE)
-            lines = _run_i2c_rtl_trace(vvp_path, build_dir, words, ack)
-            rec = analyze_i2c_trace(lines, mode_name=name, spec_profile=profile)
+        for name, half_cycles, run_param, profile, ack, is_mb in configs:
+            if is_mb:
+                words, _ = build_i2c_write_multibyte_program([0xA0, 0x55], half_cycles=None)
+                exp_bytes = (0xA0, 0x55) if ack else (0xA0,)
+            else:
+                words = build_i2c_write_byte_program(0xA0, half_cycles=half_cycles, ack_tag=0xAC, nack_tag=0xDE)
+                exp_bytes = (0xA0,)
+            lines = _run_i2c_rtl_trace(
+                vvp_path,
+                build_dir,
+                words,
+                ack,
+                run_param=run_param,
+                exp_bytes=2 if is_mb else 1,
+                tag_name=name,
+            )
+            rec = analyze_i2c_trace(lines, mode_name=name, spec_profile=profile, expected_rx_bytes=exp_bytes)
             rec["half_cycles"] = half_cycles
             rec["ack"] = ack
             rec["program_words"] = len(words)
@@ -465,6 +509,10 @@ def main() -> int:
     assert by_name["i2c-fast-compliant-nack"]["compliant"]
     assert by_name["i2c-100k"]["compliant"]
     assert by_name["i2c-100k-nack"]["compliant"]
+    assert by_name["i2c-2byte-od-fast"]["compliant"]
+    assert by_name["i2c-2byte-od-fast-nack"]["compliant"]
+    assert by_name["i2c-2byte-od-100k"]["compliant"]
+    assert by_name["i2c-2byte-od-100k-nack"]["compliant"]
     return 0
 
 

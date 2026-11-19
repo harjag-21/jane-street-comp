@@ -26,6 +26,7 @@ OPCODES: Dict[str, int] = {
     "WAIT_EDGE": 0xD,
     "TX": 0xE,
     "LD_TX": 0xE,
+    "LD_TX_OD": 0xE,
     "SHIFT_TX": 0xE,
 }
 
@@ -87,9 +88,12 @@ def make_uart_request(
 
 
 def insn(op: str, imm: int) -> int:
-    code = OPCODES[op.upper()]
+    name = op.upper()
+    code = OPCODES[name]
     if not (0 <= imm <= 0xFFF):
         raise ValueError(f"12-bit immediate out of range for {op}: {imm}")
+    if name == "LD_TX_OD" and (imm & 0xC00) == 0:
+        imm = imm | (1 << 9)
     return ((code & 0xF) << 12) | (imm & 0xFFF)
 
 
@@ -177,10 +181,11 @@ def assemble(lines: Iterable[str]) -> List[int]:
         elif mnem == "HALT":
             keep_oe = (_parse_int(args[0], labels) & 0x1) if args else 0
             words.append(insn("HALT", keep_oe))
-        elif mnem == "LD_TX":
+        elif mnem in ("LD_TX", "LD_TX_OD"):
             val = _parse_int(args[0], labels) & 0xFF
             lsb_first = (_parse_int(args[1], labels) & 0x1) if len(args) > 1 else 0
-            words.append(insn("TX", (lsb_first << 8) | val))
+            od_bit = 1 if mnem == "LD_TX_OD" else 0
+            words.append(insn("TX", (od_bit << 9) | (lsb_first << 8) | val))
         elif mnem == "SHIFT_TX":
             tx_pin = _parse_int(args[0], labels) & 0x7
             rx_pin = (_parse_int(args[1], labels) & 0x7) if len(args) > 1 else tx_pin
@@ -445,6 +450,75 @@ def build_i2c_write_byte_program(
     return assemble(lines)
 
 
+def build_i2c_write_multibyte_program(
+    bytes_seq: Sequence[int],
+    half_cycles: Optional[int] = None,
+    scl_pin: int = 0,
+    sda_pin: int = 1,
+    ack_tag_base: int = 0xA0,
+    nack_tag_base: int = 0xF0,
+) -> Tuple[List[int], List[int]]:
+    """Build an open-drain multi-byte I2C START + N-byte write (with per-byte ACK/NACK branch) + STOP program.
+
+    Uses `LD_TX_OD` + `SHIFT_TX` loops (`30` words for 1 byte, `49` words for 2 bytes vs `62` words for 1 unrolled byte).
+    When `half_cycles` is `None`, emits `WAIT_PARAM 0` so `run_param` tunes bit rate at runtime (`62` -> compliant Fast-mode
+    `384.615 kHz` @ `50 MHz`, `248` -> Standard-mode `99.602 kHz`); otherwise uses fixed `WAIT (half_cycles - 2)`.
+    Returns `(words, ld_tx_addrs)`.
+    """
+    if not bytes_seq:
+        raise ValueError("bytes_seq must be non-empty")
+    if half_cycles is not None and half_cycles < 2:
+        raise ValueError("half_cycles must be >= 2")
+    scl_oe = 1 << scl_pin
+    sda_oe = 1 << sda_pin
+    both_oe = scl_oe | sda_oe
+    wait_insn = "WAIT_PARAM 0" if half_cycles is None else f"WAIT {half_cycles - 2}"
+
+    lines: List[str] = [
+        "OUT 0x00",
+        "OE  0x00",
+        wait_insn,
+        f"OE  0x{sda_oe:02x}",   # START: SDA low while SCL high
+        wait_insn,
+        f"OE  0x{both_oe:02x}",  # SCL low
+        wait_insn,
+    ]
+    ld_tx_addrs: List[int] = []
+    for idx, b in enumerate(bytes_seq):
+        ld_tx_addrs.append(7 + idx * 19)
+        lines += [
+            f"LD_TX_OD 0x{b & 0xFF:02x}, 0",
+            "SETCOUNT 0, 8",
+            f"i2c_mb_loop_{idx}:",
+            f"SHIFT_TX {sda_pin}, {sda_pin}, {scl_pin}, 0, 0",
+            wait_insn,
+            f"SHIFT_TX {sda_pin}, {sda_pin}, {scl_pin}, 1, 0",
+            wait_insn,
+            f"SHIFT_TX {sda_pin}, {sda_pin}, {scl_pin}, 0, 1",
+            f"LOOP 0, i2c_mb_loop_{idx}",
+            f"OE 0x{scl_oe:02x}",      # 9th clock: release SDA
+            wait_insn,
+            "OE 0x00",                 # release SCL high
+            wait_insn,
+            f"SAMPLE {sda_pin}, 1",    # sample ACK(0)/NACK(1)
+            f"OE 0x{both_oe:02x}",     # SCL=0, SDA=0
+            wait_insn,
+            f"JZ i2c_mb_ack_{idx}",
+            f"MARK 0x{(nack_tag_base + idx) & 0xFF:02x}, 0",
+            "JMP i2c_mb_stop",
+            f"i2c_mb_ack_{idx}:",
+            f"MARK 0x{(ack_tag_base + idx) & 0xFF:02x}, 0",
+        ]
+    lines += [
+        "i2c_mb_stop:",
+        f"OE 0x{sda_oe:02x}",          # STOP: release SCL high while SDA low
+        wait_insn,
+        "OE 0x00",                     # release SDA high
+        "HALT 0",
+    ]
+    return assemble(lines), ld_tx_addrs
+
+
 def build_i2c_stretch_probe_program(
     scl_pin: int = 0,
     sda_pin: int = 1,
@@ -690,7 +764,7 @@ def predict_straight_line_cycles(words: Sequence[int], run_param: int) -> Dict[s
         imm = w & 0xFFF
         if op in (0x5, 0x6, 0x7, 0xD):
             raise ValueError(f"Dynamic branch/edge op 0x{op:x} at PC {pc} requires dynamic trace")
-        if op == 0xF or (op == 0xE and ((imm >> 11) & 1) == 0 and ((imm >> 9) & 0x3) != 0):
+        if op == 0xF or (op == 0xE and ((imm >> 11) & 1) == 0 and ((imm >> 10) & 1) == 1):
             raise ValueError(f"Illegal opcode 0x{w:04x} at PC {pc}")
         if op == 0x9:  # MARK records pre-increment cycle_cnt_o
             marks.append(cycles)
@@ -786,9 +860,9 @@ def analyze_timing_bounds(
                     ((next_pc, lc0, lc1, 0), 1 + lim, 1 + lim),
                 ],
             )
-        if op == 0xE:  # OP_TX: LD_TX (imm[11]==0, imm[10:9]==0) or SHIFT_TX (imm[11]==1)
+        if op == 0xE:  # OP_TX: LD_TX / LD_TX_OD (imm[11]==0, imm[10]==0) or SHIFT_TX (imm[11]==1)
             if ((imm >> 11) & 1) == 0:
-                if ((imm >> 9) & 0x3) == 0:
+                if ((imm >> 10) & 1) == 0:
                     return ("step", [((next_pc, lc0, lc1, last_s), 1, 1)])
                 return ("fault", [(None, 1, 1)])
             do_shift = (imm >> 10) & 1
@@ -1023,9 +1097,9 @@ def predict_dynamic_contract(
                 cycles += 1 + int(wait_spec)
                 last_sample = 1
             pc = next_pc
-        elif op == 0xE:  # OP_TX (LD_TX / SHIFT_TX)
+        elif op == 0xE:  # OP_TX (LD_TX / LD_TX_OD / SHIFT_TX)
             if ((imm >> 11) & 1) == 0:
-                if ((imm >> 9) & 0x3) != 0:
+                if ((imm >> 10) & 1) != 0:
                     cycles += 1
                     final_state = "ENG_FAULT"
                     break
@@ -1162,6 +1236,7 @@ if __name__ == "__main__":
             "spi_mode2",
             "spi_mode3",
             "i2c",
+            "i2c_multibyte",
             "i2c_100k",
             "i2c_400k_nominal",
             "i2c_fast_compliant",
@@ -1188,6 +1263,8 @@ if __name__ == "__main__":
         prog = build_spi_program(0x55, mode=3)
     elif args.example == "i2c":
         prog = build_i2c_write_byte_program(0xA0)
+    elif args.example == "i2c_multibyte":
+        prog, _ = build_i2c_write_multibyte_program([0xA0, 0x55], half_cycles=None)
     elif args.example == "i2c_100k":
         prog = build_i2c_write_byte_program(0xA0, half_cycles=250)
     elif args.example == "i2c_400k_nominal":

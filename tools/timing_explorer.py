@@ -39,6 +39,7 @@ from tools.protocol_asm import (  # noqa: E402
     assemble,
     build_i2c_stretch_probe_program,
     build_i2c_write_byte_program,
+    build_i2c_write_multibyte_program,
     build_jtag_idcode_program,
     build_spi_mode0_program,
     build_spi_multibyte_program,
@@ -1145,6 +1146,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "spi-mode3",
             "spi-responder",
             "i2c",
+            "i2c-multibyte",
             "i2c-100k",
             "i2c-400k-nominal",
             "i2c-fast-compliant",
@@ -1260,6 +1262,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 if args.sim:
                     transport.configure_target(2, i2c_ack=args.i2c_ack)
                 words = build_i2c_write_byte_program(0xA0, half_cycles=4)
+            elif args.example == "i2c-multibyte":
+                if args.sim:
+                    transport.configure_target(2, i2c_ack=args.i2c_ack)
+                words, _ = build_i2c_write_multibyte_program([0xA0, 0x55], half_cycles=None)
+                if param <= 2:
+                    param = 62
             elif args.example == "i2c-100k":
                 if args.sim:
                     transport.configure_target(2, i2c_ack=args.i2c_ack)

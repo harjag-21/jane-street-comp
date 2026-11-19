@@ -586,14 +586,122 @@ module tb_v1_sequencer;
       #1;
       check(rx0 == 8'hA3 && rx1 == 8'h5C, "UART 2-byte LD_TX/SHIFT_TX MSB-first emitted 0xA3, 0x5C");
 
-      // 2) Reserved OP_TX sub-opcode (0xE200..0xE7FF) must fault and drop uio_oe to 0x00
+      // 2) Reserved OP_TX sub-opcode (0xE400..0xE7FF) must fault and drop uio_oe to 0x00
       clear_imem;
       load_word(6'd0, insn(OP_OE, 12'h0FF));
-      load_word(6'd1, insn(OP_TX, 12'h200)); // reserved imm[11]=0, imm[10:9]=2'b01
+      load_word(6'd1, insn(OP_TX, 12'h400)); // reserved imm[11]=0, imm[10]=1
       prog_valid = 1;
       start_and_wait(12'd0);
-      check(eng_state == 2'd3, "Reserved 0xE200 enters ENG_FAULT");
-      check(uio_oe == 8'h00, "Reserved 0xE200 drops uio_oe to 0x00");
+      check(eng_state == 2'd3, "Reserved 0xE400 enters ENG_FAULT");
+      check(uio_oe == 8'h00, "Reserved 0xE400 drops uio_oe to 0x00");
+
+      // 3) Open-drain LD_TX_OD + SHIFT_TX 2-byte I2C write [0xA0, 0x55] (45 words <= 64) with ACK & NACK
+      clear_imem;
+      a = 0;
+      load_word(a[5:0], insn(OP_OUT, 12'h000));        a = a + 1; // 0
+      load_word(a[5:0], insn(OP_OE,  12'h000));        a = a + 1; // 1
+      load_word(a[5:0], insn(OP_WAIT_PARAM, 12'd0));   a = a + 1; // 2
+      load_word(a[5:0], insn(OP_OE,  12'h002));        a = a + 1; // 3: START
+      load_word(a[5:0], insn(OP_WAIT_PARAM, 12'd0));   a = a + 1; // 4
+      load_word(a[5:0], insn(OP_OE,  12'h003));        a = a + 1; // 5: SCL=0, SDA=0
+      load_word(a[5:0], insn(OP_WAIT_PARAM, 12'd0));   a = a + 1; // 6
+      // Byte 0: 0xA0, MSB-first, open-drain (LD_TX_OD -> 0xE2A0)
+      load_word(a[5:0], insn(OP_TX,  12'h2A0));        a = a + 1; // 7
+      load_word(a[5:0], insn(OP_SETCOUNT, 12'd8));     a = a + 1; // 8
+      load_word(a[5:0], insn(OP_TX,  12'h809));        a = a + 1; // 9: SHIFT_TX tx=1,rx=1,clk=0,val=0,shift=0
+      load_word(a[5:0], insn(OP_WAIT_PARAM, 12'd0));   a = a + 1; // 10
+      load_word(a[5:0], insn(OP_TX,  12'hA09));        a = a + 1; // 11: SHIFT_TX clk=1,shift=0
+      load_word(a[5:0], insn(OP_WAIT_PARAM, 12'd0));   a = a + 1; // 12
+      load_word(a[5:0], insn(OP_TX,  12'hC09));        a = a + 1; // 13: SHIFT_TX clk=0,shift=1
+      load_word(a[5:0], insn(OP_LOOP, 12'd9));         a = a + 1; // 14
+      load_word(a[5:0], insn(OP_OE,  12'h001));        a = a + 1; // 15: ACK prep
+      load_word(a[5:0], insn(OP_WAIT_PARAM, 12'd0));   a = a + 1; // 16
+      load_word(a[5:0], insn(OP_OE,  12'h000));        a = a + 1; // 17: SCL=1
+      load_word(a[5:0], insn(OP_WAIT_PARAM, 12'd0));   a = a + 1; // 18
+      load_word(a[5:0], insn(OP_SAMPLE, 12'h801));     a = a + 1; // 19: sample SDA no_shift
+      load_word(a[5:0], insn(OP_OE,  12'h003));        a = a + 1; // 20
+      load_word(a[5:0], insn(OP_WAIT_PARAM, 12'd0));   a = a + 1; // 21
+      load_word(a[5:0], insn(OP_JZ,  12'd25));         a = a + 1; // 22: ACK -> 25
+      load_word(a[5:0], insn(OP_MARK, 12'h0F0));       a = a + 1; // 23: NACK0
+      load_word(a[5:0], insn(OP_JMP, 12'd41));         a = a + 1; // 24 -> STOP
+      load_word(a[5:0], insn(OP_MARK, 12'h0A0));       a = a + 1; // 25: ACK0
+      // Byte 1: 0x55, MSB-first, open-drain (LD_TX_OD -> 0xE255)
+      load_word(a[5:0], insn(OP_TX,  12'h255));        a = a + 1; // 26
+      load_word(a[5:0], insn(OP_SETCOUNT, 12'd8));     a = a + 1; // 27
+      load_word(a[5:0], insn(OP_TX,  12'h809));        a = a + 1; // 28
+      load_word(a[5:0], insn(OP_WAIT_PARAM, 12'd0));   a = a + 1; // 29
+      load_word(a[5:0], insn(OP_TX,  12'hA09));        a = a + 1; // 30
+      load_word(a[5:0], insn(OP_WAIT_PARAM, 12'd0));   a = a + 1; // 31
+      load_word(a[5:0], insn(OP_TX,  12'hC09));        a = a + 1; // 32
+      load_word(a[5:0], insn(OP_LOOP, 12'd28));        a = a + 1; // 33
+      load_word(a[5:0], insn(OP_OE,  12'h001));        a = a + 1; // 34
+      load_word(a[5:0], insn(OP_WAIT_PARAM, 12'd0));   a = a + 1; // 35
+      load_word(a[5:0], insn(OP_OE,  12'h000));        a = a + 1; // 36
+      load_word(a[5:0], insn(OP_WAIT_PARAM, 12'd0));   a = a + 1; // 37
+      load_word(a[5:0], insn(OP_SAMPLE, 12'h801));     a = a + 1; // 38
+      load_word(a[5:0], insn(OP_OE,  12'h003));        a = a + 1; // 39
+      load_word(a[5:0], insn(OP_WAIT_PARAM, 12'd0));   a = a + 1; // 40 -> wait: label stop at 43!
+      // Shift STOP up cleanly: oops let's use exact JUMP target = 44 below!
+      load_word(a[5:0], insn(OP_JZ,  12'd44));         a = a + 1; // 41 -> ack1
+      load_word(a[5:0], insn(OP_MARK, 12'h0F1));       a = a + 1; // 42 -> nack1
+      load_word(a[5:0], insn(OP_JMP, 12'd45));         a = a + 1; // 43 -> stop
+      load_word(a[5:0], insn(OP_MARK, 12'h0A1));       a = a + 1; // 44 -> ack1
+      load_word(a[5:0], insn(OP_OE,  12'h002));        a = a + 1; // 45: STOP
+      load_word(a[5:0], insn(OP_WAIT_PARAM, 12'd0));   a = a + 1; // 46
+      load_word(a[5:0], insn(OP_OE,  12'h000));        a = a + 1; // 47
+      load_word(a[5:0], insn(OP_HALT, 12'h000));       a = a + 1; // 48
+      // Fix JMP target at PC 24 from 41 to 45!
+      load_word(6'd24,  insn(OP_JMP, 12'd45));
+      prog_valid = 1;
+
+      begin : i2c_mb_blk
+        reg [7:0] mb0, mb1;
+        integer od_err;
+        mb0 = 8'h00; mb1 = 8'h00; od_err = 0;
+        target_drive_en = 8'h00; target_drive_val = 8'h00;
+        fork
+          begin : i2c_mb_slave
+            // Verify open-drain every cycle until halt
+            @(negedge bus_pins[1]);
+            if (bus_pins[0] == 1'b1) begin
+              @(negedge bus_pins[0]);
+              for (b = 7; b >= 0; b = b - 1) begin
+                @(posedge bus_pins[0]);
+                mb0[b] = bus_pins[1];
+                @(negedge bus_pins[0]);
+              end
+              target_drive_en[1] = 1'b1; // ACK byte 0
+              @(posedge bus_pins[0]);
+              @(negedge bus_pins[0]);
+              target_drive_en[1] = 1'b0;
+              for (b = 7; b >= 0; b = b - 1) begin
+                @(posedge bus_pins[0]);
+                mb1[b] = bus_pins[1];
+                @(negedge bus_pins[0]);
+              end
+              target_drive_en[1] = 1'b1; // ACK byte 1
+              @(posedge bus_pins[0]);
+              @(negedge bus_pins[0]);
+              target_drive_en[1] = 1'b0;
+            end
+          end
+          begin : i2c_mb_od_mon
+            @(posedge clk);
+            while (eng_state == 2'd1 || cmd_start) begin
+              if ((uio_oe[1:0] & uio_out[1:0]) != 2'b00) od_err = od_err + 1;
+              @(posedge clk);
+            end
+          end
+          begin : i2c_mb_run
+            start_and_wait(12'd2);
+          end
+        join
+        check(od_err == 0, "LD_TX_OD never drove SCL/SDA actively high");
+        check(mb0 == 8'hA0 && mb1 == 8'h55, "LD_TX_OD 2-byte I2C emitted exact 0xA0, 0x55");
+        check(event_count == 4'd2, "LD_TX_OD 2-byte I2C pushed 2 ACK marks");
+        pop_event(t0, ts0); pop_event(t1, ts1);
+        check(t0 == 8'hA0 && t1 == 8'hA1, "LD_TX_OD 2-byte I2C tags [0xA0, 0xA1]");
+      end
     end
   endtask
 

@@ -808,22 +808,42 @@ module sim_explorer_tb;
   always @(negedge sda_bus) begin : i2c_blk
     integer b;
     reg [7:0] rx;
+    reg in_frame, init_sda;
     if ((target_mode == MODE_I2C) && (scl_bus === 1'b1)) begin
+      in_frame = 1'b1;
       while (scl_bus === 1'b1) @(posedge clk);
-      rx = 8'h00;
-      for (b = 0; b < 8; b = b + 1) begin
-        while (scl_bus === 1'b0) @(posedge clk);
-        rx = {rx[6:0], sda_bus};
-        while (scl_bus === 1'b1) @(posedge clk);
+      while (in_frame) begin
+        rx = 8'h00;
+        for (b = 0; b < 8; b = b + 1) begin
+          while (scl_bus === 1'b0 && (uo_out[4:3] != 2'd2) && (uo_out[4:3] != 2'd3)) @(posedge clk);
+          if ((uo_out[4:3] == 2'd2) || (uo_out[4:3] == 2'd3)) begin
+            in_frame = 1'b0;
+            b = 8;
+          end else begin
+            init_sda = sda_bus;
+            while ((scl_bus === 1'b1) && (sda_bus === init_sda)) @(posedge clk);
+            if (scl_bus === 1'b1) begin
+              in_frame = 1'b0;
+              b = 8;
+            end else begin
+              rx = {rx[6:0], init_sda};
+            end
+          end
+        end
+        if (in_frame) begin
+          if (i2c_do_ack) begin
+            i2c_sda_low = 1'b1;
+          end
+          while (scl_bus === 1'b0) @(posedge clk);
+          while (scl_bus === 1'b1) @(posedge clk);
+          i2c_sda_low = 1'b0;
+          i2c_rx_byte = rx;
+          i2c_seen    = 1'b1;
+          if (!i2c_do_ack) begin
+            in_frame = 1'b0;
+          end
+        end
       end
-      if (i2c_do_ack) begin
-        i2c_sda_low = 1'b1;
-      end
-      while (scl_bus === 1'b0) @(posedge clk);
-      while (scl_bus === 1'b1) @(posedge clk);
-      i2c_sda_low = 1'b0;
-      i2c_rx_byte = rx;
-      i2c_seen    = 1'b1;
     end
   end
 

@@ -188,6 +188,7 @@ class SequencerRefModel:
         self.loop_cnt1: int = 0
         self.tx_reg: int = 0
         self.tx_lsb_first: int = 0
+        self.tx_od: int = 0
         self.ev_fifo: List[Tuple[int, int]] = []
         self.event_overflow: int = 0
 
@@ -227,6 +228,7 @@ class SequencerRefModel:
         self.loop_cnt1 = 0
         self.tx_reg = 0
         self.tx_lsb_first = 0
+        self.tx_od = 0
         self.ev_fifo = []
         self.event_overflow = 0
 
@@ -360,11 +362,12 @@ class SequencerRefModel:
                 self.wait_edge_pol = pol
                 self.wait_edge_pin = pin
                 self.wait_cnt = lim
-        elif op == 0xE:  # OP_TX: LD_TX (imm[11]==0, imm[10:9]==0) or SHIFT_TX (imm[11]==1)
+        elif op == 0xE:  # OP_TX: LD_TX / LD_TX_OD (imm[11]==0, imm[10]==0) or SHIFT_TX (imm[11]==1)
             if ((imm >> 11) & 1) == 0:
-                if ((imm >> 9) & 0x3) == 0:
+                if ((imm >> 10) & 1) == 0:
                     self.tx_reg = imm & 0xFF
                     self.tx_lsb_first = (imm >> 8) & 1
+                    self.tx_od = (imm >> 9) & 1
                     self.pc = next_pc
                 else:
                     self.eng_state = ENG_FAULT
@@ -376,15 +379,28 @@ class SequencerRefModel:
                 clk_val = (imm >> 9) & 0x1
                 do_shift = (imm >> 10) & 0x1
                 tx_bit = (self.tx_reg & 1) if self.tx_lsb_first else ((self.tx_reg >> 7) & 1)
-                if tx_bit:
-                    self.uio_out |= 1 << tx_pin
-                else:
-                    self.uio_out &= ~(1 << tx_pin) & 0xFF
-                if clk_pin != tx_pin:
-                    if clk_val:
-                        self.uio_out |= 1 << clk_pin
+                if self.tx_od:
+                    clr = (1 << tx_pin) | ((1 << clk_pin) if clk_pin != tx_pin else 0)
+                    self.uio_out &= ~clr & 0xFF
+                    if tx_bit:
+                        self.uio_oe &= ~(1 << tx_pin) & 0xFF
                     else:
-                        self.uio_out &= ~(1 << clk_pin) & 0xFF
+                        self.uio_oe |= 1 << tx_pin
+                    if clk_pin != tx_pin:
+                        if clk_val:
+                            self.uio_oe &= ~(1 << clk_pin) & 0xFF
+                        else:
+                            self.uio_oe |= 1 << clk_pin
+                else:
+                    if tx_bit:
+                        self.uio_out |= 1 << tx_pin
+                    else:
+                        self.uio_out &= ~(1 << tx_pin) & 0xFF
+                    if clk_pin != tx_pin:
+                        if clk_val:
+                            self.uio_out |= 1 << clk_pin
+                        else:
+                            self.uio_out &= ~(1 << clk_pin) & 0xFF
                 if do_shift:
                     if self.tx_lsb_first:
                         self.tx_reg = (self.tx_reg >> 1) & 0xFF
@@ -418,21 +434,24 @@ def generate_test_case(seed: int) -> Tuple[List[int], int, List[Tuple[int, int]]
         ]
         run_param = 4090
     elif seed == 1:
-        # FIFO overflow (>8 marks) + MARK_SAMPLE + illegal reserved 0xE sub-opcode (0xE234) clearing uio_oe
+        # FIFO overflow (>8 marks) + MARK_SAMPLE + illegal reserved 0xE sub-opcode (0xE434) clearing uio_oe
         words = [insn("OE", 0xFF), insn("SAMPLE", 3)] + [insn("MARK", 0x30 + k) for k in range(10)] + [
             insn("MARK", 0x100),
-            (0xE << 12) | 0x234,
+            (0xE << 12) | 0x434,
         ]
         run_param = 0
     elif seed == 2:
-        # LD_TX MSB/LSB + SHIFT_TX setup/shift/sample + illegal opcode 0xF fault clearing uio_oe
+        # LD_TX + LD_TX_OD (MSB/LSB) + SHIFT_TX push-pull/open-drain + illegal opcode 0xF fault clearing uio_oe
         words = [
             insn("OE", 0x3C),
             insn("OUT", 0xC3),
             insn("TX", (0 << 8) | 0xA5),  # LD_TX 0xA5, msb_first
-            insn("TX", (1 << 11) | (0 << 10) | (0 << 9) | (1 << 6) | (2 << 3) | 2),  # SHIFT_TX setup
-            insn("TX", (1 << 11) | (1 << 10) | (1 << 9) | (1 << 6) | (3 << 3) | 2),  # SHIFT_TX sample+shift
-            insn("TX", (1 << 8) | 0x5A),  # LD_TX 0x5A, lsb_first
+            insn("TX", (1 << 11) | (0 << 10) | (0 << 9) | (1 << 6) | (2 << 3) | 2),  # SHIFT_TX setup (PP)
+            insn("TX", (1 << 11) | (1 << 10) | (1 << 9) | (1 << 6) | (3 << 3) | 2),  # SHIFT_TX sample+shift (PP)
+            insn("TX", (1 << 9) | (1 << 8) | 0x5A),  # LD_TX_OD 0x5A, lsb_first
+            insn("TX", (1 << 11) | (0 << 10) | (0 << 9) | (0 << 6) | (1 << 3) | 1),  # SHIFT_TX setup (OD)
+            insn("TX", (1 << 11) | (1 << 10) | (1 << 9) | (0 << 6) | (0 << 3) | 1),  # SHIFT_TX shift (OD)
+            insn("TX", (1 << 8) | 0x5A),  # LD_TX 0x5A, lsb_first (back to PP)
             insn("TX", (1 << 11) | (1 << 10) | (0 << 9) | (0 << 6) | (0 << 3) | 0),  # SHIFT_TX UART-style
             insn("NOP", 0),
             (0xF << 12) | 0x456,
@@ -500,7 +519,7 @@ def generate_test_case(seed: int) -> Tuple[List[int], int, List[Tuple[int, int]]
                     words.append(insn("WAIT_PARAM", rng.randint(0, 10)))
                 elif op == 0xE:
                     if rng.randint(0, 1) == 0:
-                        words.append(insn("TX", (rng.randint(0, 1) << 8) | rng.randint(0, 255)))
+                        words.append(insn("TX", (rng.randint(0, 1) << 9) | (rng.randint(0, 1) << 8) | rng.randint(0, 255)))
                     else:
                         words.append(
                             insn(
@@ -541,7 +560,7 @@ def generate_test_case(seed: int) -> Tuple[List[int], int, List[Tuple[int, int]]
                 words.append(insn("WAIT_PARAM", rng.choice([0, 1, 8, 255])))
             elif op == 0xE:
                 if rng.randint(0, 1) == 0:
-                    words.append(insn("TX", (rng.randint(0, 1) << 8) | rng.randint(0, 255)))
+                    words.append(insn("TX", (rng.randint(0, 1) << 9) | (rng.randint(0, 1) << 8) | rng.randint(0, 255)))
                 else:
                     words.append(
                         insn(
@@ -561,7 +580,7 @@ def generate_test_case(seed: int) -> Tuple[List[int], int, List[Tuple[int, int]]
             if rng.randint(0, 1) == 0:
                 words.append((0xF << 12) | rng.randint(0, 0xFFF))
             else:
-                words.append((0xE << 12) | (rng.choice([1, 2, 3]) << 9) | rng.randint(0, 0x1FF))
+                words.append((0xE << 12) | (rng.choice([2, 3]) << 9) | rng.randint(0, 0x1FF))
         else:
             words.append(insn("HALT", rng.randint(0, 1)))
 
@@ -595,9 +614,11 @@ def run_differential_suite(num_seeds: int = 120) -> Dict[str, Any]:
         "mark_sample": 0,
         "tx_ld_msb": 0,
         "tx_ld_lsb": 0,
+        "tx_ld_od": 0,
         "tx_shift_setup": 0,
         "tx_shift_only": 0,
         "tx_shift_sample": 0,
+        "tx_shift_od": 0,
         "tx_reserved_fault": 0,
         "wait_zero": 0,
         "wait_max_4095": 0,
@@ -711,15 +732,19 @@ def run_differential_suite(num_seeds: int = 120) -> Dict[str, Any]:
                             coverage["wait_edge_timeout"] += 1
                     elif op == 0xE:
                         if ((imm >> 11) & 1) == 0:
-                            if ((imm >> 9) & 0x3) == 0:
+                            if ((imm >> 10) & 1) == 0:
                                 if (imm >> 8) & 1:
                                     coverage["tx_ld_lsb"] += 1
                                 else:
                                     coverage["tx_ld_msb"] += 1
+                                if (imm >> 9) & 1:
+                                    coverage["tx_ld_od"] += 1
                             else:
                                 coverage["tx_reserved_fault"] += 1
                                 coverage["illegal_fault_hiz"] += 1
                         else:
+                            if ref.tx_od:
+                                coverage["tx_shift_od"] += 1
                             do_sh = (imm >> 10) & 1
                             rx_p = (imm >> 3) & 7
                             tx_p = imm & 7
@@ -832,8 +857,8 @@ def format_markdown(rep: Dict[str, Any]) -> str:
         f"| `SAMPLE` shift / `no_shift=1` | {cov['sample_shift']} / {cov['sample_no_shift']} |",
         f"| `OUT_SAMPLE` shift / `no_shift=1` | {cov['out_sample_shift']} / {cov['out_sample_no_shift']} |",
         f"| `MARK` immediate / `MARK_SAMPLE` | {cov['mark_imm']} / {cov['mark_sample']} |",
-        f"| `LD_TX` MSB-first / LSB-first | {cov['tx_ld_msb']} / {cov['tx_ld_lsb']} |",
-        f"| `SHIFT_TX` setup / shift-only / shift+sample | {cov['tx_shift_setup']} / {cov['tx_shift_only']} / {cov['tx_shift_sample']} |",
+        f"| `LD_TX` / `LD_TX_OD` (MSB / LSB / open-drain) | {cov['tx_ld_msb']} / {cov['tx_ld_lsb']} / {cov['tx_ld_od']} |",
+        f"| `SHIFT_TX` setup / shift-only / shift+sample / open-drain | {cov['tx_shift_setup']} / {cov['tx_shift_only']} / {cov['tx_shift_sample']} / {cov['tx_shift_od']} |",
         f"| `WAIT(0)` / `WAIT(4095)` | {cov['wait_zero']} / {cov['wait_max_4095']} |",
         f"| `WAIT_PARAM(0)` / saturated `0xFFF` | {cov['wait_param_zero']} / {cov['wait_param_saturated']} |",
         f"| `WAIT_EDGE` immediate hit / delayed hit / timeout | {cov['wait_edge_immediate_hit']} / {cov['wait_edge_delayed_hit']} / {cov['wait_edge_timeout']} |",
@@ -868,8 +893,8 @@ def main() -> int:
     assert cov["sample_shift"] > 0 and cov["sample_no_shift"] > 0
     assert cov["out_sample_shift"] > 0 and cov["out_sample_no_shift"] > 0
     assert cov["mark_imm"] > 0 and cov["mark_sample"] > 0
-    assert cov["tx_ld_msb"] > 0 and cov["tx_ld_lsb"] > 0
-    assert cov["tx_shift_setup"] > 0 and cov["tx_shift_only"] > 0 and cov["tx_shift_sample"] > 0
+    assert cov["tx_ld_msb"] > 0 and cov["tx_ld_lsb"] > 0 and cov["tx_ld_od"] > 0
+    assert cov["tx_shift_setup"] > 0 and cov["tx_shift_only"] > 0 and cov["tx_shift_sample"] > 0 and cov["tx_shift_od"] > 0
     assert cov["tx_reserved_fault"] > 0
     assert cov["wait_zero"] > 0 and cov["wait_max_4095"] > 0
     assert cov["wait_param_zero"] > 0 and cov["wait_param_saturated"] > 0
