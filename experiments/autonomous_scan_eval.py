@@ -125,24 +125,60 @@ def benchmark_2d_surface_uniform_scan(surface_id: int = 0) -> Dict[str, Any]:
         auto_frames = client.uart_frames_sent - f1
         auto_wall_s = time.perf_counter() - t1
 
+        client.invalidate_cache()
+        transport.reset(1)
+        auto2d_prog = build_spi_2d_program(0x06, 0x05, sclk_low_cycles=None)
+        t2 = time.perf_counter()
+        f2 = client.uart_frames_sent
+        client.load_program(auto2d_prog)
+        transport.configure_target(10, delay_ns=surface_id)
+        auto2d = client.run_autonomous_2d_scan(
+            x_start=0,
+            x_step=1,
+            num_x=len(X_VALS),
+            y_start=0,
+            y_step=1,
+            num_y=len(Y_VALS),
+            expected_val=0xAA,
+            pass_mode=0,
+        )
+        auto2d_grid: Dict[Tuple[int, int], bool] = {
+            (xv, yv): bool(auto2d["grid"][(xv - 2, yv)])
+            for xv in X_VALS
+            for yv in Y_VALS
+        }
+        auto2d_frames = client.uart_frames_sent - f2
+        auto2d_wall_s = time.perf_counter() - t2
+
     mismatches = [
         (x, y, host_grid[(x, y)], auto_grid[(x, y)])
         for x in X_VALS
         for y in Y_VALS
         if host_grid[(x, y)] != auto_grid[(x, y)]
     ]
+    mismatches_2d = [
+        (x, y, host_grid[(x, y)], auto2d_grid[(x, y)])
+        for x in X_VALS
+        for y in Y_VALS
+        if host_grid[(x, y)] != auto2d_grid[(x, y)]
+    ]
     return {
         "benchmark": f"2d_uniform_surface_S{surface_id}",
         "total_points": len(X_VALS) * len(Y_VALS),
         "exact_grid_match": (len(mismatches) == 0),
+        "exact_auto2d_match": (len(mismatches_2d) == 0),
         "mismatch_count": len(mismatches),
-        "pass_points": sum(1 for v in auto_grid.values() if v),
-        "fail_points": sum(1 for v in auto_grid.values() if not v),
+        "mismatch_count_2d": len(mismatches_2d),
+        "pass_points": sum(1 for v in auto2d_grid.values() if v),
+        "fail_points": sum(1 for v in auto2d_grid.values() if not v),
         "host_uart_frames": host_frames,
-        "auto_uart_frames": auto_frames,
-        "uart_frame_reduction": round(host_frames / max(1, auto_frames), 2),
+        "auto1d_col_uart_frames": auto_frames,
+        "auto2d_uart_frames": auto2d_frames,
+        "uart_frame_reduction_1d": round(host_frames / max(1, auto_frames), 2),
+        "uart_frame_reduction_2d": round(host_frames / max(1, auto2d_frames), 2),
         "host_wall_s": round(host_wall_s, 4),
-        "auto_wall_s": round(auto_wall_s, 4),
+        "auto1d_col_wall_s": round(auto_wall_s, 4),
+        "auto2d_wall_s": round(auto2d_wall_s, 4),
     }
 
 
@@ -156,6 +192,7 @@ def main() -> int:
     assert results["1d_spi_32pt"]["exact_first_fail_match"]
     for surf in results["2d_surfaces"]:
         assert surf["exact_grid_match"], f"Mismatch on {surf['benchmark']}"
+        assert surf["exact_auto2d_match"], f"Auto-2D mismatch on {surf['benchmark']}"
     return 0
 
 

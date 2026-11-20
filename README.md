@@ -13,10 +13,10 @@ A **runtime-reprogrammable protocol emulator and autonomous timing-boundary expl
 ## Architecture & Toolchain Summary
 
 - **RTL (`src/project.v`, `src/protocol_sequencer.v`):**
-  - **Sequencer (`0x0`–`0xE`):** `NOP`, `OUT`, `OE`, `WAIT`, `SAMPLE`, `JZ`, `JMP`, `LOOP`, `SETCOUNT`, `MARK`, `HALT`, simultaneous `OUT_SAMPLE`, runtime-parameterized `WAIT_PARAM`, bounded `WAIT_EDGE`, and transmit shifter `LD_TX` / `LD_TX_OD` / `SHIFT_TX` (`0xE`, push-pull or open-drain MSB/LSB-first looped TX + optional simultaneous sample; plus safe high-Z `ENG_FAULT` on `0xF` and reserved `0xE400..0xE7FF`).
-  - **Control & Autonomous Scanner (`0x10`–`0x1D`):** 8-byte CRC-8/07 UART frames with `ui_in[2:1]` runtime baud dividers (`8 / 104 / 217 / 434` for sim or `12/25/50 MHz @ 115200`), single-word live patching (`0x19 OP_PATCH_WORD`), autonomous sweep (`0x1A`–`0x1D`), and `ena & rst_n` deselection reset.
-- **Assembler & Cycle-Contract Checker (`tools/protocol_asm.py`):** Symbolic assembler generating UART TX (`24` words single-byte; `22` words 2-byte looped vs `44` unrolled), SPI modes `0–3` sweeps (`38 / 39 / 38 / 39` words; `20` words 2-byte looped vs `70` unrolled), 2D SPI (`59` words), end-to-end SPI target responder (`40` words, `WAIT_EDGE`), I2C open-drain ACK/NACK at `400 kHz` / `100 kHz` (`62` words unrolled 1-byte; `30` words 1-byte / `49` words 2-byte parameterized via `LD_TX_OD`), I2C clock-stretch probe, and IEEE 1149.1 JTAG TAP `IDCODE` (`50` words) programs, plus `analyze_timing_bounds` and `check_timing_contract` (`JZ`, `LOOP`, `WAIT_EDGE`, `OP_TX`).
-- **Host CLI & Simulator Bridge (`tools/timing_explorer.py`, `tools/sim_explorer_tb.v`):** Unified `ProtocolClient` (`--sim` Icarus RTL or `--port` serial UART) with `run_autonomous_scan`, single-trial sweeps/binary search, JSONL trace replay (`replay --exec`), differential timing fuzzing + minimization (`tools/diff_minimizer.py`), and noisy-target sweeps (`tools/noisy_boundary_study.py`).
+  - **Sequencer (`0x0`–`0xE`):** `NOP`, `OUT`, `OE`, `WAIT`, `SAMPLE`, `JZ`, `JMP`, `LOOP`, `SETCOUNT`, `MARK`, `HALT`, simultaneous `OUT_SAMPLE`, dual-parameter `WAIT_PARAM` / `WAIT_PARAM2`, bounded `WAIT_EDGE`, and transmit shifter `LD_TX` / `LD_TX_OD` / `SHIFT_TX` (`0xE`, push-pull or open-drain MSB/LSB-first looped TX + optional simultaneous sample; safe high-Z `ENG_FAULT` on `0xF` and reserved `0xE400..0xE7FF`), plus per-pin selectable 2-FF input synchronizers (`cfg_sync_mask`), optional execution cycle budget (`cfg_cycle_budget`), and passive input-edge FIFO capture (`cfg_cap_mask`/`cfg_cap_mode`).
+  - **Control & Autonomous 1D/2D Scanner (`0x10`–`0x21`):** 8-byte CRC-8/07 UART frames with `ui_in[2:1]` runtime baud dividers, `imem` wipe on `OP_BEGIN_LOAD`, single-word live patching (`0x19 OP_PATCH_WORD`), control/budget/sync/capture configuration (`0x1E OP_SET_CTRL`), autonomous 1D (`0x1A`–`0x1D`) and single-load 2D grid sweeps (`0x1F`–`0x21`, up to `16 × 32`), `stop_reason` diagnostics, and `ena & rst_n` deselection reset.
+- **Assembler, Pre-Load Safety Verifier & Cycle-Contract Checker (`tools/protocol_asm.py`):** Symbolic assembler generating UART TX (`24` words single-byte; `22` words 2-byte looped), SPI modes `0–3` sweeps (`38 / 39 / 38 / 39` words; `20` words 2-byte looped), single-load dual-parameter 2D SPI (`59` words), end-to-end SPI target responder (`40` words), I2C open-drain ACK/NACK (`62` words unrolled; `30` / `49` words 1B/2B parameterized via `LD_TX_OD`), I2C clock-stretch probe, and IEEE 1149.1 JTAG TAP `IDCODE` (`50` words) programs, plus `analyze_timing_bounds`, `check_timing_contract`, and `verify_program_safety` ("safe-to-run" pre-load gate).
+- **Host CLI, Robustness Studies & End-to-End Showcase (`tools/timing_explorer.py`, `tools/sync_robustness_study.py`, `tools/run_showcase.py`, `tools/sim_explorer_tb.v`):** Unified `ProtocolClient` (`--sim` Icarus RTL or `--port` serial UART) with `run_autonomous_scan`, `run_autonomous_2d_scan`, `verify`, `run_showcase`, JSONL trace replay (`replay --exec`), differential timing fuzzing + minimization (`tools/diff_minimizer.py`), and noisy-target sweeps (`tools/noisy_boundary_study.py`).
 - **Software Reference Model & Benchmarks (`experiments/`):** Femtosecond SPI timing oracle (`15/15` unit tests), `experiments/autonomous_scan_eval.py`, and reproducible fuzzing/cartographer studies (`docs/evidence/`).
 - **Documentation:** [PROGRAMMABLE_ENGINE_ARCHITECTURE.md](docs/PROGRAMMABLE_ENGINE_ARCHITECTURE.md), [TIMING_BOUNDARY_EXPLORER_ARCHITECTURE.md](docs/TIMING_BOUNDARY_EXPLORER_ARCHITECTURE.md), [COMPETITION_PLAN_AND_EVIDENCE.md](docs/COMPETITION_PLAN_AND_EVIDENCE.md), [PROJECT_STATUS_REPORT_2026-11-16.md](docs/PROJECT_STATUS_REPORT_2026-11-16.md), [info.md](docs/info.md).
 
@@ -25,17 +25,20 @@ A **runtime-reprogrammable protocol emulator and autonomous timing-boundary expl
 **Prerequisites (for clean checkout):** Icarus Verilog (`iverilog >= 12`), GNU `make`, and Python 3.11+ with `pip install -r test/requirements.txt` (all `tools/` and `experiments/` runtime/test scripts use Python standard library only; `pyserial` is required only for `--port` hardware UART).
 
 ```bash
-# 1. Autonomous scan API vs host-driven sweep benchmark (1D 32-pt + 2D 192-pt surfaces)
+# 1. Autonomous 1D & single-load 2D scan benchmark (1D 32-pt + 2D 192-pt surfaces) & end-to-end judge showcase
 python experiments/autonomous_scan_eval.py
+python tools/run_showcase.py --md-out docs/evidence/SHOWCASE_WALKTHROUGH.md
+python tools/sync_robustness_study.py --md-out docs/evidence/rtl-v2-sync-robustness.md
 
-# 2. Explorer CLI + live-RTL multi-protocol, SPI modes 0-3, responder, I2C Fast/Standard, JTAG, autonomous scan, Phase 4 audits, & OP_TX multi-byte (11/11)
+# 2. Explorer CLI + live-RTL multi-protocol, SPI modes 0-3, responder, I2C Fast/Standard, JTAG, 1D/2D scan, v2 sync/budget/capture, & OP_TX multi-byte (12/12)
 python -m unittest discover -s tools -v
 
-# 3. Dynamic cycle-contract audit (13/13), 50 MHz I2C pulse audit, independent target, randomized ISA diff, & responder characterization
+# 3. Pre-load safety verifier, dynamic cycle-contract audit (13/13), 50 MHz I2C pulse audit, independent target, 150-seed ISA diff, & responder characterization
+python tools/timing_explorer.py verify --example i2c-multibyte --param 62 --od-pins 0,1
 python tools/contract_audit.py
 python tools/i2c_timing_audit.py --md-out docs/evidence/rtl-phase4-i2c-timing-audit.md
 python tools/independent_target_eval.py --md-out docs/evidence/rtl-phase4-independent-target-report.md
-python tools/isa_diff_fuzz.py --seeds 120 --md-out docs/evidence/rtl-phase4-isa-diff-report.md
+python tools/isa_diff_fuzz.py --seeds 150 --md-out docs/evidence/rtl-phase4-isa-diff-report.md
 python tools/spi_responder_char.py --md-out docs/evidence/rtl-phase4-spi-responder-limits.md
 python -m unittest discover -s experiments -v
 
@@ -43,7 +46,7 @@ python -m unittest discover -s experiments -v
 iverilog -g2012 -Wall -s tb_v1_sequencer -o sim_seq.vvp src/protocol_sequencer.v test/tb_v1_sequencer.v && vvp sim_seq.vvp
 iverilog -g2012 -Wall -s tb_jtag_tap -o sim_jtag.vvp src/project.v src/protocol_sequencer.v test/jtag_tap_model.v test/tb_jtag_tap.v && vvp sim_jtag.vvp
 
-# 5. Live protocol sweeps, autonomous scan CLI, replay, & differential fuzzing
+# 5. Live protocol sweeps, 1D/2D autonomous scan CLI, replay, & differential fuzzing
 python tools/timing_explorer.py run-example --sim --example uart
 python tools/timing_explorer.py run-example --sim --example uart-multibyte
 python tools/timing_explorer.py run-example --sim --example spi-multibyte
@@ -54,6 +57,7 @@ python tools/timing_explorer.py run-example --sim --example i2c-multibyte --i2c-
 python tools/timing_explorer.py run-example --sim --example i2c-100k --i2c-ack 1
 python tools/timing_explorer.py run-example --sim --example jtag
 python tools/timing_explorer.py scan --sim --delay-ns 37 --start 0 --step 1 --steps 16 --expect 0xAA
+python tools/timing_explorer.py scan2d --sim --surface 0
 python tools/timing_explorer.py sweep --sim --delay-ns 23 --min-low 2 --max-low 8 --method sweep --out trace.jsonl --report report.md
 python tools/timing_explorer.py replay trace.jsonl --sim --exec --trials 5
 python tools/diff_minimizer.py --budget 30 --seed 20261116 --repeats 10
@@ -61,12 +65,12 @@ python tools/diff_minimizer.py --budget 30 --seed 20261116 --repeats 10
 
 ## Verification Results & Scope Limits
 
-- **Physical ASIC hardening (`exp/tx-od` merged into `master`, `80/80` IHP CMOS5L LibreLane, `docs/evidence/rtl-phase5-tx-od-metrics.json`; prior frozen milestones `b783133` & `v1.2-phase4-fallback` @ `12ed559`):**
-  - `--check-docs` passed (`0` errors); `Verilator` lint passed (`0` errors, `0` warnings); Cocotb RTL passed **`10/10`** (`17,126,050.01 ns`, `58.42 s`, adding `test_i2c_multibyte_open_drain_100k_and_fast_compliant` across `run_param=62` [`384.615 kHz`] and `run_param=248` [`99.602 kHz`] for ACK & NACK with `(uio_oe & uio_out) == 0` enforced every cycle); `tools/` host + live-RTL suite passed **`11/11`**, `experiments/` passed **`15/15`**, `isa_diff_fuzz.py --seeds 120` passed **`0` mismatches** (`218,477` cycles, `16/16` opcodes including `LD_TX_OD` and open-drain `SHIFT_TX`), and standalone `tb_v1_sequencer.v` (`6/6` groups) + `tb_jtag_tap.v` (`321` cycles) passed. On GitHub Actions (`harjag-21/jane-street-comp`), **`55bd679`** passed **`test`** (`44554540197`), **`docs`** (`44554540107`), and **`gds`** (`44554540076` — `gds`, `viewer`, `gl_test`, `precheck` all `success`).
-  - Full LibreLane flow on `exp/tx-od` completed **`80/80` stages** (`1:23:25`): `14,901` stdcells (`1,842` sequential), `233,335 µm²` active stdcells (`0.233 mm²`, `19.3131%` of `1,208,170 µm²` placeable core [`1.208 mm²`] / `16.969 %` via `--print-stats`), `607,560 µm` routed wirelength, `+10.7497 ns` worst slow setup slack (`20 ns` period), `+0.1139 ns` fast hold slack, and `0` setup/hold/slew/cap/route-DRC/Magic-DRC/Netgen-LVS/antenna violations.
+- **Physical ASIC hardening (`exp/v2-capabilities`, `80/80` IHP CMOS5L LibreLane, `docs/evidence/rtl-v2-hardened-metrics.json`; prior frozen milestones `573f384`, `b783133`, `v1.2-phase4-fallback` @ `12ed559`):**
+  - `--check-docs` passed (`0` errors); `Verilator` lint passed (`0` errors, `0` warnings); Cocotb RTL passed **`11/11`** (`18,084,360.01 ns`, adding `test_v2_sync_budget_capture_and_2d_scan` and `OP_BEGIN_LOAD` stale `imem` wipe); `pytest tools experiments` passed **`27/27`** (`12/12` `tools/` + `15/15` `experiments/`); `isa_diff_fuzz.py --seeds 150` passed **`0` mismatches** (`177,547` cycles, `16/16` opcodes plus `WAIT_PARAM2`, 2-FF sync, cycle-budget timeouts, edge capture, and `cmd_halt`-on-`OP_MARK`); standalone `tb_v1_sequencer.v` (`8/8` groups) + `tb_jtag_tap.v` (`321` cycles) passed; [docs/evidence/SHOWCASE_WALKTHROUGH.md](docs/evidence/SHOWCASE_WALKTHROUGH.md) and [docs/evidence/rtl-v2-sync-robustness.md](docs/evidence/rtl-v2-sync-robustness.md) generated cleanly. Prior `master` (`55bd679` / `573f384`) passed upstream GitHub Actions (`test`, `docs`, `gds` [`gds`+`viewer`+`gl_test`+`precheck`]).
+  - Full LibreLane flow on `exp/v2-capabilities` completed **`80/80` stages** (`1:46:17`): `20,326` stdcells (`2,538` sequential), `317,787 µm²` active stdcells (`0.318 mm²`, `26.3031%` of `1,208,170 µm²` placeable core [`1.208 mm²`] / `23.355 %` via `--print-stats`), `869,966 µm` routed wirelength, `+10.2321 ns` worst slow setup slack (`20 ns` period), `+0.1093 ns` fast hold slack, and `0` setup/hold/slew/cap/route-DRC/Magic-DRC/Netgen-LVS/antenna violations.
   - Area note: per `tt/tech/ihp-sg13cmos5l/tile_sizes.yaml`, one `1×1` tile is `202.08 × 154.98 µm` (`32 × 1×1 ≈ 1.00 mm²`), while the `8×4` macro bbox (`1724.16 × 710.64 µm`) includes inter-tile routing and power-mux channels (`1,225,260 µm²` die / `1,208,170 µm²` core).
-  - Gate-level verification: post-PnR Cocotb against the hardened `exp/tx-od` netlist `tt_um_harjag_21_timing_explorer.nl.v` passed **`10/10`** (`17,126,050.01 ns`, `923.29 s`), executed as **functional verification** without SDF timing annotation (using a temporary `/tmp` copy of `sg13cmos5l_stdcell.v` with `specify`/`delayed_*` removed for Icarus `12.0`). `KLayout.DRC`/XOR remain disabled in default Tiny Tapeout `src/config.json`.
+  - Gate-level verification: post-PnR Cocotb against the hardened `exp/v2-capabilities` netlist `tt_um_harjag_21_timing_explorer.nl.v` passed **`11/11`** (`18,084,360.01 ns`, `1683.92 s`), executed as **functional verification** without SDF timing annotation (using a temporary `/tmp` copy of `sg13cmos5l_stdcell.v` with `specify`/`delayed_*` removed for Icarus `12.0`). `KLayout.DRC`/XOR remain disabled in default Tiny Tapeout `src/config.json`.
 - **Simulated experiment scope:**
-  - All tested autonomous scans matched host-driven results `100%` in RTL simulation (`32/32` 1D SPI bitmap + exact `first_fail` trace; `192/192` exact grid match with `0` mismatches across `12×16` surfaces `S0`, `S4`, `S8`).
-  - Reported UART reductions (**`21.33×`**, `6` vs `128` frames on a 32-pt 1D sweep; **`3.25×–3.32×`**, `309`/`303` vs `1005` frames on `12×16` grids) measure **host-control UART traffic in RTL simulation**, not a measured physical/hardware speedup. There are **no FPGA or fabricated-ASIC measurements yet**.
+  - All tested autonomous scans matched host-driven results `100%` in RTL simulation (`32/32` 1D SPI bitmap + exact `first_fail` trace; `192/192` exact grid match with `0` mismatches across `12×16` surfaces `S0`, `S4`, `S8` in both 1D column scans and single-load autonomous 2D scan).
+  - Reported UART reductions (**`21.33×`**, `6` vs `128` frames on a 32-pt 1D sweep; **`3.25×–3.32×`**, `309`/`303` vs `1005` frames for 1D column scans; and **`12.41×`**, `81` vs `1,005` frames including initial cold program load for single-load autonomous 2D scan) measure **host-control UART traffic in RTL simulation**, not a measured physical/hardware speedup. Note similarly that 2-FF input synchronizer evaluation verifies exact `+2`-cycle pipeline latency shift (`raw` `[3, 4, 6]` vs `synced` `[5, 6, 8]`, `WAIT_EDGE` `+2` cycles) in digital RTL simulation rather than analog metastability MTBF. There are **no FPGA or fabricated-ASIC measurements yet**.
 - **Fuzzing conclusion:** Joint timing + payload sampling beats payload-only fuzzing across simulated suites, whereas response-guided mutation does not generally beat blind `joint_random` when pin responses do not gate failing state transitions (`tools/transfer_study.py`).

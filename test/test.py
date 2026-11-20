@@ -16,22 +16,27 @@ from tools.protocol_asm import (
     PROG_DEPTH,
     UART_OP_BEGIN_LOAD,
     UART_OP_CFG_SCAN,
+    UART_OP_CFG_SCAN_2D,
     UART_OP_COMMIT_LOAD,
     UART_OP_HALT,
     UART_OP_PATCH_WORD,
     UART_OP_PING_INFO,
     UART_OP_POP_EVENT,
     UART_OP_READ_CYCLE_CNT,
+    UART_OP_READ_SCAN_2D,
     UART_OP_READ_SCAN_FAIL,
     UART_OP_READ_SCAN_STATUS,
     UART_OP_READ_STATUS,
+    UART_OP_SET_CTRL,
     UART_OP_START,
     UART_OP_START_SCAN,
+    UART_OP_START_SCAN_2D,
     UART_OP_WRITE_WORD,
     assemble,
     bitrev8,
     build_i2c_write_byte_program,
     build_i2c_write_multibyte_program,
+    build_spi_2d_program,
     build_spi_mode0_program,
     build_spi_multibyte_program,
     build_spi_program,
@@ -1109,5 +1114,154 @@ async def test_i2c_multibyte_open_drain_100k_and_fast_compliant(dut):
     ev0 = await send_cmd(dut, UART_OP_POP_EVENT, req_id=178)
     ev1 = await send_cmd(dut, UART_OP_POP_EVENT, req_id=179)
     assert ev0[4] == 0xA0 and ev1[4] == 0xA1
+
+
+@cocotb.test()
+async def test_v2_sync_budget_capture_and_2d_scan(dut):
+    """Test 11: OP_PING feature mask, selectable 2-FF sync, cycle budget, passive edge capture, and 2D scan."""
+    dut._log.info("Test 11: Selectable 2-FF sync, cycle budget timeout, edge capture, and 2D autonomous scan.")
+    cocotb.start_soon(Clock(dut.clk, 10, unit="ns").start())
+    await reset_dut(dut)
+
+    # 1. PING_INFO reports feature flags in upper nibble of d3
+    ping = await send_cmd(dut, UART_OP_PING_INFO, req_id=190)
+    assert ping[2] == 0 and ping[3:6] == [1, 64, 8]
+    assert ((ping[6] >> 4) & 0xF) == 0xF
+
+    # 2. Cycle budget catches runaway loop safely in ENG_FAULT with Hi-Z uio_oe and stop_reason=4
+    runaway = [insn("OE", 0xFF), insn("OUT", 0x5A), insn("JMP", 0)]
+    assert (await load_program(dut, runaway))[2] == 0
+    assert (await send_cmd(dut, UART_OP_SET_CTRL, req_id=191, arg0=1, arg1=25, arg2=0))[2] == 0
+    assert (await send_cmd(dut, UART_OP_START, req_id=192))[2] == 0
+    assert (await wait_halted_or_fault(dut)) == 3
+    assert int(dut.uio_oe.value) == 0
+    st = await send_cmd(dut, UART_OP_READ_STATUS, req_id=193)
+    assert ((st[3] >> 4) & 0x7) == 4, f"expected stop_reason=4 (CYCLE_LIMIT), got {st[3] >> 4}"
+    cnt = await send_cmd(dut, UART_OP_READ_CYCLE_CNT, req_id=194)
+    assert (cnt[3] | (cnt[4] << 8)) == 25
+    assert (await send_cmd(dut, UART_OP_SET_CTRL, req_id=195, arg0=1, arg1=0, arg2=0))[2] == 0
+
+    # 3. Selectable 2-FF input synchronizer shifts MISO boundary by +2 cycles vs raw bypass
+    sync_prog = assemble([
+        "OE 0x03",
+        "OUT 0x01",
+        "OUT 0x03",      # pulse uio_out[1] high -> testbench asserts uio_in[3]=1 after 1 clk + 1 ns setup
+        "WAIT_PARAM 0",
+        "SAMPLE 3",
+        "HALT 0",
+    ])
+    assert (await load_program(dut, sync_prog))[2] == 0
+    delayed_stop = False
+
+    async def delayed_pin3_driver():
+        q0 = 0
+        q1 = 0
+        while not delayed_stop:
+            await ClockCycles(dut.clk, 1)
+            await Timer(1, unit="ns")
+            q1 = q0
+            q0 = 1 if (int(dut.uio_oe.value) & 2) and (int(dut.uio_out.value) & 2) else 0
+            dut.uio_in.value = (q1 << 3)
+
+    drv_task = cocotb.start_soon(delayed_pin3_driver())
+    # Raw (sync_mask=0): passes at run_param=0 (q1 arrives before SAMPLE 3 posedge)
+    assert (await send_cmd(dut, UART_OP_SET_CTRL, req_id=196, arg0=0, arg1=0x00, arg2=0, arg3=0))[2] == 0
+    assert (await send_cmd(dut, UART_OP_START, req_id=197, arg0=0))[2] == 0
+    assert (await wait_halted_or_fault(dut)) == 2
+    st_raw = await send_cmd(dut, UART_OP_READ_STATUS, req_id=198)
+    assert (st_raw[5] & 1) == 1
+
+    # Synced pin 3 (sync_mask=0x08): fails at run_param=0 & 1 (+2 cyc needed), passes at run_param=2
+    assert (await send_cmd(dut, UART_OP_SET_CTRL, req_id=199, arg0=0, arg1=0x08, arg2=0, arg3=0))[2] == 0
+    assert (await send_cmd(dut, UART_OP_START, req_id=200, arg0=1))[2] == 0
+    assert (await wait_halted_or_fault(dut)) == 2
+    st_sync_fail = await send_cmd(dut, UART_OP_READ_STATUS, req_id=201)
+    assert (st_sync_fail[5] & 1) == 0
+    assert (await send_cmd(dut, UART_OP_START, req_id=202, arg0=2))[2] == 0
+    assert (await wait_halted_or_fault(dut)) == 2
+    st_sync_ok = await send_cmd(dut, UART_OP_READ_STATUS, req_id=203)
+    assert (st_sync_ok[5] & 1) == 1
+    delayed_stop = True
+    await drv_task
+
+    # 4. Passive input-edge capture timestamps transitions with zero OP_MARK instructions
+    dut.uio_in.value = 0x00
+    assert (await send_cmd(dut, UART_OP_SET_CTRL, req_id=204, arg0=0, arg1=0x00, arg2=0x04, arg3=3))[2] == 0
+    cap_prog = assemble(["WAIT 4000", "HALT 0"])
+    assert (await load_program(dut, cap_prog))[2] == 0
+
+    async def edge_stim():
+        while ((int(dut.uo_out.value) >> 3) & 0x3) != 1:
+            await ClockCycles(dut.clk, 1)
+        await ClockCycles(dut.clk, 5)
+        dut.uio_in.value = 0x04
+        await ClockCycles(dut.clk, 7)
+        dut.uio_in.value = 0x00
+        await ClockCycles(dut.clk, 9)
+        dut.uio_in.value = 0x04
+
+    stim_t = cocotb.start_soon(edge_stim())
+    assert (await send_cmd(dut, UART_OP_START, req_id=205))[2] == 0
+    await stim_t
+    assert (await wait_halted_or_fault(dut, max_cycles=10000)) == 2
+    ev_a = await send_cmd(dut, UART_OP_POP_EVENT, req_id=206)
+    ev_b = await send_cmd(dut, UART_OP_POP_EVENT, req_id=207)
+    ev_c = await send_cmd(dut, UART_OP_POP_EVENT, req_id=208)
+    assert ev_a[3] == 3 and ev_a[4] == 0x04 and ev_b[4] == 0x00 and ev_c[4] == 0x04
+    ts_a = ev_a[5] | (ev_a[6] << 8)
+    ts_b = ev_b[5] | (ev_b[6] << 8)
+    ts_c = ev_c[5] | (ev_c[6] << 8)
+    assert ts_a < ts_b < ts_c
+    assert (await send_cmd(dut, UART_OP_SET_CTRL, req_id=209, arg0=0, arg1=0, arg2=0, arg3=0))[2] == 0
+    dut.uio_in.value = 0x00
+
+    # 5. Autonomous 2D scan using WAIT_PARAM (Y) + WAIT_PARAM2 (X) in one loaded program (3x4 = 12 pts)
+    scan2_prog = assemble([
+        "OE 0x01",
+        "OUT 0x00",
+        "WAIT_PARAM 0",
+        "WAIT_PARAM2 0",
+        "OUT 0x01",
+        "NOP",
+        "SAMPLE 4",
+        "HALT 0",
+    ])
+    assert (await load_program(dut, scan2_prog))[2] == 0
+    scan2_stop = False
+
+    async def scan2_target():
+        low_cnt = 0
+        while not scan2_stop:
+            await ClockCycles(dut.clk, 1)
+            oe0 = int(dut.uio_oe.value) & 1
+            out0 = int(dut.uio_out.value) & 1
+            if oe0 and not out0:
+                low_cnt += 1
+            elif oe0 and out0:
+                # Passes when low_cnt (3 + run_param + run_param2) >= 6 -> x + y >= 3
+                dut.uio_in.value = 0x10 if low_cnt >= 6 else 0x00
+                low_cnt = 0
+            else:
+                low_cnt = 0
+                dut.uio_in.value = 0x00
+
+    s2_task = cocotb.start_soon(scan2_target())
+    assert (await send_cmd(dut, UART_OP_CFG_SCAN, req_id=210, arg0=0, arg1=1, arg2=4, arg3=0x01))[2] == 0
+    assert (await send_cmd(dut, UART_OP_CFG_SCAN_2D, req_id=211, arg0=0, arg1=1, arg2=3, arg3=0))[2] == 0
+    assert (await send_cmd(dut, UART_OP_START_SCAN_2D, req_id=212, arg0=0))[2] == 0
+    for _ in range(250):
+        await ClockCycles(dut.clk, 100)
+        if ((int(dut.uo_out.value) >> 6) & 0x3) == 0x2:
+            break
+    sm = await send_cmd(dut, UART_OP_READ_SCAN_2D, req_id=213, arg0=0xFF)
+    assert sm[2] == 0 and (sm[3] & 0x3) == 0x2
+    assert sm[4] == 6  # x=0: y=3 (1), x=1: y=2,3 (2), x=2: y=1,2,3 (3) -> total 6 pass
+    col0 = await send_cmd(dut, UART_OP_READ_SCAN_2D, req_id=214, arg0=0)
+    col1 = await send_cmd(dut, UART_OP_READ_SCAN_2D, req_id=215, arg0=1)
+    col2 = await send_cmd(dut, UART_OP_READ_SCAN_2D, req_id=216, arg0=2)
+    assert col0[3] == 0b1000 and col1[3] == 0b1100 and col2[3] == 0b1110
+    scan2_stop = True
+    await s2_task
+
 
 

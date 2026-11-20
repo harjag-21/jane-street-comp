@@ -39,7 +39,7 @@ Each instruction word is `{opcode[3:0], imm[11:0]}` (`opcode[15:12] | operand[11
 | `0x9` | `MARK` | `from_sample = imm[8]`, `tag = imm[7:0]` | Push `{tag_or_sample_reg, cycle_cnt_o}` into the 8-entry event FIFO (sets `event_overflow_o` if full and not simultaneously popped). |
 | `0xA` | `HALT` | `keep_oe = imm[0]` | Transition to `ENG_HALTED`; clear `uio_oe_o <= 8'h00` unless `keep_oe == 1`. Preserve program store, `sample_reg_o`, `cycle_cnt_o`, and FIFO for host readback. |
 | `0xB` | `OUT_SAMPLE` | `no_shift = imm[11]`, `pin = imm[10:8]`, `val = imm[7:0]` | Atomically drive `uio_out_o <= val` and sample `uio_in[pin]` (into `last_sample_o` and optionally `sample_reg_o`) on the same clock edge, enabling tight SPI clock/sample timing. |
-| `0xC` | `WAIT_PARAM` | `offset = imm[7:0]` | Wait `saturate_12b(run_param + offset)` additional cycles (`WAIT_PARAM 0` waits `run_param` extra cycles, so `run_param == 0` takes `1` cycle total). |
+| `0xC` | `WAIT_PARAM` / `WAIT_PARAM2` | `sel = imm[8]`, `offset = imm[7:0]` | Wait `saturate_12b((sel ? run_param2 : run_param) + offset)` additional cycles (`WAIT_PARAM 0` waits `run_param` extra cycles, `WAIT_PARAM2 0` waits `run_param2` extra cycles; `0` takes `1` cycle total). |
 | `0xD` | `WAIT_EDGE` | `pol = imm[11]`, `pin = imm[10:8]`, `max = imm[7:0]` | Wait up to `max` (or `run_param` if `max == 0`) cycles for `uio_in[pin] == pol`. Sets `last_sample_o = 1` on hit or `0` on timeout; used for I2C clock stretching and SPI target polling. |
 | `0xE` (`imm[11]=0`) | `LD_TX` / `LD_TX_OD` | `imm[10] = 0`, `od = imm[9]`, `lsb_first = imm[8]`, `val = imm[7:0]` | Load `tx_reg <= val`, `tx_lsb_first <= lsb_first`, and `tx_od <= od` (`0` push-pull `LD_TX`, `1` open-drain `LD_TX_OD`); advance `pc_o`. Reserved sub-encodings `imm[10] = 1` (`0xE400..0xE7FF`) transition to `ENG_FAULT` and clear `uio_oe_o <= 8'h00`. |
 | `0xE` (`imm[11]=1`) | `SHIFT_TX` | `do_shift = imm[10]`, `clk_val = imm[9]`, `clk_pin = imm[8:6]`, `rx_pin = imm[5:3]`, `tx_pin = imm[2:0]` | When `tx_od == 0` (push-pull): drive `uio_out_o[tx_pin]` with `tx_cur_bit` and `uio_out_o[clk_pin] <= clk_val` (if `clk_pin != tx_pin`). When `tx_od == 1` (open-drain): force `uio_out_o <= 0` on `tx_pin`/`clk_pin` and drive `uio_oe_o[tx_pin] <= ~tx_cur_bit` (`0`=release high-Z, `1`=pull low) and `uio_oe_o[clk_pin] <= ~clk_val` (if `clk_pin != tx_pin`). If `do_shift == 1`, shift `tx_reg` by 1 bit and (when `rx_pin != tx_pin`) sample `uio_in[rx_pin]` into `last_sample_o` and `sample_reg_o`. |
@@ -56,20 +56,24 @@ If `CMD_BODY` or `CMD_CRC` stalls for `64 × CLKS_PER_BIT` cycles, the loader pa
 
 | Request `op` | Command | Request arguments | Response `d0..d3` (on `ST_OK`) |
 |---|---|---|---|
-| `0x10` | `PING_INFO` | ignored | `d0 = 0x01` (version), `d1 = 64` (`PROG_DEPTH`), `d2 = 8` (`EVENT_DEPTH`), `d3 = {4'd0, prog_valid, event_overflow, eng_state}` |
-| `0x11` | `BEGIN_LOAD` | `arg0 = len` (`1..64`), `arg1 = exp_crc8`, `arg2 = exp_sum8` | Clears `prog_valid`; echoes `len, exp_crc, exp_sum, 0` (`ST_BAD_STATE` if `ENG_RUN`, `ST_BAD_ARG` if `len == 0` or `len > 64`) |
+| `0x10` | `PING_INFO` | ignored | `d0 = 0x01` (version), `d1 = 64` (`PROG_DEPTH`), `d2 = 8` (`EVENT_DEPTH`), `d3 = {4'hF, prog_valid, event_overflow, eng_state}` (`d3[7:4]` feature flags: synchronizers, cycle budget, edge capture, 2D scan) |
+| `0x11` | `BEGIN_LOAD` | `arg0 = len` (`1..64`), `arg1 = exp_crc8`, `arg2 = exp_sum8` | Clears `prog_valid` and wipes `imem[0..63]` to `0x0000` (`NOP`) via 1-cycle `prog_clear`; echoes `len, exp_crc, exp_sum, 0` (`ST_BAD_STATE` if `ENG_RUN`, `ST_BAD_ARG` if `len == 0` or `len > 64`) |
 | `0x12` | `WRITE_WORD` | `arg0 = addr`, `arg1 = word[7:0]`, `arg2 = word[15:8]` | Sequential write (`addr == load_idx`); updates incremental `calc_crc` and `calc_sum`; returns `addr, next_idx, 0, 0` |
 | `0x13` | `COMMIT_LOAD` | ignored | Verifies `load_idx == len`, `calc_crc == exp_crc`, `calc_sum == exp_sum`; sets `prog_valid` (`d3 = 1`) or returns `ST_CHECKSUM` (`0x05`) |
-| `0x14` | `START` | `arg0 = param[7:0]`, `arg1[3:0] = param[11:8]` | Starts at `pc_o = 0` with `cmd_param = 12b` if `prog_valid` and not running; clears FIFO & `cycle_cnt_o` |
-| `0x15` | `HALT` | ignored | Stops sequencer (`ENG_HALTED`), clears `uio_oe_o`, returns state and `pc` |
-| `0x16` | `READ_STATUS` | ignored | `d0 = flags/state`, `d1 = pc`, `d2 = sample_reg`, `d3 = {last_sample, 3'd0, event_count}` |
+| `0x14` | `START` | `arg0 = p1[7:0]`, `arg1[3:0] = p1[11:8]`, `arg2 = p2[7:0]`, `arg3[3:0] = p2[11:8]` | Starts at `pc_o = 0` with `run_param = p1`, `run_param2 = p2` if `prog_valid` and not running; clears FIFO & `cycle_cnt_o` |
+| `0x15` | `HALT` | ignored | Stops sequencer (`ENG_HALTED`, preserves prior `stop_reason` if already stopped), clears `uio_oe_o` and active scan flags, returns status and `pc` |
+| `0x16` | `READ_STATUS` | ignored | `d0 = {1'b0, stop_reason[2:0], prog_valid, event_overflow, eng_state}` (`stop_reason`: `0=NONE, 1=HALT_INSN, 2=ILLEGAL_OP, 3=CMD_HALT, 4=CYCLE_LIMIT`), `d1 = pc`, `d2 = sample_reg`, `d3 = {last_sample, 3'd0, event_count}` |
 | `0x17` | `POP_EVENT` | ignored | Returns `d0 = event_count` (pre-pop), `d1 = tag`, `d2 = ts[7:0]`, `d3 = ts[15:8]` and pops FIFO if nonempty |
 | `0x18` | `READ_CYCLE_CNT` | ignored | Returns `d0 = cycle_cnt[7:0]`, `d1 = cycle_cnt[15:8]`, `d2 = sample_reg`, `d3 = event_count` |
 | `0x19` | `PATCH_WORD` | `arg0 = addr`, `arg1 = word[7:0]`, `arg2 = word[15:8]` | Random-access single-word patch when `prog_valid == 1` and halted (accelerates fuzzing/minimization without reloading all 64 words) |
 | `0x1A` | `CFG_SCAN` | `arg0 = start[7:0]`, `arg1 = step[7:0]`, `arg2 = {pass_mode[6], steps[5:0]}`, `arg3 = expected[7:0]` | Configure `1..32` uniform autonomous sweep steps (`ST_BAD_ARG` on `0` or `>32`); `pass_mode=0` checks `sample_reg == expected`, `pass_mode=1` checks nonempty FIFO and `last_mark_tag == expected` |
-| `0x1B` | `START_SCAN` | `arg0[3:0] = start[11:8]` | Launch on-chip sweep; sequencer advances `cur_param += step` across trials with 2-cycle inter-trial overhead, asserting `scan_active` (`uo_out[6]`) then `scan_done` (`uo_out[7]`) |
+| `0x1B` | `START_SCAN` | `arg0[3:0] = start[11:8]` | Launch 1D on-chip sweep; sequencer advances `cur_param += step` across trials with 2-cycle inter-trial overhead, asserting `scan_active` (`uo_out[6]`) then `scan_done` (`uo_out[7]`) |
 | `0x1C` | `READ_SCAN_STATUS` | `arg0 = page` (`0` or `1`) | `arg0=0`: `{scan_done, scan_active}`, `steps_done`, `pass_cnt`, `fail_cnt`; `arg0=1`: `scan_pass_bitmap[31:0]` (LSB first) |
-| `0x1D` | `READ_SCAN_FAIL` | `arg0 = page` (`0` or `1`) | `arg0=0`: `{valid, idx}`, `param[7:0]`, `{state, param[11:8]}`, `sample_reg`; `arg0=1`: `cycle_cnt[15:0]`, `last_mark_tag`, `event_count` for the first failing trial |
+| `0x1D` | `READ_SCAN_FAIL` | `arg0 = page` (`0..2`) | `arg0=0`: `{valid, idx}`, `param[7:0]`, `{state, param[11:8]}`, `sample_reg`; `arg0=1`: `cycle_cnt[15:0]`, `last_mark_tag`, `{stop_reason, 0, evcnt}`; `arg0=2`: `fail_x_idx`, `param2[11:0]`, `scan2_nx` |
+| `0x1E` | `SET_CTRL` | `arg0 = sub` (`0..3`), `arg1..3` | `arg0=0`: set `cfg_sync_mask[7:0]`, `cfg_cap_mask[7:0]`, `cfg_cap_mode[1:0]`; `arg0=1`: set 16-bit `cfg_cycle_budget`; `arg0=2/3`: readback config & `stop_reason` |
+| `0x1F` | `CFG_SCAN_2D` | `arg0 = x_start[7:0]`, `arg1 = x_step`, `arg2[4:0] = nx` (`1..16`), `arg3[3:0] = x_start[11:8]` | Configure outer X axis (`1..16` columns) for single-load 2D grid scan alongside Y axis from `CFG_SCAN` |
+| `0x20` | `START_SCAN_2D` | `arg0[3:0] = y_start[11:8]` | Launch full `(nx × ny)` on-chip grid scan varying both `cmd_param` (Y) and `cmd_param2` (X) from one loaded program |
+| `0x21` | `READ_SCAN_2D` | `arg0` (`0..15`, `0xFE`, `0xFF`) | `0xFF`: `{scan_done, scan_active}`, `total_pass`, `{cur_x, fail_x}`; `0xFE`: `total_fail`, `nx`, `ny`; `0..15`: 32-bit Y pass bitmap for column `x = arg0` |
 
 | Status codes: `0x00 ST_OK`, `0x01 ST_BAD_CRC`, `0x02 ST_BAD_OP`, `0x03 ST_BAD_ARG`, `0x04 ST_BAD_STATE`, `0x05 ST_CHECKSUM`.
 

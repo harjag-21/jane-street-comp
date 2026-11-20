@@ -806,6 +806,29 @@ class TimingExplorerTests(unittest.TestCase):
             self.assertEqual(r_i2c_patch["sim_observations"]["i2c_rx_byte"], 0x3C)
             self.assertEqual([e["tag"] for e in r_i2c_patch["events"]], [0xA0, 0xA1])
 
+    def test_v2_sync_budget_capture_auto2d_verifier_and_showcase(self) -> None:
+        from tools.protocol_asm import build_spi_2d_program, verify_program_safety
+        from tools.run_showcase import run_showcase
+        from tools.sync_robustness_study import run_sync_robustness_study
+
+        # Verifier checks safe/unsafe classification & 59-word dual-param 2D program
+        spi2d = build_spi_2d_program(0x06, 0x05, sclk_low_cycles=None)
+        self.assertEqual(len(spi2d), 59)
+        self.assertEqual(verify_program_safety(spi2d, run_param=4, run_param2=4)["verdict"], "SAFE_TO_RUN")
+        self.assertEqual(verify_program_safety([insn("JMP", 0)], cycle_budget=0)["verdict"], "UNSAFE")
+        self.assertEqual(verify_program_safety([insn("JMP", 0)], cycle_budget=20)["verdict"], "SAFE_WITH_BUDGET")
+
+        # Raw vs 2-FF sync boundary shift (+2 cycles exact)
+        sync_rep = run_sync_robustness_study(delays_ns=(25,))
+        self.assertEqual(sync_rep["wait_edge_stretch_cycles"]["measured_delta_cycles"], 2)
+
+        # Full end-to-end showcase workflow
+        show = run_showcase()
+        self.assertEqual(show["ping"]["feature_flags"], 0xF)
+        self.assertEqual(show["cycle_budget_guard"]["stop_reason"], "CYCLE_LIMIT")
+        self.assertEqual(show["auto_2d_s0"]["total_points"], 192)
+        self.assertGreater(len(show["edge_capture_events"]), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

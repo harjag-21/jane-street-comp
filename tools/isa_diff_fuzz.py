@@ -37,7 +37,12 @@ module tb_diff_sequencer;
   reg         prog_valid = 1'b1;
   reg         cmd_start = 1'b0;
   reg  [11:0] cmd_param = 12'd0;
+  reg  [11:0] cmd_param2 = 12'd0;
   reg         cmd_halt = 1'b0;
+  reg  [7:0]  cfg_sync_mask = 8'h00;
+  reg  [15:0] cfg_cycle_budget = 16'd0;
+  reg  [7:0]  cfg_cap_mask = 8'h00;
+  reg  [1:0]  cfg_cap_mode = 2'b00;
   reg         event_pop = 1'b0;
   wire [3:0]  event_count_o;
   wire        event_overflow_o;
@@ -49,6 +54,7 @@ module tb_diff_sequencer;
   wire [7:0]  sample_reg_o;
   wire [15:0] cycle_cnt_o;
   wire [7:0]  last_mark_tag_o;
+  wire [2:0]  stop_reason_o;
   reg  [7:0]  uio_in = 8'h00;
   wire [7:0]  uio_out_o;
   wire [7:0]  uio_oe_o;
@@ -66,7 +72,12 @@ module tb_diff_sequencer;
       .prog_clear      (1'b0),
       .cmd_start       (cmd_start),
       .cmd_param       (cmd_param),
+      .cmd_param2      (cmd_param2),
       .cmd_halt        (cmd_halt),
+      .cfg_sync_mask   (cfg_sync_mask),
+      .cfg_cycle_budget(cfg_cycle_budget),
+      .cfg_cap_mask    (cfg_cap_mask),
+      .cfg_cap_mode    (cfg_cap_mode),
       .event_pop       (event_pop),
       .event_count_o   (event_count_o),
       .event_overflow_o(event_overflow_o),
@@ -78,6 +89,7 @@ module tb_diff_sequencer;
       .sample_reg_o    (sample_reg_o),
       .cycle_cnt_o     (cycle_cnt_o),
       .last_mark_tag_o (last_mark_tag_o),
+      .stop_reason_o   (stop_reason_o),
       .uio_in          (uio_in),
       .uio_out_o       (uio_out_o),
       .uio_oe_o        (uio_oe_o),
@@ -86,15 +98,16 @@ module tb_diff_sequencer;
 
   task automatic emit_state(input integer seed_id, input integer step_id);
     begin
-      $display("S %0d %0d %0d %0d %02x %02x %0d %02x %04x %02x %0d %0d %02x %04x",
+      $display("S %0d %0d %0d %0d %02x %02x %0d %02x %04x %02x %0d %0d %02x %04x %0d",
                seed_id, step_id, eng_state_o, pc_o, uio_out_o, uio_oe_o,
                last_sample_o, sample_reg_o, cycle_cnt_o, last_mark_tag_o,
-               event_count_o, event_overflow_o, event_head_tag_o, event_head_ts_o);
+               event_count_o, event_overflow_o, event_head_tag_o, event_head_ts_o,
+               stop_reason_o);
     end
   endtask
 
   reg [1023:0] stim_path;
-  integer fd, rc, seed_id, nwords, rparam, max_steps;
+  integer fd, rc, seed_id, nwords, rparam, rparam2, sync_m, budget_c, cap_m, cap_md, max_steps;
   integer i, w, pin_v, do_halt, pop_i;
   initial begin
     if (!$value$plusargs("STIM=%s", stim_path)) begin
@@ -106,13 +119,18 @@ module tb_diff_sequencer;
       $display("ERR cannot open +STIM");
       $finish;
     end
-    while ($fscanf(fd, "%d %d %d %d", seed_id, nwords, rparam, max_steps) == 4) begin
+    while ($fscanf(fd, "%d %d %d %d %x %d %x %d %d",
+                   seed_id, nwords, rparam, rparam2, sync_m, budget_c, cap_m, cap_md, max_steps) == 9) begin
       rst_n = 1'b0;
       prog_we = 1'b0;
       cmd_start = 1'b0;
       cmd_halt = 1'b0;
       event_pop = 1'b0;
       uio_in = 8'h00;
+      cfg_sync_mask = sync_m[7:0];
+      cfg_cycle_budget = budget_c[15:0];
+      cfg_cap_mask = cap_m[7:0];
+      cfg_cap_mode = cap_md[1:0];
       @(posedge clk);
       #1;
       rst_n = 1'b1;
@@ -130,6 +148,7 @@ module tb_diff_sequencer;
       // Start pulse
       cmd_start = 1'b1;
       cmd_param = rparam[11:0];
+      cmd_param2 = rparam2[11:0];
       @(posedge clk);
       #1;
       cmd_start = 1'b0;
@@ -178,6 +197,7 @@ class SequencerRefModel:
         self.sample_reg: int = 0
         self.cycle_cnt: int = 0
         self.last_mark_tag: int = 0
+        self.stop_reason: int = 0
         self.uio_out: int = 0
         self.uio_oe: int = 0
         self.wait_cnt: int = 0
@@ -185,11 +205,19 @@ class SequencerRefModel:
         self.wait_edge_pol: int = 0
         self.wait_edge_pin: int = 0
         self.run_param: int = 0
+        self.run_param2: int = 0
         self.loop_cnt0: int = 0
         self.loop_cnt1: int = 0
         self.tx_reg: int = 0
         self.tx_lsb_first: int = 0
         self.tx_od: int = 0
+        self.cfg_sync_mask: int = 0
+        self.cfg_cycle_budget: int = 0
+        self.cfg_cap_mask: int = 0
+        self.cfg_cap_mode: int = 0
+        self.sync_d1: int = 0
+        self.sync_d2: int = 0
+        self.cap_prev: int = 0
         self.ev_fifo: List[Tuple[int, int]] = []
         self.event_overflow: int = 0
 
@@ -197,7 +225,7 @@ class SequencerRefModel:
         assert len(words) <= PROG_DEPTH
         self.imem = list(words) + [0] * (PROG_DEPTH - len(words))
 
-    def observable(self) -> Tuple[int, int, int, int, int, int, int, int, int, int, int, int]:
+    def observable(self) -> Tuple[int, int, int, int, int, int, int, int, int, int, int, int, int]:
         head_tag, head_ts = self.ev_fifo[0] if self.ev_fifo else (0, 0)
         return (
             self.eng_state,
@@ -212,9 +240,19 @@ class SequencerRefModel:
             self.event_overflow,
             head_tag,
             head_ts,
+            self.stop_reason,
         )
 
-    def start(self, run_param: int) -> None:
+    def start(
+        self,
+        run_param: int,
+        *,
+        run_param2: int = 0,
+        sync_mask: int = 0,
+        cycle_budget: int = 0,
+        cap_mask: int = 0,
+        cap_mode: int = 0,
+    ) -> None:
         assert self.eng_state != ENG_RUN
         self.eng_state = ENG_RUN
         self.pc = 0
@@ -222,14 +260,23 @@ class SequencerRefModel:
         self.sample_reg = 0
         self.cycle_cnt = 0
         self.last_mark_tag = 0
+        self.stop_reason = 0
         self.wait_cnt = 0
         self.wait_edge_active = False
         self.run_param = run_param & 0xFFF
+        self.run_param2 = run_param2 & 0xFFF
+        self.cfg_sync_mask = sync_mask & 0xFF
+        self.cfg_cycle_budget = cycle_budget & 0xFFFF
+        self.cfg_cap_mask = cap_mask & 0xFF
+        self.cfg_cap_mode = cap_mode & 0x3
         self.loop_cnt0 = 0
         self.loop_cnt1 = 0
         self.tx_reg = 0
         self.tx_lsb_first = 0
         self.tx_od = 0
+        self.sync_d1 = 0
+        self.sync_d2 = 0
+        self.cap_prev = 0
         self.ev_fifo = []
         self.event_overflow = 0
 
@@ -238,8 +285,28 @@ class SequencerRefModel:
             return None
         return self.ev_fifo.pop(0)
 
+    def _push_ev(self, tag: int, ts: int) -> None:
+        self.last_mark_tag = tag & 0xFF
+        if len(self.ev_fifo) < EVENT_DEPTH:
+            self.ev_fifo.append((tag & 0xFF, ts & 0xFFFF))
+        else:
+            self.event_overflow = 1
+
     def step(self, uio_in: int, cmd_halt: bool = False) -> None:
+        raw_in = uio_in & 0xFF
+        uio_eff = (self.sync_d2 & self.cfg_sync_mask) | (raw_in & (~self.cfg_sync_mask & 0xFF))
+        budget_hit = (
+            self.eng_state == ENG_RUN
+            and self.cfg_cycle_budget != 0
+            and self.cycle_cnt >= self.cfg_cycle_budget
+        )
+        # Advance 2-FF input synchronizer every clock cycle
+        self.sync_d2 = self.sync_d1
+        self.sync_d1 = raw_in
+
         if cmd_halt:
+            if self.eng_state == ENG_RUN:
+                self.stop_reason = 3
             self.eng_state = ENG_HALTED
             self.wait_cnt = 0
             self.wait_edge_active = False
@@ -247,13 +314,34 @@ class SequencerRefModel:
             return
         if self.eng_state != ENG_RUN:
             return
+        if budget_hit:
+            self.eng_state = ENG_FAULT
+            self.wait_cnt = 0
+            self.wait_edge_active = False
+            self.uio_oe = 0
+            self.stop_reason = 4
+            return
 
         pre_cycle = self.cycle_cnt
         self.cycle_cnt = (self.cycle_cnt + 1) & 0xFFFF
 
+        w = self.imem[self.pc]
+        op = (w >> 12) & 0xF
+        imm = w & 0xFFF
+        do_mark = (self.wait_cnt == 0) and (op == 0x9)
+        prev_cap = self.cap_prev
+        self.cap_prev = uio_eff
+
+        if not do_mark and self.cfg_cap_mode != 0 and self.cfg_cap_mask != 0:
+            diff = (uio_eff ^ prev_cap) & self.cfg_cap_mask
+            rise = (diff & uio_eff) if (self.cfg_cap_mode & 1) else 0
+            fall = (diff & (~uio_eff & 0xFF)) if (self.cfg_cap_mode & 2) else 0
+            if (rise | fall) != 0:
+                self._push_ev(uio_eff, pre_cycle)
+
         if self.wait_cnt != 0:
             if self.wait_edge_active:
-                pin_val = (uio_in >> self.wait_edge_pin) & 1
+                pin_val = (uio_eff >> self.wait_edge_pin) & 1
                 if pin_val == self.wait_edge_pol:
                     self.wait_edge_active = False
                     self.wait_cnt = 0
@@ -272,9 +360,6 @@ class SequencerRefModel:
                     self.pc = (self.pc + 1) & (PROG_DEPTH - 1)
             return
 
-        w = self.imem[self.pc]
-        op = (w >> 12) & 0xF
-        imm = w & 0xFFF
         next_pc = (self.pc + 1) & (PROG_DEPTH - 1)
 
         if op == 0x0:  # NOP
@@ -291,7 +376,7 @@ class SequencerRefModel:
             else:
                 self.wait_cnt = imm
         elif op == 0x4:  # SAMPLE
-            bit = (uio_in >> (imm & 0x7)) & 1
+            bit = (uio_eff >> (imm & 0x7)) & 1
             self.last_sample = bit
             if not ((imm >> 11) & 1):
                 self.sample_reg = ((self.sample_reg << 1) | bit) & 0xFF
@@ -325,25 +410,23 @@ class SequencerRefModel:
             self.pc = next_pc
         elif op == 0x9:  # MARK
             tag = self.sample_reg if ((imm >> 8) & 1) else (imm & 0xFF)
-            self.last_mark_tag = tag
-            if len(self.ev_fifo) < EVENT_DEPTH:
-                self.ev_fifo.append((tag, pre_cycle))
-            else:
-                self.event_overflow = 1
+            self._push_ev(tag, pre_cycle)
             self.pc = next_pc
         elif op == 0xA:  # HALT
             self.eng_state = ENG_HALTED
+            self.stop_reason = 1
             if not (imm & 1):
                 self.uio_oe = 0
         elif op == 0xB:  # OUT_SAMPLE
             self.uio_out = imm & 0xFF
-            bit = (uio_in >> ((imm >> 8) & 0x7)) & 1
+            bit = (uio_eff >> ((imm >> 8) & 0x7)) & 1
             self.last_sample = bit
             if not ((imm >> 11) & 1):
                 self.sample_reg = ((self.sample_reg << 1) | bit) & 0xFF
             self.pc = next_pc
-        elif op == 0xC:  # WAIT_PARAM
-            extra = min(0xFFF, self.run_param + (imm & 0xFF))
+        elif op == 0xC:  # WAIT_PARAM / WAIT_PARAM2
+            sel_p = self.run_param2 if ((imm >> 8) & 1) else self.run_param
+            extra = min(0xFFF, sel_p + (imm & 0xFF))
             if extra == 0:
                 self.pc = next_pc
             else:
@@ -352,7 +435,7 @@ class SequencerRefModel:
             pol = (imm >> 11) & 1
             pin = (imm >> 8) & 7
             lim = self.run_param if (imm & 0xFF) == 0 else (imm & 0xFF)
-            if ((uio_in >> pin) & 1) == pol:
+            if ((uio_eff >> pin) & 1) == pol:
                 self.last_sample = 1
                 self.pc = next_pc
             elif lim == 0:
@@ -372,6 +455,7 @@ class SequencerRefModel:
                     self.pc = next_pc
                 else:
                     self.eng_state = ENG_FAULT
+                    self.stop_reason = 2
                     self.uio_oe = 0
             else:
                 tx_pin = imm & 0x7
@@ -408,20 +492,26 @@ class SequencerRefModel:
                     else:
                         self.tx_reg = (self.tx_reg << 1) & 0xFF
                     if rx_pin != tx_pin:
-                        s_bit = (uio_in >> rx_pin) & 1
+                        s_bit = (uio_eff >> rx_pin) & 1
                         self.last_sample = s_bit
                         self.sample_reg = ((self.sample_reg << 1) | s_bit) & 0xFF
                 self.pc = next_pc
         else:  # 0xF illegal -> ENG_FAULT + safe Hi-Z
             self.eng_state = ENG_FAULT
+            self.stop_reason = 2
             self.uio_oe = 0
 
 
-def generate_test_case(seed: int) -> Tuple[List[int], int, List[Tuple[int, int]]]:
+def generate_test_case(seed: int) -> Tuple[List[int], int, int, int, int, int, int, List[Tuple[int, int]]]:
     """Generate a guaranteed-terminating program exercising directed boundary corners + randomized mixes."""
     rng = random.Random(20261118 + seed)
     words: List[int] = []
-    # Directed corner seeds 0..5 ensure every edge case is guaranteed covered, plus 6..119 random stress
+    run_param2 = 0
+    sync_mask = 0
+    cycle_budget = 0
+    cap_mask = 0
+    cap_mode = 0
+    # Directed corner seeds 0..8 ensure every edge case is guaranteed covered, plus 9..N random stress
     if seed == 0:
         # WAIT(0), WAIT(4095) max wait, WAIT_PARAM saturation (4090+10->4095), HALT keep_oe=1
         words = [
@@ -499,8 +589,42 @@ def generate_test_case(seed: int) -> Tuple[List[int], int, List[Tuple[int, int]]
             insn("HALT", 0),
         ]
         run_param = 0
+    elif seed == 6:
+        # Runaway infinite loop caught cleanly by hardware cfg_cycle_budget
+        words = [
+            insn("OE", 0xFF),
+            insn("OUT", 0xA5),
+            insn("MARK", 0x33),
+            insn("JMP", 1),
+        ]
+        run_param = 0
+        cycle_budget = 27
+    elif seed == 8:
+        # WAIT_PARAM2 + per-pin 2-FF sync + passive hardware edge capture colliding with OP_MARK
+        words = [
+            insn("OE", 0x0F),
+            insn("WAIT_PARAM", 0),
+            insn("WAIT_PARAM2", 2),
+            insn("SAMPLE", 3),
+            insn("MARK", 0x55),
+            insn("WAIT", 6),
+            insn("HALT", 0),
+        ]
+        run_param = 2
+        run_param2 = 4
+        sync_mask = 0xA8
+        cap_mask = 0x0F
+        cap_mode = 3
     else:
         run_param = rng.choice([0, 1, 3, 7, 15, 250, 4092])
+        run_param2 = rng.choice([0, 2, 5, 11, 200])
+        if seed % 4 == 1:
+            sync_mask = rng.randint(1, 255)
+        if seed % 5 == 2:
+            cap_mask = rng.randint(1, 255)
+            cap_mode = rng.choice([1, 2, 3])
+        if seed % 9 == 3:
+            cycle_budget = rng.choice([40, 85, 250])
         # Build 48..62 words with forward JZ/JMP and optional bounded SETCOUNT/LOOP
         idx = 0
         # Reserve optional loop wrapper if seed is even
@@ -567,7 +691,7 @@ def generate_test_case(seed: int) -> Tuple[List[int], int, List[Tuple[int, int]]
             elif op == 0xB:
                 words.append(insn("OUT_SAMPLE", (rng.randint(0, 1) << 11) | (rng.randint(0, 7) << 8) | rng.randint(0, 255)))
             elif op == 0xC:
-                words.append(insn("WAIT_PARAM", rng.choice([0, 1, 8, 255])))
+                words.append(insn("WAIT_PARAM", ((rng.randint(0, 1) << 8) | rng.choice([0, 1, 8, 255]))))
             elif op == 0xE:
                 if rng.randint(0, 1) == 0:
                     words.append(insn("TX", (rng.randint(0, 1) << 9) | (rng.randint(0, 1) << 8) | rng.randint(0, 255)))
@@ -604,7 +728,7 @@ def generate_test_case(seed: int) -> Tuple[List[int], int, List[Tuple[int, int]]
         pin_v = rng.randint(0, 255)
         do_h = 1 if (inject_halt_at is not None and t == inject_halt_at) else 0
         schedule.append((pin_v, do_h))
-    return words, run_param, schedule
+    return words, run_param, run_param2, sync_mask, cycle_budget, cap_mask, cap_mode, schedule
 
 
 def run_differential_suite(num_seeds: int = 120) -> Dict[str, Any]:
@@ -643,6 +767,10 @@ def run_differential_suite(num_seeds: int = 120) -> Dict[str, Any]:
         "illegal_fault_hiz": 0,
         "cmd_halt_abort": 0,
         "cmd_halt_on_mark": 0,
+        "wait_param2": 0,
+        "sync_mask_nonzero": 0,
+        "cycle_budget_timeout": 0,
+        "edge_capture_seeds": 0,
     }
 
     with tempfile.TemporaryDirectory(prefix="isa_diff_") as tmp:
@@ -675,17 +803,29 @@ def run_differential_suite(num_seeds: int = 120) -> Dict[str, Any]:
         stim_lines: List[str] = []
         total_cycles = 0
         for seed in range(num_seeds):
-            words, run_param, full_sched = generate_test_case(seed)
+            words, run_param, run_param2, sync_mask, cycle_budget, cap_mask, cap_mode, full_sched = generate_test_case(seed)
+            if sync_mask != 0:
+                coverage["sync_mask_nonzero"] += 1
+            if cap_mode != 0 and cap_mask != 0:
+                coverage["edge_capture_seeds"] += 1
             ref = SequencerRefModel()
             ref.load(words)
-            ref.start(run_param)
+            ref.start(
+                run_param,
+                run_param2=run_param2,
+                sync_mask=sync_mask,
+                cycle_budget=cycle_budget,
+                cap_mask=cap_mask,
+                cap_mode=cap_mode,
+            )
             ref_states = [ref.observable()]
             used_sched: List[Tuple[int, int]] = []
             for step_idx, (pin_v, do_h) in enumerate(full_sched):
                 if ref.eng_state != ENG_RUN:
                     break
+                will_budget = (ref.cfg_cycle_budget != 0) and (ref.cycle_cnt >= ref.cfg_cycle_budget)
                 # Record instruction/branch coverage right before step
-                if ref.wait_cnt == 0 and not do_h:
+                if ref.wait_cnt == 0 and not do_h and not will_budget:
                     w = ref.imem[ref.pc]
                     op = (w >> 12) & 0xF
                     imm = w & 0xFFF
@@ -729,15 +869,19 @@ def run_differential_suite(num_seeds: int = 120) -> Dict[str, Any]:
                         else:
                             coverage["out_sample_shift"] += 1
                     elif op == 0xC:
-                        if min(0xFFF, ref.run_param + (imm & 0xFF)) == 0:
+                        if (imm >> 8) & 1:
+                            coverage["wait_param2"] += 1
+                        sel_p = ref.run_param2 if ((imm >> 8) & 1) else ref.run_param
+                        if min(0xFFF, sel_p + (imm & 0xFF)) == 0:
                             coverage["wait_param_zero"] += 1
-                        elif ref.run_param + (imm & 0xFF) >= 0xFFF:
+                        elif sel_p + (imm & 0xFF) >= 0xFFF:
                             coverage["wait_param_saturated"] += 1
                     elif op == 0xD:
                         pol = (imm >> 11) & 1
                         pin = (imm >> 8) & 7
                         lim = ref.run_param if (imm & 0xFF) == 0 else (imm & 0xFF)
-                        if ((pin_v >> pin) & 1) == pol:
+                        eff_now = ((ref.sync_d2 >> pin) & 1) if ((ref.cfg_sync_mask >> pin) & 1) else ((pin_v >> pin) & 1)
+                        if eff_now == pol:
                             coverage["wait_edge_immediate_hit"] += 1
                         elif lim == 0:
                             coverage["wait_edge_timeout"] += 1
@@ -767,8 +911,9 @@ def run_differential_suite(num_seeds: int = 120) -> Dict[str, Any]:
                                 coverage["tx_shift_only"] += 1
                     elif op == 0xF:
                         coverage["illegal_fault_hiz"] += 1
-                elif ref.wait_edge_active and not do_h:
-                    if ((pin_v >> ref.wait_edge_pin) & 1) == ref.wait_edge_pol:
+                elif ref.wait_edge_active and not do_h and not will_budget:
+                    eff_wait = ((ref.sync_d2 >> ref.wait_edge_pin) & 1) if ((ref.cfg_sync_mask >> ref.wait_edge_pin) & 1) else ((pin_v >> ref.wait_edge_pin) & 1)
+                    if eff_wait == ref.wait_edge_pol:
                         coverage["wait_edge_delayed_hit"] += 1
                     elif ref.wait_cnt == 1:
                         coverage["wait_edge_timeout"] += 1
@@ -778,6 +923,8 @@ def run_differential_suite(num_seeds: int = 120) -> Dict[str, Any]:
                         coverage["cmd_halt_on_mark"] += 1
 
                 ref.step(pin_v, cmd_halt=bool(do_h))
+                if ref.stop_reason == 4:
+                    coverage["cycle_budget_timeout"] += 1
                 if ref.event_overflow:
                     coverage["mark_overflow"] += 1
                 ref_states.append(ref.observable())
@@ -791,7 +938,9 @@ def run_differential_suite(num_seeds: int = 120) -> Dict[str, Any]:
                 ref_pops.append(p)
             total_cycles += len(used_sched)
 
-            stim_lines.append(f"{seed} {len(words)} {run_param} {len(used_sched)}")
+            stim_lines.append(
+                f"{seed} {len(words)} {run_param} {run_param2} {sync_mask:02x} {cycle_budget} {cap_mask:02x} {cap_mode} {len(used_sched)}"
+            )
             stim_lines.extend(f"{w:04x}" for w in words)
             stim_lines.extend(f"{pv:02x} {dh}" for pv, dh in used_sched)
             cases.append((seed, words, run_param, used_sched, ref_states, ref_pops))
@@ -824,6 +973,7 @@ def run_differential_suite(num_seeds: int = 120) -> Dict[str, Any]:
                     int(parts[12]),
                     int(parts[13], 16),
                     int(parts[14], 16),
+                    int(parts[15]),
                 )
             )
         elif parts[0] == "E":
@@ -879,6 +1029,8 @@ def format_markdown(rep: Dict[str, Any]) -> str:
         f"| `HALT(keep_oe=0)` / `HALT(keep_oe=1)` | {cov['halt_keep_oe_0']} / {cov['halt_keep_oe_1']} |",
         f"| Illegal opcode (`0xF` + reserved `0xE`) `ENG_FAULT` + Hi-Z (`uio_oe=0`) | {cov['illegal_fault_hiz']} (reserved `0xE`: {cov['tx_reserved_fault']}) |",
         f"| `cmd_halt` mid-run abort (on `OP_MARK`) | {cov['cmd_halt_abort']} ({cov['cmd_halt_on_mark']}) |",
+        f"| `WAIT_PARAM2` (`cmd_param2`) / 2-FF sync seeds | {cov['wait_param2']} / {cov['sync_mask_nonzero']} |",
+        f"| Cycle-budget timeouts / edge-capture seeds | {cov['cycle_budget_timeout']} / {cov['edge_capture_seeds']} |",
     ]
     return "\n".join(lines) + "\n"
 
@@ -917,6 +1069,10 @@ def main() -> int:
     assert cov["illegal_fault_hiz"] > 0
     assert cov["cmd_halt_abort"] > 0
     assert cov["cmd_halt_on_mark"] > 0
+    assert cov["wait_param2"] > 0
+    assert cov["sync_mask_nonzero"] > 0
+    assert cov["cycle_budget_timeout"] > 0
+    assert cov["edge_capture_seeds"] > 0
     return 0
 
 

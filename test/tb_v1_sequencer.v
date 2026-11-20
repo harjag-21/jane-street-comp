@@ -11,7 +11,12 @@ module tb_v1_sequencer;
   reg prog_clear = 0;
   reg cmd_start = 0;
   reg [11:0] cmd_param = 0;
+  reg [11:0] cmd_param2 = 0;
   reg cmd_halt = 0;
+  reg [7:0] cfg_sync_mask = 8'h00;
+  reg [15:0] cfg_cycle_budget = 16'd0;
+  reg [7:0] cfg_cap_mask = 8'h00;
+  reg [1:0] cfg_cap_mode = 2'b00;
   reg event_pop = 0;
 
   wire [3:0] event_count;
@@ -24,6 +29,7 @@ module tb_v1_sequencer;
   wire [7:0] sample_reg;
   wire [15:0] cycle_cnt;
   wire [7:0] last_mark_tag;
+  wire [2:0] stop_reason;
   wire [7:0] uio_out, uio_oe;
   wire trial_active;
 
@@ -49,7 +55,12 @@ module tb_v1_sequencer;
     .prog_clear(prog_clear),
     .cmd_start(cmd_start),
     .cmd_param(cmd_param),
+    .cmd_param2(cmd_param2),
     .cmd_halt(cmd_halt),
+    .cfg_sync_mask(cfg_sync_mask),
+    .cfg_cycle_budget(cfg_cycle_budget),
+    .cfg_cap_mask(cfg_cap_mask),
+    .cfg_cap_mode(cfg_cap_mode),
     .event_pop(event_pop),
     .event_count_o(event_count),
     .event_overflow_o(event_overflow),
@@ -61,6 +72,7 @@ module tb_v1_sequencer;
     .sample_reg_o(sample_reg),
     .cycle_cnt_o(cycle_cnt),
     .last_mark_tag_o(last_mark_tag),
+    .stop_reason_o(stop_reason),
     .uio_in(bus_pins),
     .uio_out_o(uio_out),
     .uio_oe_o(uio_oe),
@@ -789,6 +801,101 @@ module tb_v1_sequencer;
     end
   endtask
 
+  task test_v2_sequencer_features;
+    integer k;
+    reg [7:0] tag;
+    reg [15:0] ts;
+    begin
+      // (1) WAIT_PARAM2 uses cmd_param2 independently of cmd_param
+      clear_imem;
+      load_word(6'd0, insn(OP_WAIT_PARAM, 12'h000)); // waits run_param (3)
+      load_word(6'd1, insn(OP_MARK, 12'h0A1));
+      load_word(6'd2, insn(OP_WAIT_PARAM, 12'h102)); // WAIT_PARAM2 +2 => run_param2(7)+2 = 9
+      load_word(6'd3, insn(OP_MARK, 12'h0A2));
+      load_word(6'd4, insn(OP_HALT, 12'h000));
+      prog_valid = 1;
+      cmd_param2 = 12'd7;
+      start_and_wait(12'd3);
+      cmd_param2 = 12'd0;
+      check(eng_state == 2'd2 && stop_reason == 3'd1, "WAIT_PARAM2 finished normally with stop_reason=HALT_INSN");
+      check(cycle_cnt == 16'd17, "WAIT_PARAM(3)=4 + MARK(1) + WAIT_PARAM2(7+2)=10 + MARK(1) + HALT(1) = 17 cycles");
+      pop_event(tag, ts);
+      check(tag == 8'hA1 && ts == 16'd4, "WAIT_PARAM2 MARK1 ts=4");
+      pop_event(tag, ts);
+      check(tag == 8'hA2 && ts == 16'd15, "WAIT_PARAM2 MARK2 ts=15");
+
+      // (2) Selectable per-pin 2-FF synchronizer: pin 3 synchronized (+2 cyc), pin 2 raw (0 cyc)
+      clear_imem;
+      load_word(6'd0, insn(OP_WAIT, 12'd0));     // t=0..0 -> finishes t=1
+      load_word(6'd1, insn(OP_SAMPLE, 12'h003)); // t=1 sample synced pin 3 (reset=0, pulse @ t=1 reaches sync_d2 @ t=3!)
+      load_word(6'd2, insn(OP_SAMPLE, 12'h002)); // t=2 sample raw pin 2 immediately
+      load_word(6'd3, insn(OP_SAMPLE, 12'h003)); // t=3 sample synced pin 3 -> sees pulse driven at t=1!
+      load_word(6'd4, insn(OP_HALT, 12'h000));
+      prog_valid = 1;
+      cfg_sync_mask = 8'b0000_1000; // pin 3 synced only
+      target_drive_en = 8'b0000_1100;
+      target_drive_val = 8'b0000_0000;
+      repeat (3) @(posedge clk); // flush 0 into sync_d1/d2
+      @(negedge clk); cmd_param = 12'd0; cmd_start = 1;
+      @(posedge clk); #1; cmd_start = 0; // eng_state <= RUN, pc <= 0
+      @(posedge clk); #1; // t=0 executes WAIT 0 (pc 0->1)
+      @(negedge clk);
+      target_drive_val = 8'b0000_1100; // raise pins 2 & 3 before t=1
+      @(posedge clk); #1; // t=1 executes SAMPLE 3 (sync_d2=0 -> bit 0; sync_d1 <= 1)
+      @(posedge clk); #1; // t=2 executes SAMPLE 2 (raw=1 -> bit 1; sync_d2 <= 1)
+      @(posedge clk); #1; // t=3 executes SAMPLE 3 (sync_d2=1 -> bit 1)
+      @(posedge clk); #1; // t=4 executes HALT
+      target_drive_en = 8'h00;
+      cfg_sync_mask = 8'h00;
+      check(eng_state == 2'd2 && sample_reg[2:0] == 3'b011, "Per-pin 2-FF sync shifted pin3 +2 cyc while pin2 stayed raw");
+
+      // (3) Optional on-chip execution budget catches infinite loop cleanly
+      clear_imem;
+      load_word(6'd0, insn(OP_OE, 12'h0FF));
+      load_word(6'd1, insn(OP_OUT, 12'h05A));
+      load_word(6'd2, insn(OP_JMP, 12'd0));
+      prog_valid = 1;
+      cfg_cycle_budget = 16'd15;
+      start_and_wait(12'd0);
+      cfg_cycle_budget = 16'd0;
+      check(eng_state == 2'd3, "Budget timeout entered ENG_FAULT");
+      check(stop_reason == 3'd4, "Budget timeout set stop_reason=STOP_CYCLE_LIMIT(4)");
+      check(uio_oe == 8'h00, "Budget timeout forced Hi-Z uio_oe=0");
+      check(cycle_cnt == 16'd15, "Budget timeout halted exactly at cycle_cnt=15");
+      @(negedge clk); cmd_halt = 1; @(posedge clk); #1; cmd_halt = 0;
+      check(stop_reason == 3'd4, "Subsequent cmd_halt when not running preserved STOP_CYCLE_LIMIT");
+
+      // (4) Passive hardware edge-capture mode records transitions with zero OP_MARK insns
+      clear_imem;
+      load_word(6'd0, insn(OP_WAIT, 12'd11));
+      load_word(6'd1, insn(OP_HALT, 12'h000));
+      prog_valid = 1;
+      cfg_cap_mask = 8'b0000_0011;
+      cfg_cap_mode = 2'b11; // both edges on pins [1:0]
+      target_drive_en = 8'hFF;
+      target_drive_val = 8'h00;
+      @(negedge clk); cmd_start = 1;
+      @(posedge clk); #1; cmd_start = 0; // cap_prev latched 0x00, cycle_cnt=0
+      @(posedge clk); #1; // cyc 0->1 (no edge)
+      @(negedge clk); target_drive_val = 8'h01;
+      @(posedge clk); #1; // cyc 1: captured 0x01 @ ts=1
+      @(negedge clk); target_drive_val = 8'h03;
+      @(posedge clk); #1; // cyc 2: captured 0x03 @ ts=2
+      @(negedge clk); target_drive_val = 8'h02;
+      @(posedge clk); #1; // cyc 3: captured 0x02 @ ts=3
+      for (k = 0; k < 20 && eng_state == 2'd1; k = k + 1) begin
+        @(posedge clk); #1;
+      end
+      target_drive_en = 8'h00;
+      cfg_cap_mask = 8'h00;
+      cfg_cap_mode = 2'b00;
+      check(eng_state == 2'd2 && event_count == 4'd3, "Edge capture recorded 3 pin transitions passively");
+      pop_event(tag, ts); check(tag == 8'h01 && ts == 16'd1, "Edge cap #1: 0x01 @ ts=1");
+      pop_event(tag, ts); check(tag == 8'h03 && ts == 16'd2, "Edge cap #2: 0x03 @ ts=2");
+      pop_event(tag, ts); check(tag == 8'h02 && ts == 16'd3, "Edge cap #3: 0x02 @ ts=3");
+    end
+  endtask
+
   initial begin
     #500000;
     $display("FAIL: global simulation timeout at time=%0t pc=%0d state=%0d", $time, pc, eng_state);
@@ -815,8 +922,10 @@ module tb_v1_sequencer;
     test_tx_shifter_multibyte_and_faults;
     $display("Running test_rtl_loophole_regressions");
     test_rtl_loophole_regressions;
+    $display("Running test_v2_sequencer_features");
+    test_v2_sequencer_features;
 
-    if (errors == 0) $display("PASS: v1 protocol_sequencer ISA + UART + SPI sweep + I2C + WAIT_EDGE + OP_TX + loophole regressions passed");
+    if (errors == 0) $display("PASS: v1+v2 protocol_sequencer ISA + UART + SPI sweep + I2C + WAIT_EDGE + OP_TX + loophole + sync/budget/capture/param2 tests passed");
     else $display("FAIL: %0d checks failed", errors);
     $finish_and_return(errors != 0);
   end

@@ -23,6 +23,7 @@ OPCODES: Dict[str, int] = {
     "HALT": 0xA,
     "OUT_SAMPLE": 0xB,
     "WAIT_PARAM": 0xC,
+    "WAIT_PARAM2": 0xC,
     "WAIT_EDGE": 0xD,
     "TX": 0xE,
     "LD_TX": 0xE,
@@ -44,6 +45,18 @@ UART_OP_CFG_SCAN = 0x1A
 UART_OP_START_SCAN = 0x1B
 UART_OP_READ_SCAN_STATUS = 0x1C
 UART_OP_READ_SCAN_FAIL = 0x1D
+UART_OP_SET_CTRL = 0x1E
+UART_OP_CFG_SCAN_2D = 0x1F
+UART_OP_START_SCAN_2D = 0x20
+UART_OP_READ_SCAN_2D = 0x21
+
+STOP_REASON_NAMES = {
+    0: "NONE",
+    1: "HALT_INSN",
+    2: "ILLEGAL_OP",
+    3: "CMD_HALT",
+    4: "CYCLE_LIMIT",
+}
 
 
 def crc8_07(data: Sequence[int]) -> int:
@@ -143,6 +156,9 @@ def assemble(lines: Iterable[str]) -> List[int]:
         elif mnem == "WAIT_PARAM":
             offset = _parse_int(args[0], labels) if args else 0
             words.append(insn("WAIT_PARAM", offset & 0xFF))
+        elif mnem == "WAIT_PARAM2":
+            offset = _parse_int(args[0], labels) if args else 0
+            words.append(insn("WAIT_PARAM", (1 << 8) | (offset & 0xFF)))
         elif mnem == "WAIT_EDGE":
             pol = _parse_int(args[0], labels) & 0x1
             pin = _parse_int(args[1], labels) & 0x7
@@ -719,16 +735,21 @@ def build_spi_two_txn_sequence(
 def build_spi_2d_program(
     cmd0: int,
     cmd1: int,
-    sclk_low_cycles: int = 4,
+    sclk_low_cycles: Optional[int] = 4,
     cs_pin: int = 0,
     sclk_pin: int = 1,
     mosi_pin: int = 2,
     miso_pin: int = 3,
 ) -> List[int]:
-    """Assemble a 2-txn SPI program (59 words <= 64) with X=`sclk_low_cycles` (>=2) and Y=`WAIT_PARAM`."""
-    if sclk_low_cycles < 2:
-        raise ValueError("sclk_low_cycles must be >= 2")
-    w = sclk_low_cycles - 2
+    """Assemble a 2-txn SPI program (59 words <= 64).
+
+    When `sclk_low_cycles` is an int (>=2), emits fixed `WAIT (sclk_low_cycles - 2)` for X and
+    `WAIT_PARAM 0` for Y. When `sclk_low_cycles is None`, emits `WAIT_PARAM2 0` so a single loaded
+    program sweeps both X (`run_param2 = sclk_low_cycles - 2`) and Y (`run_param`) on-chip.
+    """
+    if sclk_low_cycles is not None and sclk_low_cycles < 2:
+        raise ValueError("sclk_low_cycles must be >= 2 when fixed")
+    w_insn = "WAIT_PARAM2 0" if sclk_low_cycles is None else f"WAIT {sclk_low_cycles - 2}"
     cs_mask = 1 << cs_pin
     sclk_mask = 1 << sclk_pin
     mosi_mask = 1 << mosi_pin
@@ -745,7 +766,7 @@ def build_spi_2d_program(
         for bit in range(7, -1, -1):
             m = mosi_mask if ((cmd >> bit) & 1) else 0
             lines.append(f"OUT 0x{m:02x}")
-            lines.append(f"WAIT {w}")
+            lines.append(w_insn)
             lines.append(f"OUT_SAMPLE 0x{(sclk_mask | m):02x}, {miso_pin}, 0")
         lines.append("OUT 0x00")
         lines.append(f"OUT 0x{cs_mask:02x}")
@@ -755,7 +776,7 @@ def build_spi_2d_program(
     return assemble(lines)
 
 
-def predict_straight_line_cycles(words: Sequence[int], run_param: int) -> Dict[str, Any]:
+def predict_straight_line_cycles(words: Sequence[int], run_param: int, run_param2: int = 0) -> Dict[str, Any]:
     """Statically compute exact cycle_cnt and MARK offsets for branch/loop-free programs."""
     cycles = 0
     marks: List[int] = []
@@ -771,8 +792,9 @@ def predict_straight_line_cycles(words: Sequence[int], run_param: int) -> Dict[s
         cycles += 1
         if op == 0x3:  # WAIT adds imm extra cycles
             cycles += imm
-        elif op == 0xC:  # WAIT_PARAM adds min(0xFFF, run_param + imm[7:0])
-            cycles += min(0xFFF, run_param + (imm & 0xFF))
+        elif op == 0xC:  # WAIT_PARAM / WAIT_PARAM2 adds min(0xFFF, selected_param + imm[7:0])
+            sel_p = run_param2 if ((imm >> 8) & 1) else run_param
+            cycles += min(0xFFF, sel_p + (imm & 0xFF))
         elif op == 0xA:  # HALT stops incrementing after its decode cycle
             break
     return {"total_cycles": cycles, "mark_cycles": marks}
@@ -788,6 +810,7 @@ def analyze_timing_bounds(
     words: Sequence[int],
     run_param: int,
     *,
+    run_param2: int = 0,
     max_states: int = 20000,
 ) -> Dict[str, Any]:
     """Compute exact reachable cycle bounds across dynamic paths (JZ, JMP, LOOP, WAIT_EDGE)."""
@@ -838,8 +861,9 @@ def analyze_timing_bounds(
             return ("step", [((next_pc, nl0, nl1, last_s), 1, 1)])
         if op == 0xA:  # HALT
             return ("halt", [(None, 1, 1)])
-        if op == 0xC:  # WAIT_PARAM
-            extra = min(0xFFF, run_param + (imm & 0xFF))
+        if op == 0xC:  # WAIT_PARAM / WAIT_PARAM2
+            sel_p = run_param2 if ((imm >> 8) & 1) else run_param
+            extra = min(0xFFF, sel_p + (imm & 0xFF))
             c = 1 + extra
             return ("step", [((next_pc, lc0, lc1, last_s), c, c)])
         if op == 0xD:  # WAIT_EDGE: hit in [0..lim] waits (1..1+lim, ls=1) or timeout (1+lim, ls=0)
@@ -998,6 +1022,7 @@ def predict_dynamic_contract(
     words: Sequence[int],
     run_param: int,
     *,
+    run_param2: int = 0,
     sample_bits: Sequence[int] = (),
     edge_waits: Sequence[Optional[int]] = (),
     max_cycles: int = 100000,
@@ -1078,8 +1103,9 @@ def predict_dynamic_contract(
             cycles += 1
             final_state = "ENG_HALTED"
             break
-        elif op == 0xC:  # OP_WAIT_PARAM
-            cycles += 1 + min(0xFFF, run_param + (imm & 0xFF))
+        elif op == 0xC:  # OP_WAIT_PARAM / WAIT_PARAM2
+            sel_p = run_param2 if ((imm >> 8) & 1) else run_param
+            cycles += 1 + min(0xFFF, sel_p + (imm & 0xFF))
             pc = next_pc
         elif op == 0xD:  # OP_WAIT_EDGE
             if e_idx >= len(edge_waits):
@@ -1140,6 +1166,7 @@ def check_timing_contract(
     words: Sequence[int],
     run_param: int,
     *,
+    run_param2: int = 0,
     observed_cycles: int,
     observed_events: Sequence[Dict[str, Any]],
     eng_state: str = "ENG_HALTED",
@@ -1147,7 +1174,7 @@ def check_timing_contract(
     edge_waits: Optional[Sequence[Optional[int]]] = None,
 ) -> Dict[str, Any]:
     """Verify RTL-observed cycle counts and MARK timestamps against static bounds and exact trace."""
-    bounds = analyze_timing_bounds(words, run_param)
+    bounds = analyze_timing_bounds(words, run_param, run_param2=run_param2)
     errors: List[str] = []
 
     if not bounds["bounded"]:
@@ -1189,6 +1216,7 @@ def check_timing_contract(
         exact_trace = predict_dynamic_contract(
             words,
             run_param,
+            run_param2=run_param2,
             sample_bits=sample_bits or (),
             edge_waits=edge_waits or (),
         )
@@ -1220,6 +1248,212 @@ def check_timing_contract(
         "errors": errors,
         "bounds": bounds,
         "exact_trace": exact_trace,
+    }
+
+
+def verify_program_safety(
+    words: Sequence[int],
+    *,
+    run_param: int = 0,
+    run_param2: int = 0,
+    cycle_budget: int = 0,
+    open_drain_pins: Sequence[int] = (),
+) -> Dict[str, Any]:
+    """Pre-load static program verifier returning a structured safe-to-run report."""
+    errors: List[str] = []
+    warnings: List[str] = []
+    nwords = len(words)
+
+    if nwords == 0:
+        errors.append("Empty program (0 words)")
+    elif nwords > PROG_DEPTH:
+        errors.append(f"Program length {nwords} exceeds PROG_DEPTH={PROG_DEPTH}")
+
+    raw_words = [int(w) for w in words]
+    for pc, w in enumerate(raw_words):
+        if not (0 <= w <= 0xFFFF):
+            errors.append(f"Word at PC {pc} out of 16-bit range: {w}")
+
+    if errors:
+        return {
+            "verdict": "UNSAFE",
+            "safe": False,
+            "word_count": nwords,
+            "prog_depth": PROG_DEPTH,
+            "errors": errors,
+            "warnings": warnings,
+            "bounds": None,
+            "illegal_opcodes": [],
+            "out_of_range_targets": [],
+            "keep_oe_halts": [],
+            "open_drain_violations": [],
+            "pin_conflicts": [],
+        }
+
+    bounds = analyze_timing_bounds(raw_words, run_param, run_param2=run_param2)
+    od_mask = 0
+    for p in open_drain_pins:
+        if 0 <= int(p) <= 7:
+            od_mask |= 1 << int(p)
+
+    # Abstract state tracking over (pc, lc0, lc1, last_s) with concrete pin drive state when unambiguous
+    illegal_opcodes: List[Dict[str, Any]] = []
+    out_of_range_targets: List[Dict[str, Any]] = []
+    keep_oe_halts: List[int] = []
+    open_drain_violations: List[Dict[str, Any]] = []
+    pin_conflicts: List[Dict[str, Any]] = []
+    driven_pins_seen = 0
+
+    for pc, w in enumerate(raw_words):
+        op = (w >> 12) & 0xF
+        imm = w & 0xFFF
+        if op == 0xF or (op == 0xE and ((imm >> 11) & 1) == 0 and ((imm >> 10) & 1) == 1):
+            illegal_opcodes.append({"pc": pc, "word": f"0x{w:04x}"})
+        if op in (0x5, 0x6, 0x7):
+            tgt = imm & (PROG_DEPTH - 1)
+            if tgt >= nwords:
+                out_of_range_targets.append({"pc": pc, "op": op, "target": tgt, "nwords": nwords})
+        if op == 0xA and (imm & 1):
+            keep_oe_halts.append(pc)
+        if op == 0xE and ((imm >> 11) & 1) == 0 and ((imm >> 10) & 1) == 0:
+            is_od = bool((imm >> 9) & 1)
+            if od_mask and not is_od:
+                warnings.append(f"PC {pc}: push-pull LD_TX configured alongside open_drain_pins={list(open_drain_pins)}")
+        if op == 0xE and ((imm >> 11) & 1) == 1:
+            do_sh = (imm >> 10) & 1
+            tx_p = imm & 7
+            rx_p = (imm >> 3) & 7
+            clk_p = (imm >> 6) & 7
+            if clk_p == tx_p:
+                pin_conflicts.append({"pc": pc, "reason": "SHIFT_TX clk_pin == tx_pin"})
+            if do_sh and clk_p == rx_p and rx_p != tx_p:
+                pin_conflicts.append({"pc": pc, "reason": "SHIFT_TX clk_pin == rx_pin"})
+            if (od_mask >> tx_p) & 1:
+                driven_pins_seen |= 1 << tx_p
+
+    # Forward abstract walk of (uio_out, uio_oe) over straight/branching paths up to 512 states to catch static OD drives
+    visited_io = set()
+    q_io: List[Tuple[int, int, int, int, int, int]] = [(0, 0, 0, 0, 0, 0)]  # pc, lc0, lc1, out, oe, tx_od
+    padded = _pad_program(raw_words)
+    steps_budget = 1024
+    while q_io and steps_budget > 0:
+        steps_budget -= 1
+        pc, lc0, lc1, out_v, oe_v, tx_od_v = q_io.pop(0)
+        key = (pc, lc0, lc1, out_v, oe_v, tx_od_v)
+        if key in visited_io:
+            continue
+        visited_io.add(key)
+        driven_pins_seen |= oe_v
+        if od_mask and ((out_v & oe_v & od_mask) != 0):
+            open_drain_violations.append({"pc": pc, "out": f"0x{out_v:02x}", "oe": f"0x{oe_v:02x}"})
+        w = padded[pc]
+        op = (w >> 12) & 0xF
+        imm = w & 0xFFF
+        npc = (pc + 1) & (PROG_DEPTH - 1)
+        if op == 0x1:
+            q_io.append((npc, lc0, lc1, imm & 0xFF, oe_v, tx_od_v))
+        elif op == 0x2:
+            q_io.append((npc, lc0, lc1, out_v, imm & 0xFF, tx_od_v))
+        elif op == 0x5:
+            tgt = imm & (PROG_DEPTH - 1)
+            q_io.append((tgt, lc0, lc1, out_v, oe_v, tx_od_v))
+            q_io.append((npc, lc0, lc1, out_v, oe_v, tx_od_v))
+        elif op == 0x6:
+            q_io.append((imm & (PROG_DEPTH - 1), lc0, lc1, out_v, oe_v, tx_od_v))
+        elif op == 0x7:
+            sel = (imm >> 8) & 1
+            cur = lc1 if sel else lc0
+            if cur > 1:
+                nc = cur - 1
+                nl0, nl1 = (lc0, nc) if sel else (nc, lc1)
+                q_io.append((imm & (PROG_DEPTH - 1), nl0, nl1, out_v, oe_v, tx_od_v))
+            else:
+                nl0, nl1 = (lc0, 0) if sel else (0, lc1)
+                q_io.append((npc, nl0, nl1, out_v, oe_v, tx_od_v))
+        elif op == 0x8:
+            sel = (imm >> 8) & 1
+            val = imm & 0xFF
+            nl0, nl1 = (lc0, val) if sel else (val, lc1)
+            q_io.append((npc, nl0, nl1, out_v, oe_v, tx_od_v))
+        elif op == 0xA:
+            continue
+        elif op == 0xB:
+            q_io.append((npc, lc0, lc1, imm & 0xFF, oe_v, tx_od_v))
+        elif op == 0xE:
+            if ((imm >> 11) & 1) == 0 and ((imm >> 10) & 1) == 0:
+                q_io.append((npc, lc0, lc1, out_v, oe_v, (imm >> 9) & 1))
+            elif ((imm >> 11) & 1) == 1:
+                tx_p = imm & 7
+                clk_p = (imm >> 6) & 7
+                clk_val = (imm >> 9) & 1
+                pmask = 1 << tx_p
+                cmask = (1 << clk_p) if clk_p != tx_p else 0
+                if tx_od_v:
+                    # OD mode clears out bits; can conservatively either pull low (oe=1,out=0) or release (oe=0)
+                    nout = out_v & ~(pmask | cmask)
+                    base_oe = (oe_v & ~cmask) if clk_val else (oe_v | cmask)
+                    for alt_oe in (base_oe | pmask, base_oe & ~pmask):
+                        q_io.append((npc, lc0, lc1, nout, alt_oe, tx_od_v))
+                else:
+                    cout = ((out_v | cmask) if clk_val else (out_v & ~cmask))
+                    for bit_v in (0, pmask):
+                        q_io.append((npc, lc0, lc1, (cout & ~pmask) | bit_v, oe_v, tx_od_v))
+        elif op == 0xF:
+            continue
+        else:
+            q_io.append((npc, lc0, lc1, out_v, oe_v, tx_od_v))
+
+    if illegal_opcodes:
+        errors.append(f"Illegal/reserved opcodes present: {illegal_opcodes}")
+    if out_of_range_targets:
+        errors.append(f"Branch/jump targets point past program length ({nwords}): {out_of_range_targets}")
+    if open_drain_violations:
+        errors.append(f"Open-drain pin driven high on reachable path: {open_drain_violations[:4]}")
+    if pin_conflicts:
+        errors.append(f"Pin role conflict detected: {pin_conflicts}")
+    if bounds["bounded"] and not bounds["halt_reachable"]:
+        errors.append("No HALT instruction reachable along finite paths")
+    if bounds["fault_reachable"]:
+        errors.append("ENG_FAULT path is statically reachable")
+    if keep_oe_halts:
+        warnings.append(f"HALT(keep_oe=1) at PC(s) {keep_oe_halts} leaves uio_oe driven after completion")
+
+    unbounded_needs_budget = not bounds["bounded"]
+    budget_exceeded = bool(
+        cycle_budget > 0
+        and bounds["bounded"]
+        and bounds["max_cycles"] is not None
+        and bounds["max_cycles"] > cycle_budget
+    )
+    if unbounded_needs_budget and cycle_budget <= 0:
+        errors.append(f"Unbounded loop/cycle at PC(s) {bounds['unbounded_pcs']} with no cfg_cycle_budget")
+    elif unbounded_needs_budget and cycle_budget > 0:
+        warnings.append(f"Unbounded loop/cycle at PC(s) {bounds['unbounded_pcs']}; hardware cfg_cycle_budget={cycle_budget} will force safe Hi-Z timeout")
+    if budget_exceeded:
+        warnings.append(f"Worst-case cycles ({bounds['max_cycles']}) exceed cfg_cycle_budget={cycle_budget}")
+
+    if errors:
+        verdict = "UNSAFE"
+    elif warnings or unbounded_needs_budget or budget_exceeded:
+        verdict = "SAFE_WITH_BUDGET" if unbounded_needs_budget else "SAFE_WITH_WARNINGS"
+    else:
+        verdict = "SAFE_TO_RUN"
+
+    return {
+        "verdict": verdict,
+        "safe": verdict != "UNSAFE",
+        "word_count": nwords,
+        "prog_depth": PROG_DEPTH,
+        "cycle_budget": cycle_budget,
+        "bounds": bounds,
+        "errors": errors,
+        "warnings": warnings,
+        "illegal_opcodes": illegal_opcodes,
+        "out_of_range_targets": out_of_range_targets,
+        "keep_oe_halts": keep_oe_halts,
+        "open_drain_violations": open_drain_violations,
+        "pin_conflicts": pin_conflicts,
+        "driven_pin_mask": f"0x{driven_pins_seen:02x}",
     }
 
 

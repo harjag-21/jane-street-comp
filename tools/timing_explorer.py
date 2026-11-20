@@ -22,25 +22,31 @@ if str(ROOT_DIR) not in sys.path:
 
 from experiments.spi_timing_model import Target  # noqa: E402
 from tools.protocol_asm import (  # noqa: E402
+    STOP_REASON_NAMES,
     UART_OP_BEGIN_LOAD,
     UART_OP_CFG_SCAN,
+    UART_OP_CFG_SCAN_2D,
     UART_OP_COMMIT_LOAD,
     UART_OP_HALT,
     UART_OP_PATCH_WORD,
     UART_OP_PING_INFO,
     UART_OP_POP_EVENT,
     UART_OP_READ_CYCLE_CNT,
+    UART_OP_READ_SCAN_2D,
     UART_OP_READ_SCAN_FAIL,
     UART_OP_READ_SCAN_STATUS,
     UART_OP_READ_STATUS,
+    UART_OP_SET_CTRL,
     UART_OP_START,
     UART_OP_START_SCAN,
+    UART_OP_START_SCAN_2D,
     UART_OP_WRITE_WORD,
     assemble,
     build_i2c_stretch_probe_program,
     build_i2c_write_byte_program,
     build_i2c_write_multibyte_program,
     build_jtag_idcode_program,
+    build_spi_2d_program,
     build_spi_mode0_program,
     build_spi_multibyte_program,
     build_spi_program,
@@ -53,6 +59,7 @@ from tools.protocol_asm import (  # noqa: E402
     make_uart_request,
     predict_straight_line_cycles,
     program_checksums,
+    verify_program_safety,
 )
 
 STATUS_NAMES = {
@@ -342,6 +349,7 @@ class ProtocolClient:
             "eng_state_name": ENG_STATE_NAMES.get(d[3] & 0x3, "UNKNOWN"),
             "event_overflow": bool((d[3] >> 2) & 1),
             "prog_valid": bool((d[3] >> 3) & 1),
+            "feature_flags": (d[3] >> 4) & 0xF,
         }
 
     def load_program(self, words: Sequence[int]) -> Dict[str, int]:
@@ -373,10 +381,18 @@ class ProtocolClient:
             self.patch_word(addr, w)
         return {"mode": "patch", "writes": len(diffs)}
 
-    def start(self, run_param: int) -> None:
+    def start(self, run_param: int, run_param2: int = 0) -> None:
         if not (0 <= run_param <= 0xFFF):
             raise ValueError(f"run_param must fit in 12 bits, got {run_param}")
-        self.require_ok(UART_OP_START, run_param & 0xFF, (run_param >> 8) & 0xF)
+        if not (0 <= run_param2 <= 0xFFF):
+            raise ValueError(f"run_param2 must fit in 12 bits, got {run_param2}")
+        self.require_ok(
+            UART_OP_START,
+            run_param & 0xFF,
+            (run_param >> 8) & 0xF,
+            run_param2 & 0xFF,
+            (run_param2 >> 8) & 0xF,
+        )
 
     def halt(self) -> None:
         self.require_ok(UART_OP_HALT)
@@ -384,11 +400,14 @@ class ProtocolClient:
     def read_status(self) -> Dict[str, Any]:
         d = self.require_ok(UART_OP_READ_STATUS)
         flags = d[0]
+        stop_code = (flags >> 4) & 0x7
         return {
             "eng_state": flags & 0x3,
             "eng_state_name": ENG_STATE_NAMES.get(flags & 0x3, "UNKNOWN"),
             "event_overflow": bool((flags >> 2) & 1),
             "prog_valid": bool((flags >> 3) & 1),
+            "stop_reason": stop_code,
+            "stop_reason_name": STOP_REASON_NAMES.get(stop_code, "UNKNOWN"),
             "pc": d[1],
             "sample_reg": d[2],
             "last_sample": (d[3] >> 7) & 1,
@@ -411,8 +430,8 @@ class ProtocolClient:
                 break
         return events
 
-    def run_trial(self, run_param: int, max_wait_cycles: int = 20000) -> Dict[str, Any]:
-        self.start(run_param)
+    def run_trial(self, run_param: int, max_wait_cycles: int = 20000, run_param2: int = 0) -> Dict[str, Any]:
+        self.start(run_param, run_param2=run_param2)
         sim_obs = self.transport.wait_execution(max_wait_cycles)
         status: Optional[Dict[str, Any]] = None
         for _ in range(200):
@@ -427,9 +446,11 @@ class ProtocolClient:
         events = self.pop_all_events()
         record: Dict[str, Any] = {
             "run_param": run_param,
+            "run_param2": run_param2,
             "sample_reg": status["sample_reg"],
             "last_sample": status["last_sample"],
             "eng_state": status["eng_state_name"],
+            "stop_reason": status["stop_reason_name"],
             "pc": status["pc"],
             "cycle_cnt": cycle_cnt,
             "event_overflow": status["event_overflow"],
@@ -499,17 +520,171 @@ class ProtocolClient:
         d1 = self.require_ok(UART_OP_READ_SCAN_FAIL, 1)
         valid = bool((d0[0] >> 7) & 1)
         state_code = (d0[2] >> 6) & 0x03
+        stop_code = (d1[3] >> 5) & 0x07
         return {
             "valid": valid,
             "fail_idx": d0[0] & 0x3F,
             "fail_param": d0[1] | ((d0[2] & 0x0F) << 8),
             "eng_state": state_code,
             "eng_state_name": ENG_STATE_NAMES.get(state_code, "UNKNOWN"),
+            "stop_reason": stop_code,
+            "stop_reason_name": STOP_REASON_NAMES.get(stop_code, "UNKNOWN"),
             "sample_reg": d0[3],
             "cycle_cnt": d1[0] | (d1[1] << 8),
             "last_mark_tag": d1[2],
             "event_count": d1[3] & 0x0F,
         }
+
+    def configure_ctrl(self, *, sync_mask: int = 0, cap_mask: int = 0, cap_mode: int = 0) -> Dict[str, Any]:
+        if cap_mode not in (0, 1, 2, 3):
+            raise ValueError(f"cap_mode must be 0..3, got {cap_mode}")
+        d = self.require_ok(
+            UART_OP_SET_CTRL,
+            0,
+            sync_mask & 0xFF,
+            cap_mask & 0xFF,
+            cap_mode & 0x03,
+        )
+        return {
+            "sync_mask": d[0],
+            "cap_mask": d[1],
+            "cap_mode": d[2] & 0x03,
+            "stop_reason": d[3] & 0x07,
+            "stop_reason_name": STOP_REASON_NAMES.get(d[3] & 0x07, "UNKNOWN"),
+        }
+
+    def set_cycle_budget(self, budget: int) -> Dict[str, Any]:
+        if not (0 <= budget <= 0xFFFF):
+            raise ValueError(f"budget must fit in 16 bits, got {budget}")
+        d = self.require_ok(UART_OP_SET_CTRL, 1, budget & 0xFF, (budget >> 8) & 0xFF, 0)
+        return {
+            "cycle_budget": d[0] | (d[1] << 8),
+            "stop_reason": d[2] & 0x07,
+            "stop_reason_name": STOP_REASON_NAMES.get(d[2] & 0x07, "UNKNOWN"),
+        }
+
+    def read_ctrl(self) -> Dict[str, Any]:
+        d2 = self.require_ok(UART_OP_SET_CTRL, 2)
+        d3 = self.require_ok(UART_OP_SET_CTRL, 3)
+        stop_code = d2[3] & 0x07
+        return {
+            "sync_mask": d2[0],
+            "cap_mask": d2[1],
+            "cap_mode": d2[2] & 0x03,
+            "cycle_budget": d3[0] | (d3[1] << 8),
+            "stop_reason": stop_code,
+            "stop_reason_name": STOP_REASON_NAMES.get(stop_code, "UNKNOWN"),
+        }
+
+    def configure_scan_2d(self, *, x_start: int, x_step: int, num_x: int) -> Dict[str, int]:
+        if not (0 <= x_start <= 0xFFF):
+            raise ValueError(f"x_start must fit in 12 bits, got {x_start}")
+        if not (0 <= x_step <= 0xFF):
+            raise ValueError(f"x_step must fit in 8 bits, got {x_step}")
+        if not (1 <= num_x <= 16):
+            raise ValueError(f"num_x must be in 1..16, got {num_x}")
+        d = self.require_ok(
+            UART_OP_CFG_SCAN_2D,
+            x_start & 0xFF,
+            x_step & 0xFF,
+            num_x & 0x1F,
+            (x_start >> 8) & 0x0F,
+        )
+        return {
+            "x_start": d[0] | ((d[3] & 0x0F) << 8),
+            "x_step": d[1],
+            "num_x": d[2] & 0x1F,
+        }
+
+    def run_autonomous_2d_scan(
+        self,
+        *,
+        x_start: int,
+        x_step: int,
+        num_x: int,
+        y_start: int,
+        y_step: int,
+        num_y: int,
+        expected_val: int,
+        pass_mode: int = 0,
+        max_wait_cycles: int = 400000,
+    ) -> Dict[str, Any]:
+        self.configure_scan(
+            param_start=y_start,
+            param_step=y_step,
+            num_steps=num_y,
+            expected_val=expected_val,
+            pass_mode=pass_mode,
+        )
+        self.configure_scan_2d(x_start=x_start, x_step=x_step, num_x=num_x)
+        self.start_scan_2d((y_start >> 8) & 0x0F)
+        per_col_budget = self.compute_scan_wait_cycles(y_start, y_step, num_y, max_wait_cycles=100000)
+        total_budget = max(int(max_wait_cycles), int(num_x) * per_col_budget)
+        sim_scan = self.transport.wait_scan_completion(total_budget)
+        summary: Optional[Dict[str, Any]] = None
+        for _ in range(400):
+            sm = self.read_scan_2d_summary()
+            if sm["scan_done"] and not sm["scan_active"]:
+                summary = sm
+                break
+            time.sleep(0.001)
+        if summary is None:
+            raise ProtocolError("Autonomous 2D scan failed to complete within poll limit")
+        columns: List[int] = [self.read_scan_2d_column(xi) for xi in range(num_x)]
+        grid: Dict[Tuple[int, int], bool] = {}
+        for xi in range(num_x):
+            x_val = (x_start + xi * x_step) & 0xFFF
+            bm = columns[xi]
+            for yi in range(num_y):
+                y_val = (y_start + yi * y_step) & 0xFFF
+                grid[(x_val, y_val)] = bool((bm >> yi) & 1)
+        first_fail = self.read_scan_fail() if summary["total_fail"] > 0 else {"valid": False}
+        if first_fail.get("valid"):
+            df = self.require_ok(UART_OP_READ_SCAN_FAIL, 2)
+            first_fail["fail_x_idx"] = df[0] & 0x0F
+            first_fail["fail_x_param"] = df[1] | ((df[2] & 0x0F) << 8)
+        res: Dict[str, Any] = {
+            **summary,
+            "x_start": x_start,
+            "x_step": x_step,
+            "num_x": num_x,
+            "y_start": y_start,
+            "y_step": y_step,
+            "num_y": num_y,
+            "expected_val": expected_val,
+            "pass_mode": pass_mode,
+            "column_bitmaps": columns,
+            "grid": grid,
+            "first_fail": first_fail,
+        }
+        if sim_scan is not None:
+            res["sim_scan_cycles"] = sim_scan[1]
+            res["sim_uo_out"] = sim_scan[0]
+        return res
+
+    def start_scan_2d(self, y_start_msb: int = 0) -> Dict[str, int]:
+        d = self.require_ok(UART_OP_START_SCAN_2D, y_start_msb & 0x0F)
+        return {"x_start_lsb": d[0], "y_start_lsb": d[1], "num_x": d[2], "num_y": d[3]}
+
+    def read_scan_2d_summary(self) -> Dict[str, Any]:
+        d_p = self.require_ok(UART_OP_READ_SCAN_2D, 0xFF)
+        d_f = self.require_ok(UART_OP_READ_SCAN_2D, 0xFE)
+        return {
+            "scan_active": bool(d_p[0] & 0x01),
+            "scan_done": bool((d_p[0] >> 1) & 0x01),
+            "total_pass": d_p[1] | ((d_p[2] & 0x03) << 8),
+            "total_fail": d_f[0] | ((d_f[1] & 0x03) << 8),
+            "num_x": d_f[2],
+            "num_y": d_f[3],
+            "cur_x_idx": (d_p[3] >> 4) & 0x0F,
+            "first_fail_x_idx": d_p[3] & 0x0F,
+        }
+
+    def read_scan_2d_column(self, x_idx: int) -> int:
+        if not (0 <= x_idx < 16):
+            raise ValueError(f"x_idx must be in 0..15, got {x_idx}")
+        d = self.require_ok(UART_OP_READ_SCAN_2D, x_idx)
+        return d[0] | (d[1] << 8) | (d[2] << 16) | (d[3] << 24)
 
     @staticmethod
     def compute_scan_wait_cycles(
@@ -1170,7 +1345,49 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     p_scan.add_argument("--expect", type=lambda x: int(x, 0), default=0xAA)
     p_scan.add_argument("--pass-mode", type=int, choices=[0, 1], default=0)
 
+    p_scan2d = sub.add_parser("scan2d", help="Run a single-load on-chip autonomous 2D timing scan (0x1F-0x21)")
+    p_scan2d.add_argument("--sim", action="store_true")
+    p_scan2d.add_argument("--port")
+    p_scan2d.add_argument("--baud", type=int, default=115200)
+    p_scan2d.add_argument("--surface", type=int, default=0)
+    p_scan2d.add_argument("--x-start", type=int, default=0)
+    p_scan2d.add_argument("--x-step", type=int, default=1)
+    p_scan2d.add_argument("--num-x", type=int, default=12)
+    p_scan2d.add_argument("--y-start", type=int, default=0)
+    p_scan2d.add_argument("--y-step", type=int, default=1)
+    p_scan2d.add_argument("--num-y", type=int, default=16)
+    p_scan2d.add_argument("--expect", type=lambda x: int(x, 0), default=0xAA)
+
+    p_ver = sub.add_parser("verify", help="Run pre-load static safety verifier on a protocol program")
+    p_ver.add_argument("--example", choices=["uart", "uart-multibyte", "spi", "spi-multibyte", "spi2d", "i2c", "i2c-multibyte", "spi-responder", "jtag"], required=True)
+    p_ver.add_argument("--param", type=int, default=0)
+    p_ver.add_argument("--param2", type=int, default=0)
+    p_ver.add_argument("--budget", type=int, default=0)
+    p_ver.add_argument("--od-pins", default="", help="Comma-separated open-drain pin numbers (e.g. 0,1)")
+
     args = parser.parse_args(argv)
+    if args.cmd == "verify":
+        ex_map = {
+            "uart": build_uart_tx_program(0xA3, bit_cycles=8),
+            "uart-multibyte": build_uart_tx_multibyte_program([0xA3, 0x5C], bit_cycles=8)[0],
+            "spi": build_spi_mode0_program(0x55),
+            "spi-multibyte": build_spi_multibyte_program([0xA5, 0x3C], lsb_first=False)[0],
+            "spi2d": build_spi_2d_program(0x06, 0x05, sclk_low_cycles=None),
+            "i2c": build_i2c_write_byte_program(0xA0, half_cycles=64),
+            "i2c-multibyte": build_i2c_write_multibyte_program([0xA0, 0x55], half_cycles=None)[0],
+            "spi-responder": build_spi_target_responder_program(0x5A, max_wait=0),
+            "jtag": build_jtag_idcode_program(),
+        }
+        od = [int(x) for x in args.od_pins.split(",") if x.strip()]
+        rep = verify_program_safety(
+            ex_map[args.example],
+            run_param=args.param,
+            run_param2=args.param2,
+            cycle_budget=args.budget,
+            open_drain_pins=od,
+        )
+        print(json.dumps(rep, indent=2))
+        return 0 if rep["safe"] else 2
     if args.cmd == "replay":
         records = read_jsonl(args.trace)
         replayed = replay_records(records)
@@ -1227,6 +1444,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 pass_mode=args.pass_mode,
             )
             print(json.dumps(res, indent=2, sort_keys=True))
+            return 0
+
+        if args.cmd == "scan2d":
+            if args.sim:
+                transport.configure_target(10, delay_ns=args.surface, spi_resp=args.expect)
+            words = build_spi_2d_program(0x06, 0x05, sclk_low_cycles=None)
+            client.load_program(words)
+            res = client.run_autonomous_2d_scan(
+                x_start=args.x_start,
+                x_step=args.x_step,
+                num_x=args.num_x,
+                y_start=args.y_start,
+                y_step=args.y_step,
+                num_y=args.num_y,
+                expected_val=args.expect,
+            )
+            res_out = dict(res)
+            res_out["grid"] = {f"{k[0]},{k[1]}": v for k, v in res["grid"].items()}
+            print(json.dumps(res_out, indent=2, sort_keys=True))
             return 0
 
         if args.cmd == "run-example":

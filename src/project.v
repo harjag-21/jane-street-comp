@@ -59,7 +59,11 @@ module tt_um_harjag_21_timing_explorer #(
                    OP_CFG_SCAN         = 8'h1A,
                    OP_START_SCAN       = 8'h1B,
                    OP_READ_SCAN_STATUS = 8'h1C,
-                   OP_READ_SCAN_FAIL   = 8'h1D;
+                   OP_READ_SCAN_FAIL   = 8'h1D,
+                   OP_SET_CTRL         = 8'h1E,
+                   OP_CFG_SCAN_2D      = 8'h1F,
+                   OP_START_SCAN_2D    = 8'h20,
+                   OP_READ_SCAN_2D     = 8'h21;
 
   localparam [7:0] ST_OK        = 8'h00,
                    ST_BAD_CRC   = 8'h01,
@@ -108,19 +112,29 @@ module tt_um_harjag_21_timing_explorer #(
   reg [6:0]  load_len, load_idx;
   reg [7:0]  exp_crc, exp_sum, calc_crc, calc_sum;
   reg        cmd_start, cmd_halt, event_pop;
-  reg [11:0] cmd_param;
+  reg [11:0] cmd_param, cmd_param2;
+  reg [7:0]  cfg_sync_mask, cfg_cap_mask;
+  reg [1:0]  cfg_cap_mode;
+  reg [15:0] cfg_cycle_budget;
 
-  // Autonomous on-chip scan controller (0..32 uniform steps)
+  // Autonomous on-chip scan controller (1D: 0..32 steps; 2D: up to 16 x 32 steps)
   reg [1:0]  scan_state;
-  reg        scan_active, scan_done, scan_pass_mode;
+  reg        scan_active, scan_done, scan_pass_mode, scan2_mode;
   reg [7:0]  scan_param_start_lsb, scan_param_step, scan_expected;
   reg [5:0]  scan_num_steps, scan_idx, scan_pass_cnt, scan_fail_cnt;
-  reg [11:0] scan_cur_param;
+  reg [11:0] scan_cur_param, scan_y_start;
   reg [31:0] scan_pass_bitmap;
+  reg [11:0] scan2_x_start, scan2_cur_x;
+  reg [7:0]  scan2_x_step;
+  reg [4:0]  scan2_nx, scan2_x_idx;
+  reg [9:0]  scan2_total_pass, scan2_total_fail;
+  reg [31:0] scan2_grid [0:15];
   reg        first_fail_valid;
   reg [5:0]  first_fail_idx;
-  reg [11:0] first_fail_param;
+  reg [11:0] first_fail_param, first_fail_param2;
+  reg [3:0]  first_fail_x_idx;
   reg [1:0]  first_fail_state;
+  reg [2:0]  first_fail_stop_reason;
   reg [7:0]  first_fail_sample, first_fail_tag;
   reg [15:0] first_fail_cycles;
   reg [3:0]  first_fail_evcnt;
@@ -135,6 +149,7 @@ module tt_um_harjag_21_timing_explorer #(
   wire [7:0]  sample_reg;
   wire [15:0] cycle_cnt;
   wire [7:0]  last_mark_tag;
+  wire [2:0]  stop_reason;
   wire        trial_active;
 
   wire        scan_point_pass = (eng_state == ENG_HALTED) &&
@@ -142,6 +157,7 @@ module tt_um_harjag_21_timing_explorer #(
                                   ? ((event_count != 4'd0) && (last_mark_tag == scan_expected))
                                   : (sample_reg == scan_expected));
   wire [5:0]  scan_idx_next   = scan_idx + 6'd1;
+  wire [4:0]  scan2_x_idx_next = scan2_x_idx + 5'd1;
 
   integer i;
 
@@ -180,7 +196,12 @@ module tt_um_harjag_21_timing_explorer #(
       .prog_clear(prog_clear),
       .cmd_start(cmd_start),
       .cmd_param(cmd_param),
+      .cmd_param2(cmd_param2),
       .cmd_halt(cmd_halt),
+      .cfg_sync_mask(cfg_sync_mask),
+      .cfg_cycle_budget(cfg_cycle_budget),
+      .cfg_cap_mask(cfg_cap_mask),
+      .cfg_cap_mode(cfg_cap_mode),
       .event_pop(event_pop),
       .event_count_o(event_count),
       .event_overflow_o(event_overflow),
@@ -192,6 +213,7 @@ module tt_um_harjag_21_timing_explorer #(
       .sample_reg_o(sample_reg),
       .cycle_cnt_o(cycle_cnt),
       .last_mark_tag_o(last_mark_tag),
+      .stop_reason_o(stop_reason),
       .uio_in(uio_in),
       .uio_out_o(uio_out),
       .uio_oe_o(uio_oe),
@@ -359,10 +381,16 @@ module tt_um_harjag_21_timing_explorer #(
       cmd_halt          <= 1'b0;
       event_pop         <= 1'b0;
       cmd_param         <= 12'd0;
+      cmd_param2        <= 12'd0;
+      cfg_sync_mask     <= 8'h00;
+      cfg_cap_mask      <= 8'h00;
+      cfg_cap_mode      <= 2'd0;
+      cfg_cycle_budget  <= 16'h0000;
       scan_state        <= SCAN_IDLE;
       scan_active       <= 1'b0;
       scan_done         <= 1'b0;
       scan_pass_mode    <= 1'b0;
+      scan2_mode        <= 1'b0;
       scan_param_start_lsb <= 8'd0;
       scan_param_step   <= 8'd0;
       scan_expected     <= 8'h00;
@@ -371,11 +399,25 @@ module tt_um_harjag_21_timing_explorer #(
       scan_pass_cnt     <= 6'd0;
       scan_fail_cnt     <= 6'd0;
       scan_cur_param    <= 12'd0;
+      scan_y_start      <= 12'd0;
       scan_pass_bitmap  <= 32'd0;
+      scan2_x_start     <= 12'd0;
+      scan2_cur_x       <= 12'd0;
+      scan2_x_step      <= 8'd0;
+      scan2_nx          <= 5'd0;
+      scan2_x_idx       <= 5'd0;
+      scan2_total_pass  <= 10'd0;
+      scan2_total_fail  <= 10'd0;
+      for (i = 0; i < 16; i = i + 1) begin
+        scan2_grid[i] <= 32'd0;
+      end
       first_fail_valid  <= 1'b0;
       first_fail_idx    <= 6'd0;
       first_fail_param  <= 12'd0;
+      first_fail_param2 <= 12'd0;
+      first_fail_x_idx  <= 4'd0;
       first_fail_state  <= 2'd0;
+      first_fail_stop_reason <= 3'd0;
       first_fail_sample <= 8'h00;
       first_fail_tag    <= 8'h00;
       first_fail_cycles <= 16'h0000;
@@ -393,6 +435,7 @@ module tt_um_harjag_21_timing_explorer #(
         case (scan_state)
           SCAN_LAUNCH: begin
             cmd_param  <= scan_cur_param;
+            cmd_param2 <= scan2_mode ? scan2_cur_x : 12'd0;
             cmd_start  <= 1'b1;
             scan_state <= SCAN_ARM;
           end
@@ -404,29 +447,49 @@ module tt_um_harjag_21_timing_explorer #(
           SCAN_WAIT: begin
             if (eng_state != ENG_RUN) begin
               if (scan_point_pass) begin
-                scan_pass_cnt                  <= scan_pass_cnt + 6'd1;
-                scan_pass_bitmap[scan_idx[4:0]] <= 1'b1;
+                if (scan2_mode) begin
+                  scan2_grid[scan2_x_idx[3:0]][scan_idx[4:0]] <= 1'b1;
+                  scan2_total_pass <= scan2_total_pass + 10'd1;
+                end else begin
+                  scan_pass_cnt                  <= scan_pass_cnt + 6'd1;
+                  scan_pass_bitmap[scan_idx[4:0]] <= 1'b1;
+                end
               end else begin
-                scan_fail_cnt <= scan_fail_cnt + 6'd1;
+                if (scan2_mode) begin
+                  scan2_total_fail <= scan2_total_fail + 10'd1;
+                end else begin
+                  scan_fail_cnt <= scan_fail_cnt + 6'd1;
+                end
                 if (!first_fail_valid) begin
-                  first_fail_valid  <= 1'b1;
-                  first_fail_idx    <= scan_idx;
-                  first_fail_param  <= scan_cur_param;
-                  first_fail_state  <= eng_state;
-                  first_fail_sample <= sample_reg;
-                  first_fail_tag    <= last_mark_tag;
-                  first_fail_cycles <= cycle_cnt;
-                  first_fail_evcnt  <= event_count;
+                  first_fail_valid       <= 1'b1;
+                  first_fail_idx         <= scan_idx;
+                  first_fail_param       <= scan_cur_param;
+                  first_fail_x_idx       <= scan2_x_idx[3:0];
+                  first_fail_param2      <= scan2_mode ? scan2_cur_x : 12'd0;
+                  first_fail_state       <= eng_state;
+                  first_fail_stop_reason <= stop_reason;
+                  first_fail_sample      <= sample_reg;
+                  first_fail_tag         <= last_mark_tag;
+                  first_fail_cycles      <= cycle_cnt;
+                  first_fail_evcnt       <= event_count;
                 end
               end
-              scan_idx <= scan_idx_next;
-              if (scan_idx_next >= scan_num_steps) begin
-                scan_active <= 1'b0;
-                scan_done   <= 1'b1;
-                scan_state  <= SCAN_IDLE;
-              end else begin
+              if (scan_idx_next < scan_num_steps) begin
+                scan_idx       <= scan_idx_next;
                 scan_cur_param <= scan_cur_param + {4'd0, scan_param_step};
                 scan_state     <= SCAN_LAUNCH;
+              end else if (scan2_mode && (scan2_x_idx_next < scan2_nx)) begin
+                scan_idx       <= 6'd0;
+                scan_cur_param <= scan_y_start;
+                scan2_x_idx    <= scan2_x_idx_next;
+                scan2_cur_x    <= scan2_cur_x + {4'd0, scan2_x_step};
+                scan_state     <= SCAN_LAUNCH;
+              end else begin
+                scan_idx    <= scan_idx_next;
+                scan_active <= 1'b0;
+                scan_done   <= 1'b1;
+                scan2_mode  <= 1'b0;
+                scan_state  <= SCAN_IDLE;
               end
             end
           end
@@ -506,7 +569,7 @@ module tt_um_harjag_21_timing_explorer #(
               resp_d0    <= 8'h01;
               resp_d1    <= PROG_DEPTH[7:0];
               resp_d2    <= EVENT_DEPTH[7:0];
-              resp_d3    <= {4'd0, prog_valid, event_overflow, eng_state};
+              resp_d3    <= {4'hF, prog_valid, event_overflow, eng_state};
             end
 
             OP_BEGIN_LOAD: begin
@@ -577,9 +640,12 @@ module tt_um_harjag_21_timing_explorer #(
               end else begin
                 cmd_status <= ST_OK;
                 cmd_param  <= {req_arg1[3:0], req_arg0};
+                cmd_param2 <= {req_arg3[3:0], req_arg2};
                 cmd_start  <= 1'b1;
                 resp_d0    <= req_arg0;
                 resp_d1    <= {4'd0, req_arg1[3:0]};
+                resp_d2    <= req_arg2;
+                resp_d3    <= {4'd0, req_arg3[3:0]};
               end
             end
 
@@ -589,15 +655,16 @@ module tt_um_harjag_21_timing_explorer #(
               if (scan_active) begin
                 cmd_start   <= 1'b0;
                 scan_active <= 1'b0;
+                scan2_mode  <= 1'b0;
                 scan_state  <= SCAN_IDLE;
               end
-              resp_d0    <= {4'd0, prog_valid, event_overflow, eng_state};
+              resp_d0    <= {1'b0, stop_reason, prog_valid, event_overflow, eng_state};
               resp_d1    <= {2'd0, pc};
             end
 
             OP_READ_STATUS: begin
               cmd_status <= ST_OK;
-              resp_d0    <= {4'd0, prog_valid, event_overflow, eng_state};
+              resp_d0    <= {1'b0, stop_reason, prog_valid, event_overflow, eng_state};
               resp_d1    <= {2'd0, pc};
               resp_d2    <= sample_reg;
               resp_d3    <= {last_sample, 3'd0, event_count};
@@ -663,27 +730,32 @@ module tt_um_harjag_21_timing_explorer #(
               if (!prog_valid || (eng_state == ENG_RUN) || scan_active || (scan_num_steps == 6'd0)) begin
                 cmd_status <= ST_BAD_STATE;
               end else begin
-                cmd_status             <= ST_OK;
-                scan_state             <= SCAN_LAUNCH;
-                scan_active            <= 1'b1;
-                scan_done              <= 1'b0;
-                scan_idx               <= 6'd0;
-                scan_pass_cnt          <= 6'd0;
-                scan_fail_cnt          <= 6'd0;
+                cmd_status        <= ST_OK;
+                scan_state        <= SCAN_LAUNCH;
+                scan_active       <= 1'b1;
+                scan2_mode        <= 1'b0;
+                scan_done         <= 1'b0;
+                scan_idx          <= 6'd0;
+                scan_pass_cnt     <= 6'd0;
+                scan_fail_cnt     <= 6'd0;
                 scan_pass_bitmap  <= 32'd0;
+                scan_y_start      <= {req_arg0[3:0], scan_param_start_lsb};
                 scan_cur_param    <= {req_arg0[3:0], scan_param_start_lsb};
                 first_fail_valid  <= 1'b0;
                 first_fail_idx    <= 6'd0;
                 first_fail_param  <= 12'd0;
+                first_fail_param2 <= 12'd0;
+                first_fail_x_idx  <= 4'd0;
                 first_fail_state  <= 2'd0;
+                first_fail_stop_reason <= 3'd0;
                 first_fail_sample <= 8'h00;
                 first_fail_tag    <= 8'h00;
                 first_fail_cycles <= 16'h0000;
                 first_fail_evcnt  <= 4'd0;
                 resp_d0           <= scan_param_start_lsb;
                 resp_d1           <= {4'd0, req_arg0[3:0]};
-                resp_d2                <= {2'd0, scan_num_steps};
-                resp_d3                <= {scan_pass_mode, 7'd0};
+                resp_d2           <= {2'd0, scan_num_steps};
+                resp_d3           <= {scan_pass_mode, 7'd0};
               end
             end
 
@@ -709,11 +781,138 @@ module tt_um_harjag_21_timing_explorer #(
                 resp_d1 <= first_fail_param[7:0];
                 resp_d2 <= {first_fail_state, 2'd0, first_fail_param[11:8]};
                 resp_d3 <= first_fail_sample;
-              end else begin
+              end else if (req_arg0 == 8'd1) begin
                 resp_d0 <= first_fail_cycles[7:0];
                 resp_d1 <= first_fail_cycles[15:8];
                 resp_d2 <= first_fail_tag;
-                resp_d3 <= {4'd0, first_fail_evcnt};
+                resp_d3 <= {first_fail_stop_reason, 1'b0, first_fail_evcnt};
+              end else begin
+                resp_d0 <= {4'd0, first_fail_x_idx};
+                resp_d1 <= first_fail_param2[7:0];
+                resp_d2 <= {first_fail_stop_reason, 1'b0, first_fail_param2[11:8]};
+                resp_d3 <= scan2_nx[4:0] != 5'd0 ? {3'd0, scan2_nx} : 8'd0;
+              end
+            end
+
+            OP_SET_CTRL: begin
+              if (req_arg0 == 8'd0) begin
+                if ((eng_state == ENG_RUN) || scan_active) begin
+                  cmd_status <= ST_BAD_STATE;
+                end else begin
+                  cmd_status    <= ST_OK;
+                  cfg_sync_mask <= req_arg1;
+                  cfg_cap_mask  <= req_arg2;
+                  cfg_cap_mode  <= req_arg3[1:0];
+                  resp_d0       <= req_arg1;
+                  resp_d1       <= req_arg2;
+                  resp_d2       <= {6'd0, req_arg3[1:0]};
+                  resp_d3       <= {5'd0, stop_reason};
+                end
+              end else if (req_arg0 == 8'd1) begin
+                if ((eng_state == ENG_RUN) || scan_active) begin
+                  cmd_status <= ST_BAD_STATE;
+                end else begin
+                  cmd_status       <= ST_OK;
+                  cfg_cycle_budget <= {req_arg2, req_arg1};
+                  resp_d0          <= req_arg1;
+                  resp_d1          <= req_arg2;
+                  resp_d2          <= {5'd0, stop_reason};
+                end
+              end else if (req_arg0 == 8'd2) begin
+                cmd_status <= ST_OK;
+                resp_d0    <= cfg_sync_mask;
+                resp_d1    <= cfg_cap_mask;
+                resp_d2    <= {6'd0, cfg_cap_mode};
+                resp_d3    <= {5'd0, stop_reason};
+              end else if (req_arg0 == 8'd3) begin
+                cmd_status <= ST_OK;
+                resp_d0    <= cfg_cycle_budget[7:0];
+                resp_d1    <= cfg_cycle_budget[15:8];
+                resp_d2    <= {5'd0, stop_reason};
+              end else begin
+                cmd_status <= ST_BAD_ARG;
+              end
+            end
+
+            OP_CFG_SCAN_2D: begin
+              if ((eng_state == ENG_RUN) || scan_active) begin
+                cmd_status <= ST_BAD_STATE;
+              end else if ((req_arg2[4:0] == 5'd0) || (req_arg2[4:0] > 5'd16)) begin
+                cmd_status <= ST_BAD_ARG;
+              end else begin
+                cmd_status    <= ST_OK;
+                scan2_x_start <= {req_arg3[3:0], req_arg0};
+                scan2_x_step  <= req_arg1;
+                scan2_nx      <= req_arg2[4:0];
+                scan_done     <= 1'b0;
+                resp_d0       <= req_arg0;
+                resp_d1       <= req_arg1;
+                resp_d2       <= {3'd0, req_arg2[4:0]};
+                resp_d3       <= {4'd0, req_arg3[3:0]};
+              end
+            end
+
+            OP_START_SCAN_2D: begin
+              if (!prog_valid || (eng_state == ENG_RUN) || scan_active || (scan_num_steps == 6'd0) || (scan2_nx == 5'd0)) begin
+                cmd_status <= ST_BAD_STATE;
+              end else begin
+                cmd_status <= ST_OK;
+                for (i = 0; i < 16; i = i + 1) begin
+                  scan2_grid[i] <= 32'd0;
+                end
+                scan2_mode        <= 1'b1;
+                scan_state        <= SCAN_LAUNCH;
+                scan_active       <= 1'b1;
+                scan_done         <= 1'b0;
+                scan_idx          <= 6'd0;
+                scan_pass_cnt     <= 6'd0;
+                scan_fail_cnt     <= 6'd0;
+                scan_pass_bitmap  <= 32'd0;
+                scan_y_start      <= {req_arg0[3:0], scan_param_start_lsb};
+                scan_cur_param    <= {req_arg0[3:0], scan_param_start_lsb};
+                scan2_x_idx       <= 5'd0;
+                scan2_cur_x       <= scan2_x_start;
+                scan2_total_pass  <= 10'd0;
+                scan2_total_fail  <= 10'd0;
+                first_fail_valid  <= 1'b0;
+                first_fail_idx    <= 6'd0;
+                first_fail_param  <= 12'd0;
+                first_fail_param2 <= 12'd0;
+                first_fail_x_idx  <= 4'd0;
+                first_fail_state  <= 2'd0;
+                first_fail_stop_reason <= 3'd0;
+                first_fail_sample <= 8'h00;
+                first_fail_tag    <= 8'h00;
+                first_fail_cycles <= 16'h0000;
+                first_fail_evcnt  <= 4'd0;
+                resp_d0           <= scan2_x_start[7:0];
+                resp_d1           <= scan_param_start_lsb;
+                resp_d2           <= {3'd0, scan2_nx};
+                resp_d3           <= {2'd0, scan_num_steps};
+              end
+            end
+
+            OP_READ_SCAN_2D: begin
+              if (req_arg0 == 8'hFF) begin
+                cmd_status <= ST_OK;
+                resp_d0    <= {6'd0, scan_done, scan_active};
+                resp_d1    <= scan2_total_pass[7:0];
+                resp_d2    <= {6'd0, scan2_total_pass[9:8]};
+                resp_d3    <= {scan2_x_idx[3:0], first_fail_x_idx};
+              end else if (req_arg0 == 8'hFE) begin
+                cmd_status <= ST_OK;
+                resp_d0    <= scan2_total_fail[7:0];
+                resp_d1    <= {6'd0, scan2_total_fail[9:8]};
+                resp_d2    <= {3'd0, scan2_nx};
+                resp_d3    <= {2'd0, scan_num_steps};
+              end else if (req_arg0 < 8'd16) begin
+                cmd_status <= ST_OK;
+                resp_d0    <= scan2_grid[req_arg0[3:0]][7:0];
+                resp_d1    <= scan2_grid[req_arg0[3:0]][15:8];
+                resp_d2    <= scan2_grid[req_arg0[3:0]][23:16];
+                resp_d3    <= scan2_grid[req_arg0[3:0]][31:24];
+              end else begin
+                cmd_status <= ST_BAD_ARG;
               end
             end
 

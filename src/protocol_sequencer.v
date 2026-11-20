@@ -26,7 +26,14 @@ module protocol_sequencer #(
     // Execution control
     input  wire                   cmd_start,
     input  wire [11:0]            cmd_param,
+    input  wire [11:0]            cmd_param2,
     input  wire                   cmd_halt,
+
+    // Optional runtime robustness, budget, and passive observation controls
+    input  wire [7:0]             cfg_sync_mask,
+    input  wire [15:0]            cfg_cycle_budget,
+    input  wire [7:0]             cfg_cap_mask,
+    input  wire [1:0]             cfg_cap_mode,
 
     // Event FIFO readback port
     input  wire                   event_pop,
@@ -42,6 +49,7 @@ module protocol_sequencer #(
     output reg  [7:0]             sample_reg_o,
     output reg  [15:0]            cycle_cnt_o,
     output reg  [7:0]             last_mark_tag_o,
+    output reg  [2:0]             stop_reason_o,
 
     // Protocol I/O pins
     input  wire [7:0]             uio_in,
@@ -54,6 +62,12 @@ module protocol_sequencer #(
                    ENG_RUN    = 2'd1,
                    ENG_HALTED = 2'd2,
                    ENG_FAULT  = 2'd3;
+
+  localparam [2:0] STOP_NONE        = 3'd0,
+                   STOP_HALT_INSN   = 3'd1,
+                   STOP_ILLEGAL_OP  = 3'd2,
+                   STOP_CMD_HALT    = 3'd3,
+                   STOP_CYCLE_LIMIT = 3'd4;
 
   localparam [3:0] OP_NOP        = 4'h0,
                    OP_OUT        = 4'h1,
@@ -76,11 +90,13 @@ module protocol_sequencer #(
   reg        wait_edge_active;
   reg        wait_edge_pol;
   reg [2:0]  wait_edge_pin;
-  reg [11:0] run_param;
+  reg [11:0] run_param, run_param2;
   reg [7:0]  loop_cnt0, loop_cnt1;
   reg [7:0]  tx_reg;
   reg        tx_lsb_first;
   reg        tx_od;
+  reg [7:0]  sync_d1, sync_d2;
+  reg [7:0]  cap_prev;
 
   reg [7:0]  ev_tag [0:EVENT_DEPTH-1];
   reg [15:0] ev_ts  [0:EVENT_DEPTH-1];
@@ -94,13 +110,15 @@ module protocol_sequencer #(
   wire [11:0] imm         = ir[11:0];
   wire        ctr_sel     = imm[8];
   wire [7:0]  cur_cnt     = ctr_sel ? loop_cnt1 : loop_cnt0;
-  wire        samp_bit_s  = uio_in[imm[2:0]];
-  wire        samp_bit_os = uio_in[imm[10:8]];
-  wire [12:0] param_sum     = {1'b0, run_param} + {5'd0, imm[7:0]};
+  wire [7:0]  uio_eff     = (sync_d2 & cfg_sync_mask) | (uio_in & ~cfg_sync_mask);
+  wire        samp_bit_s  = uio_eff[imm[2:0]];
+  wire        samp_bit_os = uio_eff[imm[10:8]];
+  wire [11:0] selected_param = imm[8] ? run_param2 : run_param;
+  wire [12:0] param_sum     = {1'b0, selected_param} + {5'd0, imm[7:0]};
   wire [11:0] param_sat     = param_sum[12] ? 12'hFFF : param_sum[11:0];
   wire [11:0] edge_wait_lim = (imm[7:0] == 8'd0) ? run_param : {4'd0, imm[7:0]};
-  wire        edge_now_hit  = (uio_in[imm[10:8]] == imm[11]);
-  wire        edge_wait_hit = (uio_in[wait_edge_pin] == wait_edge_pol);
+  wire        edge_now_hit  = (uio_eff[imm[10:8]] == imm[11]);
+  wire        edge_wait_hit = (uio_eff[wait_edge_pin] == wait_edge_pol);
 
   wire        tx_cur_bit    = tx_lsb_first ? tx_reg[0] : tx_reg[7];
   wire [2:0]  tx_pin_sel    = imm[2:0];
@@ -108,7 +126,7 @@ module protocol_sequencer #(
   wire [2:0]  tx_clk_sel    = imm[8:6];
   wire        tx_clk_val    = imm[9];
   wire        tx_do_shift   = imm[10];
-  wire        tx_samp_bit   = uio_in[tx_rx_sel];
+  wire        tx_samp_bit   = uio_eff[tx_rx_sel];
   wire [7:0]  tx_pin_mask   = (8'h01 << tx_pin_sel);
   wire [7:0]  tx_clk_mask   = (8'h01 << tx_clk_sel);
   wire [7:0]  tx_out_step1   = tx_cur_bit ? (uio_out_o | tx_pin_mask) : (uio_out_o & ~tx_pin_mask);
@@ -122,10 +140,18 @@ module protocol_sequencer #(
                              : tx_oe_step1;
 
   wire [EVENT_PTR_W:0] ev_depth_max = EVENT_DEPTH[EVENT_PTR_W:0];
+  wire                 budget_hit   = (eng_state_o == ENG_RUN) && (cfg_cycle_budget != 16'd0) && (cycle_cnt_o >= cfg_cycle_budget);
+  wire                 active_step  = (eng_state_o == ENG_RUN) && !cmd_halt && !budget_hit;
+  wire [7:0]           cap_diff     = (uio_eff ^ cap_prev) & cfg_cap_mask;
+  wire [7:0]           cap_rise     = cfg_cap_mode[0] ? (cap_diff & uio_eff)  : 8'h00;
+  wire [7:0]           cap_fall     = cfg_cap_mode[1] ? (cap_diff & ~uio_eff) : 8'h00;
+  wire                 do_cap       = active_step && (cfg_cap_mode != 2'b00) && ((cap_rise | cap_fall) != 8'h00);
   wire                 do_pop       = event_pop && (ev_count != 0);
-  wire                 do_mark      = (eng_state_o == ENG_RUN) && !cmd_halt && (wait_cnt == 12'd0) && (op == OP_MARK);
-  wire                 do_push      = do_mark && ((ev_count < ev_depth_max) || do_pop);
+  wire                 do_mark      = active_step && (wait_cnt == 12'd0) && (op == OP_MARK);
+  wire                 do_ev        = do_mark || do_cap;
   wire [7:0]           mark_payload = imm[8] ? sample_reg_o : imm[7:0];
+  wire [7:0]           ev_payload   = do_mark ? mark_payload : uio_eff;
+  wire                 do_push      = do_ev && ((ev_count < ev_depth_max) || do_pop);
 
   assign event_count_o    = ev_count;
   assign event_head_tag_o = (ev_count != 0) ? ev_tag[ev_rptr] : 8'h00;
@@ -147,16 +173,21 @@ module protocol_sequencer #(
       sample_reg_o     <= 8'h00;
       cycle_cnt_o      <= 16'h0000;
       last_mark_tag_o  <= 8'h00;
+      stop_reason_o    <= STOP_NONE;
       wait_cnt         <= 12'd0;
       wait_edge_active <= 1'b0;
       wait_edge_pol    <= 1'b0;
       wait_edge_pin    <= 3'd0;
       run_param        <= 12'd0;
+      run_param2       <= 12'd0;
       loop_cnt0        <= 8'd0;
       loop_cnt1        <= 8'd0;
       tx_reg           <= 8'h00;
       tx_lsb_first     <= 1'b0;
       tx_od            <= 1'b0;
+      sync_d1          <= 8'h00;
+      sync_d2          <= 8'h00;
+      cap_prev         <= 8'h00;
       ev_wptr          <= {EVENT_PTR_W{1'b0}};
       ev_rptr          <= {EVENT_PTR_W{1'b0}};
       ev_count         <= {(EVENT_PTR_W+1){1'b0}};
@@ -164,6 +195,9 @@ module protocol_sequencer #(
       uio_out_o        <= 8'h00;
       uio_oe_o         <= 8'h00;
     end else begin
+      sync_d1 <= uio_in;
+      sync_d2 <= sync_d1;
+
       // Program clear or write allowed only when not executing.
       if (prog_clear && (eng_state_o != ENG_RUN)) begin
         for (idx = 0; idx < PROG_DEPTH; idx = idx + 1) begin
@@ -173,15 +207,15 @@ module protocol_sequencer #(
         imem[prog_addr] <= prog_wdata;
       end
 
-      // Event FIFO pointer and count update.
-      if (do_mark) begin
-        last_mark_tag_o <= mark_payload;
+      // Event FIFO pointer and count update (explicit MARK or hardware edge capture).
+      if (do_ev) begin
+        last_mark_tag_o <= ev_payload;
       end
       if (do_push) begin
-        ev_tag[ev_wptr] <= mark_payload;
+        ev_tag[ev_wptr] <= ev_payload;
         ev_ts[ev_wptr]  <= cycle_cnt_o;
         ev_wptr         <= ev_wptr + {{(EVENT_PTR_W-1){1'b0}}, 1'b1};
-      end else if (do_mark) begin
+      end else if (do_ev) begin
         event_overflow_o <= 1'b1;
       end
 
@@ -201,6 +235,9 @@ module protocol_sequencer #(
         wait_cnt         <= 12'd0;
         wait_edge_active <= 1'b0;
         uio_oe_o         <= 8'h00;
+        if (eng_state_o == ENG_RUN) begin
+          stop_reason_o <= STOP_CMD_HALT;
+        end
       end else if (eng_state_o != ENG_RUN) begin
         if (cmd_start && prog_valid) begin
           eng_state_o      <= ENG_RUN;
@@ -209,21 +246,31 @@ module protocol_sequencer #(
           sample_reg_o     <= 8'h00;
           cycle_cnt_o      <= 16'h0000;
           last_mark_tag_o  <= 8'h00;
+          stop_reason_o    <= STOP_NONE;
           wait_cnt         <= 12'd0;
           wait_edge_active <= 1'b0;
           run_param        <= cmd_param;
+          run_param2       <= cmd_param2;
           loop_cnt0        <= 8'd0;
           loop_cnt1        <= 8'd0;
           tx_reg           <= 8'h00;
           tx_lsb_first     <= 1'b0;
           tx_od            <= 1'b0;
+          cap_prev         <= uio_eff;
           ev_wptr          <= {EVENT_PTR_W{1'b0}};
           ev_rptr          <= {EVENT_PTR_W{1'b0}};
           ev_count         <= {(EVENT_PTR_W+1){1'b0}};
           event_overflow_o <= 1'b0;
         end
+      end else if (budget_hit) begin
+        eng_state_o      <= ENG_FAULT;
+        wait_cnt         <= 12'd0;
+        wait_edge_active <= 1'b0;
+        uio_oe_o         <= 8'h00;
+        stop_reason_o    <= STOP_CYCLE_LIMIT;
       end else begin
         // ENG_RUN
+        cap_prev    <= uio_eff;
         cycle_cnt_o <= cycle_cnt_o + 16'd1;
 
         if (wait_cnt != 12'd0) begin
@@ -301,7 +348,8 @@ module protocol_sequencer #(
               pc_o <= pc_o + {{(ADDR_W-1){1'b0}}, 1'b1};
             end
             OP_HALT: begin
-              eng_state_o <= ENG_HALTED;
+              eng_state_o   <= ENG_HALTED;
+              stop_reason_o <= STOP_HALT_INSN;
               if (!imm[0]) begin
                 uio_oe_o <= 8'h00;
               end
@@ -343,8 +391,9 @@ module protocol_sequencer #(
                   tx_od        <= imm[9];
                   pc_o         <= pc_o + {{(ADDR_W-1){1'b0}}, 1'b1};
                 end else begin
-                  eng_state_o <= ENG_FAULT;
-                  uio_oe_o    <= 8'h00;
+                  eng_state_o   <= ENG_FAULT;
+                  stop_reason_o <= STOP_ILLEGAL_OP;
+                  uio_oe_o      <= 8'h00;
                 end
               end else begin
                 if (tx_od) begin
@@ -364,8 +413,9 @@ module protocol_sequencer #(
               end
             end
             default: begin
-              eng_state_o <= ENG_FAULT;
-              uio_oe_o    <= 8'h00;
+              eng_state_o   <= ENG_FAULT;
+              stop_reason_o <= STOP_ILLEGAL_OP;
+              uio_oe_o      <= 8'h00;
             end
           endcase
         end
